@@ -4,6 +4,8 @@
 .tools
 target
 node_modules
+.next
+*.tsbuildinfo
 test-ledger
 circuits/**/target
 circuits/**/Prover.toml
