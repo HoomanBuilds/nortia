@@ -1,0 +1,13 @@
+.anchor
+.DS_Store
+.codex/memory.md
+.tools
+target
+node_modules
+test-ledger
+circuits/**/target
+circuits/**/Prover.toml
+circuits/**/Verifier.toml
+circuits/**/*.proof
+circuits/**/*.pk
+circuits/**/*.vk

@@ -1,0 +1,21 @@
+use anchor_lang::prelude::*;
+
+pub const PROTOCOL_SEED: &[u8] = b"protocol";
+pub const MARKET_SEED: &[u8] = b"market";
+pub const VAULT_SEED: &[u8] = b"vault";
+pub const ORDER_SEED: &[u8] = b"order";
+pub const CLAIM_SEED: &[u8] = b"claim";
+pub const DAILY_SCORES_ROOT_SEED: &[u8] = b"daily_scores_roots";
+pub const COMMITTEE_SIZE: usize = 3;
+pub const COMMITTEE_THRESHOLD: usize = 2;
+pub const USDC_DECIMALS: u8 = 6;
+pub const TICKET_AMOUNT: u64 = 1_000_000;
+pub const MAX_PROTOCOL_FEE_BPS: u16 = 300;
+pub const BASIS_POINTS_DENOMINATOR: u128 = 10_000;
+pub const PARTICIPANT_ONE_GOALS_KEY: u32 = 1;
+pub const PARTICIPANT_TWO_GOALS_KEY: u32 = 2;
+pub const TOTAL_GOALS_THRESHOLD: i32 = 2;
+pub const FINAL_PERIOD: i32 = 100;
+pub const MILLIS_PER_DAY: i64 = 86_400_000;
+pub const TXLINE_VALIDATE_STAT_V2_DISCRIMINATOR: [u8; 8] = [208, 215, 194, 214, 241, 71, 246, 178];
+pub const TXLINE_PROGRAM_ID: Pubkey = pubkey!("6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J");
