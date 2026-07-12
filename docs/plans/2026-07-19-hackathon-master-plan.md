@@ -1,4 +1,4 @@
-# Moros Cup Hackathon Master Plan
+# Nortia Hackathon Master Plan
 
 - Date: 2026-07-19
 - Deadline: 2026-07-19 23:59 UTC

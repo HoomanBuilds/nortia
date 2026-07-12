@@ -6,10 +6,10 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-moros_cup = "4S2EvdGrbKJ9zazvB4gtR83crTrVJWqqwoVVvEQy8VE9"
+nortia = "4S2EvdGrbKJ9zazvB4gtR83crTrVJWqqwoVVvEQy8VE9"
 
 [programs.devnet]
-moros_cup = "4S2EvdGrbKJ9zazvB4gtR83crTrVJWqqwoVVvEQy8VE9"
+nortia = "4S2EvdGrbKJ9zazvB4gtR83crTrVJWqqwoVVvEQy8VE9"
 
 [provider]
 cluster = "devnet"

@@ -1009,7 +1009,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "moros_cup"
+name = "nortia"
 version = "0.1.0"
 dependencies = [
  "anchor-lang",

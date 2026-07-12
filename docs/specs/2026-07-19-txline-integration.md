@@ -230,7 +230,7 @@ Fallback flow:
 1. Server fetches the same V2 proof.
 2. Official TxLINE program validates it through `.view()` simulation.
 3. The app records proof digest, fixture, sequence, values, root PDA, simulation logs, and result.
-4. A pinned resolution authority submits the one-way result to Moros Cup.
+4. A pinned resolution authority submits the one-way result to Nortia.
 5. The receipt UI labels the mode as `TxLINE proof validated, authority relayed`.
 
 Never label this fallback as atomic, permissionless, or trustless. Timeout refunds remain available if the authority does not act.

@@ -152,7 +152,7 @@ Target length: 4 minutes 30 seconds.
 ### 0:00-0:25: problem and promise
 
 - World Cup prediction products usually require trust in a result operator and expose every position.
-- Moros Cup accepts a private USDC prediction only after Solana verifies a proof, then settles from TxLINE.
+- Nortia accepts a private USDC prediction only after Solana verifies a proof, then settles from TxLINE.
 
 Show the live product, not slides.
 

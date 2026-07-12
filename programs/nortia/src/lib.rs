@@ -16,7 +16,7 @@ use error::MorosError;
 declare_id!("4S2EvdGrbKJ9zazvB4gtR83crTrVJWqqwoVVvEQy8VE9");
 
 #[program]
-pub mod moros_cup {
+pub mod nortia {
     use super::*;
 
     pub fn initialize_protocol(

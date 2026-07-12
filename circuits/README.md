@@ -1,4 +1,4 @@
-# Moros Cup proof circuits
+# Nortia proof circuits
 
 ## Pinned toolchain
 

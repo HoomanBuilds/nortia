@@ -1,4 +1,4 @@
-# Moros Cup System Architecture
+# Nortia System Architecture
 
 - Date: 2026-07-19
 - Status: Current architecture
@@ -28,7 +28,7 @@ Three-member committee
   `-- two members attest the final commitment root and aggregate counts
 
 Solana devnet
-  |-- Moros Cup Anchor program, protocol config, and PDA token vault
+  |-- Nortia Anchor program, protocol config, and PDA token vault
   |-- placement Groth16 verifier program
   |-- redeem Groth16 verifier program
   |-- Circle USDC mint and original SPL Token Program
