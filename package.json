@@ -1,0 +1,19 @@
+{
+  "name": "moros-cup",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "proof:fixtures": "node --import tsx client/scripts/generate-proof-fixtures.ts",
+    "test:client": "node --import tsx --test client/src/**/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "poseidon-lite": "0.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.1",
+    "tsx": "4.23.1",
+    "typescript": "7.0.2"
+  }
+}
