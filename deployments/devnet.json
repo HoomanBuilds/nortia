@@ -1,0 +1,19 @@
+{
+  "network": "solana-devnet",
+  "checkedAt": "2026-07-19T18:59:11Z",
+  "nortiaProgram": "4S2EvdGrbKJ9zazvB4gtR83crTrVJWqqwoVVvEQy8VE9",
+  "nortiaProgramStatus": "not-deployed",
+  "txlineProgram": "6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J",
+  "usdcMint": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+  "protocolPda": null,
+  "placementVerifier": null,
+  "redeemVerifier": null,
+  "sampleMarket": null,
+  "transactions": {},
+  "deploymentBlocker": {
+    "payerBalanceSol": 0.740084534,
+    "programBytes": 428920,
+    "programRentSol": 2.98617408,
+    "faucet": "rate-limited"
+  }
+}
