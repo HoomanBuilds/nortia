@@ -5,6 +5,12 @@
 target
 node_modules
 .next
+inspiration
+services/state
+.env
+.env.local
+**/.env
+**/.env.local
 *.tsbuildinfo
 test-ledger
 circuits/**/target
