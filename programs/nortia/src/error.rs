@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
 #[error_code]
-pub enum MorosError {
+pub enum NortiaError {
     #[msg("Protocol configuration is invalid")]
     InvalidProtocolConfiguration,
     #[msg("Market configuration is invalid")]
@@ -20,6 +20,8 @@ pub enum MorosError {
     DuplicateCommitteeSigner,
     #[msg("Batch counts do not match accepted orders")]
     BatchCountMismatch,
+    #[msg("The market has no accepted orders")]
+    NoOrders,
     #[msg("A zero commitment or root is not allowed")]
     ZeroCommitment,
     #[msg("The public witness has an invalid length")]

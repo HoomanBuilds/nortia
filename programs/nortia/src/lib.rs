@@ -6,12 +6,13 @@ pub mod zk;
 
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, TransferChecked};
+use solana_sha256_hasher::hashv;
 
 pub use constants::*;
 pub use state::*;
 pub use txline::StatValidationInput;
 
-use error::MorosError;
+use error::NortiaError;
 
 declare_id!("4S2EvdGrbKJ9zazvB4gtR83crTrVJWqqwoVVvEQy8VE9");
 
@@ -27,8 +28,13 @@ pub mod nortia {
             args.treasury_owner != Pubkey::default()
                 && args.fee_bps > 0
                 && args.fee_bps <= MAX_PROTOCOL_FEE_BPS
+                && args.keeper_reward_bps <= MAX_KEEPER_REWARD_BPS
+                && valid_committee(&args.committee)
+                && args.placement_verifier != Pubkey::default()
+                && args.redeem_verifier != Pubkey::default()
+                && args.placement_verifier != args.redeem_verifier
                 && ctx.accounts.collateral_mint.decimals == USDC_DECIMALS,
-            MorosError::InvalidProtocolConfiguration
+            NortiaError::InvalidProtocolConfiguration
         );
 
         let protocol = &mut ctx.accounts.protocol;
@@ -36,9 +42,13 @@ pub mod nortia {
         protocol.authority = ctx.accounts.authority.key();
         protocol.treasury_owner = args.treasury_owner;
         protocol.fee_bps = args.fee_bps;
+        protocol.keeper_reward_bps = args.keeper_reward_bps;
         protocol.collateral_mint = ctx.accounts.collateral_mint.key();
         protocol.token_program = ctx.accounts.token_program.key();
         protocol.txline_program = TXLINE_PROGRAM_ID;
+        protocol.committee = args.committee;
+        protocol.placement_verifier = args.placement_verifier;
+        protocol.redeem_verifier = args.redeem_verifier;
 
         emit!(ProtocolInitialized {
             protocol: protocol.key(),
@@ -46,6 +56,10 @@ pub mod nortia {
             treasury_owner: protocol.treasury_owner,
             collateral_mint: protocol.collateral_mint,
             fee_bps: protocol.fee_bps,
+            keeper_reward_bps: protocol.keeper_reward_bps,
+            committee: protocol.committee,
+            placement_verifier: protocol.placement_verifier,
+            redeem_verifier: protocol.redeem_verifier,
         });
         Ok(())
     }
@@ -58,18 +72,19 @@ pub mod nortia {
         let live_timing_valid =
             args.market_mode != MarketMode::Live || args.lock_ts <= args.fixture_start_ts;
         require!(
-            valid_committee(&args.committee)
-                && args.market_id > 0
+            args.market_id > 0
+                && args.question_hash != [0; 32]
+                && args.rules_hash != [0; 32]
+                && args.category == MarketCategory::Sports
+                && args.resolver_kind == ResolverKind::TxlineStatV2
                 && args.fixture_id > 0
+                && (0..=MAX_TOTAL_GOALS_THRESHOLD).contains(&args.total_goals_threshold)
                 && args.fixture_start_ts > 0
                 && now < args.lock_ts
                 && args.lock_ts < args.batch_deadline_ts
                 && args.batch_deadline_ts < args.resolution_deadline_ts
-                && live_timing_valid
-                && args.placement_verifier != Pubkey::default()
-                && args.redeem_verifier != Pubkey::default()
-                && args.placement_verifier != args.redeem_verifier,
-            MorosError::InvalidMarketConfiguration
+                && live_timing_valid,
+            NortiaError::InvalidMarketConfiguration
         );
 
         let protocol = &ctx.accounts.protocol;
@@ -78,16 +93,21 @@ pub mod nortia {
         market.vault_bump = ctx.bumps.vault;
         market.market_id = args.market_id;
         market.authority = ctx.accounts.creator.key();
+        market.category = args.category;
+        market.resolver_kind = args.resolver_kind;
+        market.question_hash = args.question_hash;
+        market.rules_hash = args.rules_hash;
         market.fixture_id = args.fixture_id;
         market.market_mode = args.market_mode;
         market.fixture_start_ts = args.fixture_start_ts;
         market.score_key_a = PARTICIPANT_ONE_GOALS_KEY;
         market.score_key_b = PARTICIPANT_TWO_GOALS_KEY;
-        market.total_goals_threshold = TOTAL_GOALS_THRESHOLD;
+        market.total_goals_threshold = args.total_goals_threshold;
         market.collateral_mint = protocol.collateral_mint;
         market.token_program = protocol.token_program;
         market.ticket_amount = TICKET_AMOUNT;
         market.fee_bps = protocol.fee_bps;
+        market.keeper_reward_bps = protocol.keeper_reward_bps;
         market.treasury_owner = protocol.treasury_owner;
         market.txline_program = protocol.txline_program;
         market.lock_ts = args.lock_ts;
@@ -99,26 +119,36 @@ pub mod nortia {
         market.no_count = 0;
         market.commitment_root = [0; 32];
         market.outcome = Market::OUTCOME_UNSET;
-        market.committee = args.committee;
-        market.placement_verifier = args.placement_verifier;
-        market.redeem_verifier = args.redeem_verifier;
+        market.committee = protocol.committee;
+        market.placement_verifier = protocol.placement_verifier;
+        market.redeem_verifier = protocol.redeem_verifier;
         market.gross_pool = 0;
         market.protocol_fee = 0;
+        market.keeper_reward = 0;
+        market.treasury_fee = 0;
         market.net_pool = 0;
         market.payout_amount = 0;
+        market.payout_remainder = 0;
         market.claimed_count = 0;
         market.refunded_count = 0;
         market.settled_at = 0;
         market.txline_proof_ts = 0;
         market.final_seq = 0;
         market.daily_scores_root = Pubkey::default();
+        market.settlement_evidence_hash = [0; 32];
         market.score_a = 0;
         market.score_b = 0;
 
         emit!(MarketCreated {
             market: market.key(),
             market_id: market.market_id,
+            authority: market.authority,
+            category: market.category,
+            resolver_kind: market.resolver_kind,
+            question_hash: market.question_hash,
+            rules_hash: market.rules_hash,
             fixture_id: market.fixture_id,
+            total_goals_threshold: market.total_goals_threshold,
             market_mode: market.market_mode,
             collateral_mint: market.collateral_mint,
             ticket_amount: market.ticket_amount,
@@ -131,12 +161,12 @@ pub mod nortia {
     pub fn place_order(ctx: Context<PlaceOrder>, args: PlaceOrderArgs) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
         let market = &ctx.accounts.market;
-        require!(market.phase == MarketPhase::Open, MorosError::InvalidPhase);
-        require!(now < market.lock_ts, MorosError::MarketLocked);
-        require!(args.commitment != [0; 32], MorosError::ZeroCommitment);
+        require!(market.phase == MarketPhase::Open, NortiaError::InvalidPhase);
+        require!(now < market.lock_ts, NortiaError::MarketLocked);
+        require!(args.commitment != [0; 32], NortiaError::ZeroCommitment);
         require!(
             args.share_commitments.iter().all(|value| *value != [0; 32]),
-            MorosError::ZeroCommitment
+            NortiaError::ZeroCommitment
         );
         zk::verify_place(
             market,
@@ -151,7 +181,7 @@ pub mod nortia {
         let order_index = market.order_count;
         let next_order_count = order_index
             .checked_add(1)
-            .ok_or_else(|| error!(MorosError::ArithmeticOverflow))?;
+            .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
 
         let order = &mut ctx.accounts.order;
         order.bump = ctx.bumps.order;
@@ -188,13 +218,14 @@ pub mod nortia {
     pub fn submit_batch(ctx: Context<SubmitBatch>, args: SubmitBatchArgs) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
         let market = &mut ctx.accounts.market;
-        require!(market.phase == MarketPhase::Open, MorosError::InvalidPhase);
-        require!(now >= market.lock_ts, MorosError::TooEarly);
-        require!(now <= market.batch_deadline_ts, MorosError::DeadlineElapsed);
-        require!(args.commitment_root != [0; 32], MorosError::ZeroCommitment);
+        require!(market.phase == MarketPhase::Open, NortiaError::InvalidPhase);
+        require!(now >= market.lock_ts, NortiaError::TooEarly);
+        require!(now <= market.batch_deadline_ts, NortiaError::DeadlineElapsed);
+        require!(args.commitment_root != [0; 32], NortiaError::ZeroCommitment);
+        require!(market.order_count > 0, NortiaError::NoOrders);
         require!(
             args.yes_count.checked_add(args.no_count) == Some(market.order_count),
-            MorosError::BatchCountMismatch
+            NortiaError::BatchCountMismatch
         );
         verify_committee_quorum(&market.committee, ctx.remaining_accounts)?;
 
@@ -227,13 +258,13 @@ pub mod nortia {
         let now = Clock::get()?.unix_timestamp;
         require!(
             ctx.accounts.market.phase == MarketPhase::Batched,
-            MorosError::InvalidPhase
+            NortiaError::InvalidPhase
         );
         require!(
             now <= ctx.accounts.market.resolution_deadline_ts,
-            MorosError::DeadlineElapsed
+            NortiaError::DeadlineElapsed
         );
-        require!(final_seq > 0, MorosError::InvalidScorePayload);
+        require!(final_seq > 0, NortiaError::InvalidScorePayload);
 
         let is_over = txline::resolve_total_goals_over(
             &ctx.accounts.market,
@@ -252,26 +283,42 @@ pub mod nortia {
             ctx.accounts.market.order_count,
             winners,
             ctx.accounts.market.fee_bps,
+            ctx.accounts.market.keeper_reward_bps,
         )?;
         require!(
             ctx.accounts.vault.amount >= settlement.gross_pool,
-            MorosError::InsufficientVaultBalance
+            NortiaError::InsufficientVaultBalance
         );
 
         let score_a = payload.stats[0].stat.value;
         let score_b = payload.stats[1].stat.value;
+        let mut evidence_bytes = Vec::new();
+        payload
+            .serialize(&mut evidence_bytes)
+            .map_err(|_| error!(NortiaError::InvalidScorePayload))?;
+        let final_seq_bytes = final_seq.to_le_bytes();
+        let settlement_evidence_hash = hashv(&[
+            evidence_bytes.as_slice(),
+            ctx.accounts.daily_scores_merkle_roots.key.as_ref(),
+            &final_seq_bytes,
+        ])
+        .to_bytes();
         {
             let market = &mut ctx.accounts.market;
             market.outcome = outcome;
             market.gross_pool = settlement.gross_pool;
             market.protocol_fee = settlement.protocol_fee;
+            market.keeper_reward = settlement.keeper_reward;
+            market.treasury_fee = settlement.treasury_fee;
             market.net_pool = settlement.net_pool;
             market.payout_amount = settlement.payout_amount;
+            market.payout_remainder = settlement.payout_remainder;
             market.phase = MarketPhase::Resolved;
             market.settled_at = now;
             market.txline_proof_ts = payload.ts;
             market.final_seq = final_seq;
             market.daily_scores_root = ctx.accounts.daily_scores_merkle_roots.key();
+            market.settlement_evidence_hash = settlement_evidence_hash;
             market.score_a = score_a;
             market.score_b = score_b;
         }
@@ -282,7 +329,15 @@ pub mod nortia {
             &ctx.accounts.treasury_token,
             &ctx.accounts.collateral_mint,
             &ctx.accounts.token_program,
-            settlement.protocol_fee,
+            settlement.treasury_fee,
+        )?;
+        transfer_from_vault(
+            &ctx.accounts.market,
+            &ctx.accounts.vault,
+            &ctx.accounts.keeper_token,
+            &ctx.accounts.collateral_mint,
+            &ctx.accounts.token_program,
+            settlement.keeper_reward,
         )?;
 
         emit!(ProtocolFeeCollected {
@@ -291,7 +346,9 @@ pub mod nortia {
             treasury_token: ctx.accounts.treasury_token.key(),
             gross_pool: settlement.gross_pool,
             fee_bps: ctx.accounts.market.fee_bps,
-            amount: settlement.protocol_fee,
+            treasury_amount: settlement.treasury_fee,
+            keeper: ctx.accounts.keeper.key(),
+            keeper_amount: settlement.keeper_reward,
         });
         emit!(MarketResolved {
             market: ctx.accounts.market.key(),
@@ -300,8 +357,12 @@ pub mod nortia {
             score_b,
             gross_pool: settlement.gross_pool,
             protocol_fee: settlement.protocol_fee,
+            keeper_reward: settlement.keeper_reward,
+            treasury_fee: settlement.treasury_fee,
             net_pool: settlement.net_pool,
             payout_amount: settlement.payout_amount,
+            payout_remainder: settlement.payout_remainder,
+            settlement_evidence_hash,
         });
         Ok(())
     }
@@ -314,20 +375,26 @@ pub mod nortia {
             MarketPhase::Batched => now > market.resolution_deadline_ts,
             _ => false,
         };
-        require!(timed_out, MorosError::TooEarly);
-        market.phase = MarketPhase::Refunding;
-        emit!(RefundsOpened {
-            market: market.key(),
-        });
+        require!(timed_out, NortiaError::TooEarly);
+        market.phase = if market.order_count == 0 {
+            MarketPhase::Closed
+        } else {
+            MarketPhase::Refunding
+        };
+        if market.phase == MarketPhase::Closed {
+            emit!(MarketClosed { market: market.key() });
+        } else {
+            emit!(RefundsOpened { market: market.key() });
+        }
         Ok(())
     }
 
     pub fn refund_order(ctx: Context<RefundOrder>) -> Result<()> {
         require!(
             ctx.accounts.market.phase == MarketPhase::Refunding,
-            MorosError::InvalidPhase
+            NortiaError::InvalidPhase
         );
-        require!(!ctx.accounts.order.refunded, MorosError::AlreadyRefunded);
+        require!(!ctx.accounts.order.refunded, NortiaError::AlreadyRefunded);
 
         ctx.accounts.order.refunded = true;
         ctx.accounts.market.refunded_count = ctx
@@ -335,9 +402,12 @@ pub mod nortia {
             .market
             .refunded_count
             .checked_add(1)
-            .ok_or_else(|| error!(MorosError::ArithmeticOverflow))?;
+            .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
         if ctx.accounts.market.refunded_count == ctx.accounts.market.order_count {
             ctx.accounts.market.phase = MarketPhase::Closed;
+            emit!(MarketClosed {
+                market: ctx.accounts.market.key(),
+            });
         }
         let amount = ctx.accounts.market.ticket_amount;
         transfer_from_vault(
@@ -361,12 +431,12 @@ pub mod nortia {
     pub fn redeem(ctx: Context<Redeem>, args: RedeemArgs) -> Result<()> {
         require!(
             ctx.accounts.market.phase == MarketPhase::Resolved,
-            MorosError::InvalidPhase
+            NortiaError::InvalidPhase
         );
-        require!(ctx.accounts.market.payout_amount > 0, MorosError::NoWinners);
+        require!(ctx.accounts.market.payout_amount > 0, NortiaError::NoWinners);
         require!(
             ctx.accounts.market.claimed_count < ctx.accounts.market.winner_count(),
-            MorosError::NoWinners
+            NortiaError::NoWinners
         );
         zk::verify_redeem(
             &ctx.accounts.market,
@@ -377,7 +447,17 @@ pub mod nortia {
             &ctx.accounts.redeem_verifier,
         )?;
 
-        let amount = ctx.accounts.market.payout_amount;
+        let is_final_claim = ctx.accounts.market.claimed_count + 1
+            == ctx.accounts.market.winner_count();
+        let amount = if is_final_claim {
+            ctx.accounts
+                .market
+                .payout_amount
+                .checked_add(ctx.accounts.market.payout_remainder)
+                .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?
+        } else {
+            ctx.accounts.market.payout_amount
+        };
         let claim = &mut ctx.accounts.claim;
         claim.bump = ctx.bumps.claim;
         claim.market = ctx.accounts.market.key();
@@ -391,9 +471,12 @@ pub mod nortia {
             .market
             .claimed_count
             .checked_add(1)
-            .ok_or_else(|| error!(MorosError::ArithmeticOverflow))?;
+            .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
         if ctx.accounts.market.claimed_count == ctx.accounts.market.winner_count() {
             ctx.accounts.market.phase = MarketPhase::Closed;
+            emit!(MarketClosed {
+                market: ctx.accounts.market.key(),
+            });
         }
         transfer_from_vault(
             &ctx.accounts.market,
@@ -429,7 +512,7 @@ pub struct InitializeProtocol<'info> {
     pub protocol: Account<'info, ProtocolConfig>,
     #[account(
         constraint = collateral_mint.decimals == USDC_DECIMALS
-            @ MorosError::InvalidCollateralMint
+            @ NortiaError::InvalidCollateralMint
     )]
     pub collateral_mint: Account<'info, Mint>,
     pub token_program: Program<'info, Token>,
@@ -445,23 +528,23 @@ pub struct InitializeMarket<'info> {
         seeds = [PROTOCOL_SEED],
         bump = protocol.bump,
         constraint = protocol.collateral_mint == collateral_mint.key()
-            @ MorosError::InvalidCollateralMint,
+            @ NortiaError::InvalidCollateralMint,
         constraint = protocol.token_program == token_program.key()
-            @ MorosError::InvalidTokenAccount,
+            @ NortiaError::InvalidTokenAccount,
         constraint = protocol.txline_program == TXLINE_PROGRAM_ID
-            @ MorosError::InvalidTxlineProgram
+            @ NortiaError::InvalidTxlineProgram
     )]
     pub protocol: Account<'info, ProtocolConfig>,
     #[account(
         constraint = collateral_mint.decimals == USDC_DECIMALS
-            @ MorosError::InvalidCollateralMint
+            @ NortiaError::InvalidCollateralMint
     )]
     pub collateral_mint: Account<'info, Mint>,
     #[account(
         init,
         payer = creator,
         space = Market::SPACE,
-        seeds = [MARKET_SEED, &args.market_id.to_le_bytes()],
+        seeds = [MARKET_SEED, creator.key().as_ref(), &args.market_id.to_le_bytes()],
         bump
     )]
     pub market: Box<Account<'info, Market>>,
@@ -485,21 +568,21 @@ pub struct PlaceOrder<'info> {
     pub payer: Signer<'info>,
     #[account(
         mut,
-        seeds = [MARKET_SEED, &market.market_id.to_le_bytes()],
+        seeds = [MARKET_SEED, market.authority.as_ref(), &market.market_id.to_le_bytes()],
         bump = market.bump,
         constraint = market.collateral_mint == collateral_mint.key()
-            @ MorosError::InvalidCollateralMint,
+            @ NortiaError::InvalidCollateralMint,
         constraint = market.token_program == token_program.key()
-            @ MorosError::InvalidTokenAccount
+            @ NortiaError::InvalidTokenAccount
     )]
     pub market: Box<Account<'info, Market>>,
     pub collateral_mint: Account<'info, Mint>,
     #[account(
         mut,
         constraint = payer_token.owner == payer.key()
-            @ MorosError::InvalidTokenAccount,
+            @ NortiaError::InvalidTokenAccount,
         constraint = payer_token.mint == market.collateral_mint
-            @ MorosError::InvalidTokenAccount
+            @ NortiaError::InvalidTokenAccount
     )]
     pub payer_token: Account<'info, TokenAccount>,
     #[account(
@@ -528,7 +611,7 @@ pub struct PlaceOrder<'info> {
 pub struct SubmitBatch<'info> {
     #[account(
         mut,
-        seeds = [MARKET_SEED, &market.market_id.to_le_bytes()],
+        seeds = [MARKET_SEED, market.authority.as_ref(), &market.market_id.to_le_bytes()],
         bump = market.bump
     )]
     pub market: Box<Account<'info, Market>>,
@@ -536,19 +619,21 @@ pub struct SubmitBatch<'info> {
 
 #[derive(Accounts)]
 pub struct ResolveMarket<'info> {
+    #[account(mut)]
+    pub keeper: Signer<'info>,
     #[account(
         mut,
-        seeds = [MARKET_SEED, &market.market_id.to_le_bytes()],
+        seeds = [MARKET_SEED, market.authority.as_ref(), &market.market_id.to_le_bytes()],
         bump = market.bump,
         constraint = market.collateral_mint == collateral_mint.key()
-            @ MorosError::InvalidCollateralMint,
+            @ NortiaError::InvalidCollateralMint,
         constraint = market.token_program == token_program.key()
-            @ MorosError::InvalidTokenAccount,
+            @ NortiaError::InvalidTokenAccount,
         constraint = market.treasury_owner == treasury_token.owner
-            @ MorosError::InvalidTreasury
+            @ NortiaError::InvalidTreasury
     )]
-    pub market: Account<'info, Market>,
-    pub collateral_mint: Account<'info, Mint>,
+    pub market: Box<Account<'info, Market>>,
+    pub collateral_mint: Box<Account<'info, Mint>>,
     #[account(
         mut,
         seeds = [VAULT_SEED, market.key().as_ref()],
@@ -556,13 +641,21 @@ pub struct ResolveMarket<'info> {
         token::mint = collateral_mint,
         token::authority = market
     )]
-    pub vault: Account<'info, TokenAccount>,
+    pub vault: Box<Account<'info, TokenAccount>>,
     #[account(
         mut,
         constraint = treasury_token.mint == market.collateral_mint
-            @ MorosError::InvalidTreasury
+            @ NortiaError::InvalidTreasury
     )]
-    pub treasury_token: Account<'info, TokenAccount>,
+    pub treasury_token: Box<Account<'info, TokenAccount>>,
+    #[account(
+        mut,
+        constraint = keeper_token.owner == keeper.key()
+            @ NortiaError::InvalidTokenAccount,
+        constraint = keeper_token.mint == market.collateral_mint
+            @ NortiaError::InvalidTokenAccount
+    )]
+    pub keeper_token: Box<Account<'info, TokenAccount>>,
     /// CHECK: Ownership, PDA derivation, and payload timestamp are checked against TxLINE.
     pub daily_scores_merkle_roots: UncheckedAccount<'info>,
     /// CHECK: The address and executable flag are checked against the pinned TxLINE ID.
@@ -574,7 +667,7 @@ pub struct ResolveMarket<'info> {
 pub struct BeginRefund<'info> {
     #[account(
         mut,
-        seeds = [MARKET_SEED, &market.market_id.to_le_bytes()],
+        seeds = [MARKET_SEED, market.authority.as_ref(), &market.market_id.to_le_bytes()],
         bump = market.bump
     )]
     pub market: Account<'info, Market>,
@@ -586,19 +679,19 @@ pub struct RefundOrder<'info> {
     pub payer: Signer<'info>,
     #[account(
         mut,
-        seeds = [MARKET_SEED, &market.market_id.to_le_bytes()],
+        seeds = [MARKET_SEED, market.authority.as_ref(), &market.market_id.to_le_bytes()],
         bump = market.bump,
         constraint = market.collateral_mint == collateral_mint.key()
-            @ MorosError::InvalidCollateralMint,
+            @ NortiaError::InvalidCollateralMint,
         constraint = market.token_program == token_program.key()
-            @ MorosError::InvalidTokenAccount
+            @ NortiaError::InvalidTokenAccount
     )]
     pub market: Box<Account<'info, Market>>,
     pub collateral_mint: Account<'info, Mint>,
     #[account(
         mut,
-        constraint = order.market == market.key() @ MorosError::InvalidOrder,
-        constraint = order.payer == payer.key() @ MorosError::InvalidOrder
+        constraint = order.market == market.key() @ NortiaError::InvalidOrder,
+        constraint = order.payer == payer.key() @ NortiaError::InvalidOrder
     )]
     pub order: Account<'info, Order>,
     #[account(
@@ -612,9 +705,9 @@ pub struct RefundOrder<'info> {
     #[account(
         mut,
         constraint = payer_token.owner == payer.key()
-            @ MorosError::InvalidTokenAccount,
+            @ NortiaError::InvalidTokenAccount,
         constraint = payer_token.mint == market.collateral_mint
-            @ MorosError::InvalidTokenAccount
+            @ NortiaError::InvalidTokenAccount
     )]
     pub payer_token: Account<'info, TokenAccount>,
     pub token_program: Program<'info, Token>,
@@ -627,12 +720,12 @@ pub struct Redeem<'info> {
     pub relayer: Signer<'info>,
     #[account(
         mut,
-        seeds = [MARKET_SEED, &market.market_id.to_le_bytes()],
+        seeds = [MARKET_SEED, market.authority.as_ref(), &market.market_id.to_le_bytes()],
         bump = market.bump,
         constraint = market.collateral_mint == collateral_mint.key()
-            @ MorosError::InvalidCollateralMint,
+            @ NortiaError::InvalidCollateralMint,
         constraint = market.token_program == token_program.key()
-            @ MorosError::InvalidTokenAccount
+            @ NortiaError::InvalidTokenAccount
     )]
     pub market: Box<Account<'info, Market>>,
     pub collateral_mint: Account<'info, Mint>,
@@ -657,9 +750,9 @@ pub struct Redeem<'info> {
     #[account(
         mut,
         constraint = recipient_token.owner == recipient_owner.key()
-            @ MorosError::InvalidTokenAccount,
+            @ NortiaError::InvalidTokenAccount,
         constraint = recipient_token.mint == market.collateral_mint
-            @ MorosError::InvalidTokenAccount
+            @ NortiaError::InvalidTokenAccount
     )]
     pub recipient_token: Account<'info, TokenAccount>,
     /// CHECK: The address and executable flag are checked against immutable market state.
@@ -688,7 +781,7 @@ fn verify_committee_quorum(
             require_keys_neq!(
                 *signers[left].key,
                 *signers[right].key,
-                MorosError::DuplicateCommitteeSigner
+                NortiaError::DuplicateCommitteeSigner
             );
         }
     }
@@ -698,7 +791,7 @@ fn verify_committee_quorum(
         .count();
     require!(
         quorum >= COMMITTEE_THRESHOLD,
-        MorosError::CommitteeQuorumNotMet
+        NortiaError::CommitteeQuorumNotMet
     );
     Ok(())
 }
@@ -715,8 +808,11 @@ fn batch_phase(yes_count: u32, no_count: u32) -> MarketPhase {
 struct SettlementAmounts {
     gross_pool: u64,
     protocol_fee: u64,
+    keeper_reward: u64,
+    treasury_fee: u64,
     net_pool: u64,
     payout_amount: u64,
+    payout_remainder: u64,
 }
 
 fn calculate_settlement(
@@ -724,34 +820,55 @@ fn calculate_settlement(
     order_count: u32,
     winners: u32,
     fee_bps: u16,
+    keeper_reward_bps: u16,
 ) -> Result<SettlementAmounts> {
-    require!(winners > 0, MorosError::NoWinners);
+    require!(winners > 0, NortiaError::NoWinners);
     require!(
         fee_bps > 0 && fee_bps <= MAX_PROTOCOL_FEE_BPS,
-        MorosError::InvalidProtocolFee
+        NortiaError::InvalidProtocolFee
+    );
+    require!(
+        keeper_reward_bps <= MAX_KEEPER_REWARD_BPS,
+        NortiaError::InvalidProtocolFee
     );
     let gross_pool = (ticket_amount as u128)
         .checked_mul(order_count as u128)
-        .ok_or_else(|| error!(MorosError::ArithmeticOverflow))?;
+        .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
     let protocol_fee = gross_pool
         .checked_mul(fee_bps as u128)
         .and_then(|value| value.checked_div(BASIS_POINTS_DENOMINATOR))
-        .ok_or_else(|| error!(MorosError::ArithmeticOverflow))?;
+        .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
     let net_pool = gross_pool
         .checked_sub(protocol_fee)
-        .ok_or_else(|| error!(MorosError::ArithmeticOverflow))?;
+        .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
+    let keeper_reward = protocol_fee
+        .checked_mul(keeper_reward_bps as u128)
+        .and_then(|value| value.checked_div(BASIS_POINTS_DENOMINATOR))
+        .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
+    let treasury_fee = protocol_fee
+        .checked_sub(keeper_reward)
+        .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
     let payout_amount = net_pool
         .checked_div(winners as u128)
-        .ok_or_else(|| error!(MorosError::ArithmeticOverflow))?;
+        .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
+    let payout_remainder = net_pool
+        .checked_rem(winners as u128)
+        .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
 
     Ok(SettlementAmounts {
         gross_pool: u64::try_from(gross_pool)
-            .map_err(|_| error!(MorosError::ArithmeticOverflow))?,
+            .map_err(|_| error!(NortiaError::ArithmeticOverflow))?,
         protocol_fee: u64::try_from(protocol_fee)
-            .map_err(|_| error!(MorosError::ArithmeticOverflow))?,
-        net_pool: u64::try_from(net_pool).map_err(|_| error!(MorosError::ArithmeticOverflow))?,
+            .map_err(|_| error!(NortiaError::ArithmeticOverflow))?,
+        keeper_reward: u64::try_from(keeper_reward)
+            .map_err(|_| error!(NortiaError::ArithmeticOverflow))?,
+        treasury_fee: u64::try_from(treasury_fee)
+            .map_err(|_| error!(NortiaError::ArithmeticOverflow))?,
+        net_pool: u64::try_from(net_pool).map_err(|_| error!(NortiaError::ArithmeticOverflow))?,
         payout_amount: u64::try_from(payout_amount)
-            .map_err(|_| error!(MorosError::ArithmeticOverflow))?,
+            .map_err(|_| error!(NortiaError::ArithmeticOverflow))?,
+        payout_remainder: u64::try_from(payout_remainder)
+            .map_err(|_| error!(NortiaError::ArithmeticOverflow))?,
     })
 }
 
@@ -763,10 +880,15 @@ fn transfer_from_vault<'info>(
     token_program: &Program<'info, Token>,
     amount: u64,
 ) -> Result<()> {
-    require!(vault.amount >= amount, MorosError::InsufficientVaultBalance);
+    require!(vault.amount >= amount, NortiaError::InsufficientVaultBalance);
     let market_id_bytes = market.market_id.to_le_bytes();
     let bump = [market.bump];
-    let signer_seeds: &[&[u8]] = &[MARKET_SEED, &market_id_bytes, &bump];
+    let signer_seeds: &[&[u8]] = &[
+        MARKET_SEED,
+        market.authority.as_ref(),
+        &market_id_bytes,
+        &bump,
+    ];
     let signer = &[signer_seeds];
     let transfer_accounts = TransferChecked {
         from: vault.to_account_info(),
@@ -796,6 +918,26 @@ mod tests {
     }
 
     #[test]
+    fn protocol_space_matches_serialized_configuration() {
+        let config = ProtocolConfig {
+            bump: 1,
+            authority: Pubkey::new_unique(),
+            treasury_owner: Pubkey::new_unique(),
+            fee_bps: 100,
+            keeper_reward_bps: 1_000,
+            collateral_mint: Pubkey::new_unique(),
+            token_program: Pubkey::new_unique(),
+            txline_program: TXLINE_PROGRAM_ID,
+            committee: [Pubkey::new_unique(), Pubkey::new_unique(), Pubkey::new_unique()],
+            placement_verifier: Pubkey::new_unique(),
+            redeem_verifier: Pubkey::new_unique(),
+        };
+        let mut data = Vec::new();
+        config.try_serialize(&mut data).unwrap();
+        assert_eq!(ProtocolConfig::SPACE, data.len());
+    }
+
+    #[test]
     fn one_sided_batch_refunds_before_resolution() {
         assert_eq!(batch_phase(3, 0), MarketPhase::Refunding);
         assert_eq!(batch_phase(0, 3), MarketPhase::Refunding);
@@ -804,27 +946,42 @@ mod tests {
 
     #[test]
     fn settlement_collects_one_percent_from_gross_pool() {
-        let settlement = calculate_settlement(TICKET_AMOUNT, 3, 2, 100).unwrap();
+        let settlement = calculate_settlement(TICKET_AMOUNT, 3, 2, 100, 1_000).unwrap();
         assert_eq!(
             settlement,
             SettlementAmounts {
                 gross_pool: 3_000_000,
                 protocol_fee: 30_000,
+                keeper_reward: 3_000,
+                treasury_fee: 27_000,
                 net_pool: 2_970_000,
                 payout_amount: 1_485_000,
+                payout_remainder: 0,
             }
         );
     }
 
     #[test]
+    fn settlement_assigns_division_dust_to_the_final_winner() {
+        let settlement = calculate_settlement(1, 3, 2, 100, 1_000).unwrap();
+        assert_eq!(settlement.payout_amount, 1);
+        assert_eq!(settlement.payout_remainder, 1);
+        assert_eq!(
+            settlement.protocol_fee + settlement.payout_amount * 2 + settlement.payout_remainder,
+            settlement.gross_pool
+        );
+    }
+
+    #[test]
     fn settlement_rejects_invalid_fee_and_zero_winners() {
-        assert!(calculate_settlement(TICKET_AMOUNT, 3, 2, 0).is_err());
-        assert!(calculate_settlement(TICKET_AMOUNT, 3, 2, 301).is_err());
-        assert!(calculate_settlement(TICKET_AMOUNT, 3, 0, 100).is_err());
+        assert!(calculate_settlement(TICKET_AMOUNT, 3, 2, 0, 1_000).is_err());
+        assert!(calculate_settlement(TICKET_AMOUNT, 3, 2, 301, 1_000).is_err());
+        assert!(calculate_settlement(TICKET_AMOUNT, 3, 2, 100, 5_001).is_err());
+        assert!(calculate_settlement(TICKET_AMOUNT, 3, 0, 100, 1_000).is_err());
     }
 
     #[test]
     fn settlement_rejects_values_that_do_not_fit_u64() {
-        assert!(calculate_settlement(u64::MAX, 2, 1, 100).is_err());
+        assert!(calculate_settlement(u64::MAX, 2, 1, 100, 1_000).is_err());
     }
 }

@@ -1,12 +1,16 @@
 export const USDC_DECIMALS = 6;
 export const USDC_SCALE = 10n ** BigInt(USDC_DECIMALS);
 export const MAX_FEE_BPS = 300;
+export const MAX_KEEPER_REWARD_BPS = 5_000;
 
 export type SettlementAmounts = {
   grossPool: bigint;
   protocolFee: bigint;
+  keeperReward: bigint;
+  treasuryFee: bigint;
   netPool: bigint;
   payoutPerWinner: bigint;
+  payoutRemainder: bigint;
 };
 
 export function calculateSettlement(
@@ -14,6 +18,7 @@ export function calculateSettlement(
   orderCount: number,
   winnerCount: number,
   feeBps: number,
+  keeperRewardBps = 1_000,
 ): SettlementAmounts {
   if (ticketAmount <= 0n) {
     throw new Error("ticket amount must be positive");
@@ -27,15 +32,23 @@ export function calculateSettlement(
   if (!Number.isSafeInteger(feeBps) || feeBps < 0 || feeBps > MAX_FEE_BPS) {
     throw new Error(`fee must be between 0 and ${MAX_FEE_BPS} basis points`);
   }
+  if (!Number.isSafeInteger(keeperRewardBps) || keeperRewardBps < 0 || keeperRewardBps > MAX_KEEPER_REWARD_BPS) {
+    throw new Error(`keeper reward must be between 0 and ${MAX_KEEPER_REWARD_BPS} basis points`);
+  }
 
   const grossPool = ticketAmount * BigInt(orderCount);
   const protocolFee = (grossPool * BigInt(feeBps)) / 10_000n;
+  const keeperReward = (protocolFee * BigInt(keeperRewardBps)) / 10_000n;
+  const treasuryFee = protocolFee - keeperReward;
   const netPool = grossPool - protocolFee;
   return {
     grossPool,
     protocolFee,
+    keeperReward,
+    treasuryFee,
     netPool,
     payoutPerWinner: netPool / BigInt(winnerCount),
+    payoutRemainder: netPool % BigInt(winnerCount),
   };
 }
 

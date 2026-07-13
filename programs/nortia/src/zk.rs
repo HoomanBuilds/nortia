@@ -4,7 +4,7 @@ use anchor_lang::{
 };
 use solana_poseidon::{hashv, Endianness, Parameters};
 
-use crate::{error::MorosError, state::Market};
+use crate::{error::NortiaError, state::Market};
 
 const PUBLIC_INPUTS: usize = 7;
 const WITNESS_HEADER_LEN: usize = 12;
@@ -19,7 +19,7 @@ pub fn pubkey_hash(key: &Pubkey) -> Result<[u8; 32]> {
         Endianness::LittleEndian,
         &[&bytes[..16], &bytes[16..]],
     )
-    .map_err(|_| error!(MorosError::PoseidonHashFailed))?;
+    .map_err(|_| error!(NortiaError::PoseidonHashFailed))?;
     let little_endian = hash.to_bytes();
     let mut big_endian = little_endian;
     big_endian.reverse();
@@ -88,24 +88,24 @@ fn verify(
 ) -> Result<()> {
     require!(
         (128..=MAX_PROOF_LEN).contains(&proof.len()),
-        MorosError::InvalidProofLength
+        NortiaError::InvalidProofLength
     );
     require!(
         witness.len() == WITNESS_LEN,
-        MorosError::InvalidWitnessLength
+        NortiaError::InvalidWitnessLength
     );
     require_keys_eq!(
         *verifier.key,
         *expected_verifier,
-        MorosError::InvalidVerifierProgram
+        NortiaError::InvalidVerifierProgram
     );
-    require!(verifier.executable, MorosError::InvalidVerifierProgram);
+    require!(verifier.executable, NortiaError::InvalidVerifierProgram);
 
     for (index, expected) in expected_fields.iter().enumerate() {
         let start = WITNESS_HEADER_LEN + index * FIELD_LEN;
         require!(
             witness[start..start + FIELD_LEN] == expected[..],
-            MorosError::PublicWitnessMismatch
+            NortiaError::PublicWitnessMismatch
         );
     }
 
@@ -129,5 +129,17 @@ mod tests {
         let field = field_from_u64(0x0102_0304_0506_0708);
         assert_eq!(&field[..24], &[0u8; 24]);
         assert_eq!(&field[24..], &[1, 2, 3, 4, 5, 6, 7, 8]);
+    }
+
+    #[test]
+    fn pubkey_hash_matches_the_typescript_prover_encoding() {
+        let key = pubkey!("4S2EvdGrbKJ9zazvB4gtR83crTrVJWqqwoVVvEQy8VE9");
+        assert_eq!(
+            pubkey_hash(&key).unwrap(),
+            [
+                40, 192, 105, 29, 19, 25, 245, 169, 45, 252, 52, 235, 123, 107, 24, 101,
+                211, 46, 48, 194, 152, 111, 56, 35, 168, 165, 174, 116, 28, 33, 218, 80,
+            ]
+        );
     }
 }

@@ -11,7 +11,7 @@ use crate::{
         DAILY_SCORES_ROOT_SEED, FINAL_PERIOD, MILLIS_PER_DAY, TXLINE_PROGRAM_ID,
         TXLINE_VALIDATE_STAT_V2_DISCRIMINATOR,
     },
-    error::MorosError,
+    error::NortiaError,
     state::Market,
 };
 
@@ -113,18 +113,18 @@ pub fn resolve_total_goals_over<'info>(
     require_keys_eq!(
         market.txline_program,
         TXLINE_PROGRAM_ID,
-        MorosError::InvalidTxlineProgram
+        NortiaError::InvalidTxlineProgram
     );
     require_keys_eq!(
         *txline_program.key,
         TXLINE_PROGRAM_ID,
-        MorosError::InvalidTxlineProgram
+        NortiaError::InvalidTxlineProgram
     );
-    require!(txline_program.executable, MorosError::InvalidTxlineProgram);
+    require!(txline_program.executable, NortiaError::InvalidTxlineProgram);
     require_keys_eq!(
         *daily_root.owner,
         TXLINE_PROGRAM_ID,
-        MorosError::InvalidTxlineRoot
+        NortiaError::InvalidTxlineRoot
     );
     validate_payload(market, payload, daily_root.key)?;
 
@@ -132,10 +132,10 @@ pub fn resolve_total_goals_over<'info>(
     let mut data = TXLINE_VALIDATE_STAT_V2_DISCRIMINATOR.to_vec();
     payload
         .serialize(&mut data)
-        .map_err(|_| error!(MorosError::InvalidScorePayload))?;
+        .map_err(|_| error!(NortiaError::InvalidScorePayload))?;
     strategy
         .serialize(&mut data)
-        .map_err(|_| error!(MorosError::InvalidScorePayload))?;
+        .map_err(|_| error!(NortiaError::InvalidScorePayload))?;
 
     let instruction = Instruction {
         program_id: TXLINE_PROGRAM_ID,
@@ -145,16 +145,16 @@ pub fn resolve_total_goals_over<'info>(
     invoke(&instruction, &[daily_root.clone(), txline_program.clone()])?;
 
     let (returning_program, return_data) =
-        get_return_data().ok_or_else(|| error!(MorosError::InvalidTxlineReturn))?;
+        get_return_data().ok_or_else(|| error!(NortiaError::InvalidTxlineReturn))?;
     require_keys_eq!(
         returning_program,
         TXLINE_PROGRAM_ID,
-        MorosError::InvalidTxlineReturn
+        NortiaError::InvalidTxlineReturn
     );
     match return_data.as_slice() {
         [0] => Ok(false),
         [1] => Ok(true),
-        _ => err!(MorosError::InvalidTxlineReturn),
+        _ => err!(NortiaError::InvalidTxlineReturn),
     }
 }
 
@@ -165,46 +165,46 @@ fn validate_payload(
 ) -> Result<()> {
     require!(
         payload.fixture_summary.fixture_id == market.fixture_id,
-        MorosError::InvalidScorePayload
+        NortiaError::InvalidScorePayload
     );
-    require!(payload.stats.len() == 2, MorosError::InvalidScorePayload);
+    require!(payload.stats.len() == 2, NortiaError::InvalidScorePayload);
     require!(
         payload.fixture_summary.update_stats.update_count > 0,
-        MorosError::InvalidScorePayload
+        NortiaError::InvalidScorePayload
     );
     require!(
         payload.fixture_summary.update_stats.min_timestamp
             <= payload.fixture_summary.update_stats.max_timestamp,
-        MorosError::InvalidScorePayload
+        NortiaError::InvalidScorePayload
     );
     require!(
         payload.ts == payload.fixture_summary.update_stats.min_timestamp,
-        MorosError::InvalidScorePayload
+        NortiaError::InvalidScorePayload
     );
 
     let score_a = &payload.stats[0].stat;
     let score_b = &payload.stats[1].stat;
     require!(
         score_a.key == market.score_key_a,
-        MorosError::InvalidScorePayload
+        NortiaError::InvalidScorePayload
     );
     require!(
         score_b.key == market.score_key_b,
-        MorosError::InvalidScorePayload
+        NortiaError::InvalidScorePayload
     );
     require!(
         score_a.period == FINAL_PERIOD,
-        MorosError::InvalidScorePayload
+        NortiaError::InvalidScorePayload
     );
     require!(
         score_b.period == FINAL_PERIOD,
-        MorosError::InvalidScorePayload
+        NortiaError::InvalidScorePayload
     );
-    require!(score_a.value >= 0, MorosError::InvalidScorePayload);
-    require!(score_b.value >= 0, MorosError::InvalidScorePayload);
+    require!(score_a.value >= 0, NortiaError::InvalidScorePayload);
+    require!(score_b.value >= 0, NortiaError::InvalidScorePayload);
 
     let expected_root = daily_scores_root(payload.ts)?;
-    require_keys_eq!(*daily_root, expected_root, MorosError::InvalidTxlineRoot);
+    require_keys_eq!(*daily_root, expected_root, NortiaError::InvalidTxlineRoot);
     Ok(())
 }
 
@@ -212,7 +212,7 @@ fn daily_scores_root(timestamp_ms: i64) -> Result<Pubkey> {
     let epoch_day = timestamp_ms.div_euclid(MILLIS_PER_DAY);
     require!(
         (0..=u16::MAX as i64).contains(&epoch_day),
-        MorosError::InvalidTxlineRoot
+        NortiaError::InvalidTxlineRoot
     );
     let epoch_day_bytes = (epoch_day as u16).to_le_bytes();
     Ok(Pubkey::find_program_address(

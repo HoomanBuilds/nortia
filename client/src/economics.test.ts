@@ -12,8 +12,11 @@ test("three-ticket pool charges one percent once at settlement", () => {
   assert.deepEqual(calculateSettlement(1_000_000n, 3, 2, 100), {
     grossPool: 3_000_000n,
     protocolFee: 30_000n,
+    keeperReward: 3_000n,
+    treasuryFee: 27_000n,
     netPool: 2_970_000n,
     payoutPerWinner: 1_485_000n,
+    payoutRemainder: 0n,
   });
 });
 
@@ -21,14 +24,18 @@ test("settlement validates boundaries and uses integer floor division", () => {
   assert.deepEqual(calculateSettlement(1n, 3, 2, 1), {
     grossPool: 3n,
     protocolFee: 0n,
+    keeperReward: 0n,
+    treasuryFee: 0n,
     netPool: 3n,
     payoutPerWinner: 1n,
+    payoutRemainder: 1n,
   });
   assert.throws(() => calculateSettlement(0n, 3, 2, 100), /positive/);
   assert.throws(() => calculateSettlement(1n, 0, 1, 100), /order count/);
   assert.throws(() => calculateSettlement(1n, 3, 0, 100), /winner count/);
   assert.throws(() => calculateSettlement(1n, 3, 4, 100), /winner count/);
   assert.throws(() => calculateSettlement(1n, 3, 2, 301), /basis points/);
+  assert.throws(() => calculateSettlement(1n, 3, 2, 100, 5_001), /keeper reward/);
 });
 
 test("USDC values never use scientific notation", () => {

@@ -9,6 +9,21 @@ pub enum MarketMode {
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MarketCategory {
+    Sports,
+    Crypto,
+    Politics,
+    Technology,
+    Culture,
+    Other,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ResolverKind {
+    TxlineStatV2,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MarketPhase {
     Open,
     Batched,
@@ -23,13 +38,17 @@ pub struct ProtocolConfig {
     pub authority: Pubkey,
     pub treasury_owner: Pubkey,
     pub fee_bps: u16,
+    pub keeper_reward_bps: u16,
     pub collateral_mint: Pubkey,
     pub token_program: Pubkey,
     pub txline_program: Pubkey,
+    pub committee: [Pubkey; COMMITTEE_SIZE],
+    pub placement_verifier: Pubkey,
+    pub redeem_verifier: Pubkey,
 }
 
 impl ProtocolConfig {
-    pub const SPACE: usize = 8 + 256;
+    pub const SPACE: usize = 8 + 325;
 }
 
 #[account]
@@ -38,6 +57,10 @@ pub struct Market {
     pub vault_bump: u8,
     pub market_id: u64,
     pub authority: Pubkey,
+    pub category: MarketCategory,
+    pub resolver_kind: ResolverKind,
+    pub question_hash: [u8; 32],
+    pub rules_hash: [u8; 32],
     pub fixture_id: i64,
     pub market_mode: MarketMode,
     pub fixture_start_ts: i64,
@@ -48,6 +71,7 @@ pub struct Market {
     pub token_program: Pubkey,
     pub ticket_amount: u64,
     pub fee_bps: u16,
+    pub keeper_reward_bps: u16,
     pub treasury_owner: Pubkey,
     pub txline_program: Pubkey,
     pub lock_ts: i64,
@@ -64,14 +88,18 @@ pub struct Market {
     pub redeem_verifier: Pubkey,
     pub gross_pool: u64,
     pub protocol_fee: u64,
+    pub keeper_reward: u64,
+    pub treasury_fee: u64,
     pub net_pool: u64,
     pub payout_amount: u64,
+    pub payout_remainder: u64,
     pub claimed_count: u32,
     pub refunded_count: u32,
     pub settled_at: i64,
     pub txline_proof_ts: i64,
     pub final_seq: u32,
     pub daily_scores_root: Pubkey,
+    pub settlement_evidence_hash: [u8; 32],
     pub score_a: i32,
     pub score_b: i32,
 }
@@ -122,20 +150,26 @@ impl Claim {
 pub struct InitializeProtocolArgs {
     pub treasury_owner: Pubkey,
     pub fee_bps: u16,
+    pub keeper_reward_bps: u16,
+    pub committee: [Pubkey; COMMITTEE_SIZE],
+    pub placement_verifier: Pubkey,
+    pub redeem_verifier: Pubkey,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct InitializeMarketArgs {
     pub market_id: u64,
+    pub category: MarketCategory,
+    pub resolver_kind: ResolverKind,
+    pub question_hash: [u8; 32],
+    pub rules_hash: [u8; 32],
     pub fixture_id: i64,
+    pub total_goals_threshold: i32,
     pub market_mode: MarketMode,
     pub fixture_start_ts: i64,
     pub lock_ts: i64,
     pub batch_deadline_ts: i64,
     pub resolution_deadline_ts: i64,
-    pub committee: [Pubkey; COMMITTEE_SIZE],
-    pub placement_verifier: Pubkey,
-    pub redeem_verifier: Pubkey,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -167,13 +201,23 @@ pub struct ProtocolInitialized {
     pub treasury_owner: Pubkey,
     pub collateral_mint: Pubkey,
     pub fee_bps: u16,
+    pub keeper_reward_bps: u16,
+    pub committee: [Pubkey; COMMITTEE_SIZE],
+    pub placement_verifier: Pubkey,
+    pub redeem_verifier: Pubkey,
 }
 
 #[event]
 pub struct MarketCreated {
     pub market: Pubkey,
     pub market_id: u64,
+    pub authority: Pubkey,
+    pub category: MarketCategory,
+    pub resolver_kind: ResolverKind,
+    pub question_hash: [u8; 32],
+    pub rules_hash: [u8; 32],
     pub fixture_id: i64,
+    pub total_goals_threshold: i32,
     pub market_mode: MarketMode,
     pub collateral_mint: Pubkey,
     pub ticket_amount: u64,
@@ -207,8 +251,12 @@ pub struct MarketResolved {
     pub score_b: i32,
     pub gross_pool: u64,
     pub protocol_fee: u64,
+    pub keeper_reward: u64,
+    pub treasury_fee: u64,
     pub net_pool: u64,
     pub payout_amount: u64,
+    pub payout_remainder: u64,
+    pub settlement_evidence_hash: [u8; 32],
 }
 
 #[event]
@@ -218,7 +266,9 @@ pub struct ProtocolFeeCollected {
     pub treasury_token: Pubkey,
     pub gross_pool: u64,
     pub fee_bps: u16,
-    pub amount: u64,
+    pub treasury_amount: u64,
+    pub keeper: Pubkey,
+    pub keeper_amount: u64,
 }
 
 #[event]
@@ -241,4 +291,9 @@ pub struct WinningsRedeemed {
     pub recipient_owner: Pubkey,
     pub recipient_token: Pubkey,
     pub amount: u64,
+}
+
+#[event]
+pub struct MarketClosed {
+    pub market: Pubkey,
 }

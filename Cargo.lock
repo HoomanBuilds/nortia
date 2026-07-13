@@ -1016,6 +1016,7 @@ dependencies = [
  "anchor-spl",
  "base64ct",
  "solana-poseidon",
+ "solana-sha256-hasher",
 ]
 
 [[package]]
