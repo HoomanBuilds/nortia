@@ -7,6 +7,7 @@
     "committee": "node --env-file-if-exists=.env --import tsx src/committee/server.ts",
     "committee:batch": "node --env-file-if-exists=.env --import tsx src/committee/coordinator.ts",
     "deploy:initialize": "node --env-file-if-exists=.env --import tsx src/deploy/initialize-protocol.ts",
+    "deploy:replay-market": "node --env-file-if-exists=.env --import tsx src/deploy/create-replay-market.ts",
     "indexer": "node --env-file-if-exists=.env --import tsx src/indexer/runner.ts",
     "keeper": "node --env-file-if-exists=.env --import tsx src/keeper/runner.ts",
     "prover": "node --env-file-if-exists=.env --import tsx src/prover/server.ts",
