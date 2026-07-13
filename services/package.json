@@ -1,0 +1,30 @@
+{
+  "name": "nortia-services",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "committee": "node --env-file-if-exists=.env --import tsx src/committee/server.ts",
+    "committee:batch": "node --env-file-if-exists=.env --import tsx src/committee/coordinator.ts",
+    "deploy:initialize": "node --env-file-if-exists=.env --import tsx src/deploy/initialize-protocol.ts",
+    "indexer": "node --env-file-if-exists=.env --import tsx src/indexer/runner.ts",
+    "keeper": "node --env-file-if-exists=.env --import tsx src/keeper/runner.ts",
+    "prover": "node --env-file-if-exists=.env --import tsx src/prover/server.ts",
+    "test": "node --import tsx --test src/*.test.ts src/**/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anchor-lang/core": "1.1.2",
+    "@solana/spl-token": "0.4.15",
+    "@solana/web3.js": "1.98.4",
+    "bn.js": "5.2.5",
+    "nortia-client": "file:../client",
+    "poseidon-lite": "0.3.0"
+  },
+  "devDependencies": {
+    "@types/bn.js": "5.2.0",
+    "@types/node": "22.20.1",
+    "tsx": "4.23.1",
+    "typescript": "5.9.3"
+  }
+}
