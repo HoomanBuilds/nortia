@@ -184,7 +184,8 @@ export type Nortia = {
         {
           "name": "authority",
           "writable": true,
-          "signer": true
+          "signer": true,
+          "address": "5yFHYFS1y8hVuVte6F3ae9NMh3i4F1ZGyTynwb8onb5S"
         },
         {
           "name": "protocol",
@@ -208,7 +209,8 @@ export type Nortia = {
           }
         },
         {
-          "name": "collateralMint"
+          "name": "collateralMint",
+          "address": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
         },
         {
           "name": "tokenProgram",

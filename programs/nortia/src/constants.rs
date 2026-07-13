@@ -19,4 +19,6 @@ pub const MAX_TOTAL_GOALS_THRESHOLD: i32 = 20;
 pub const FINAL_PERIOD: i32 = 100;
 pub const MILLIS_PER_DAY: i64 = 86_400_000;
 pub const TXLINE_VALIDATE_STAT_V2_DISCRIMINATOR: [u8; 8] = [208, 215, 194, 214, 241, 71, 246, 178];
+pub const PROTOCOL_AUTHORITY: Pubkey = pubkey!("5yFHYFS1y8hVuVte6F3ae9NMh3i4F1ZGyTynwb8onb5S");
+pub const DEVNET_USDC_MINT: Pubkey = pubkey!("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU");
 pub const TXLINE_PROGRAM_ID: Pubkey = pubkey!("6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J");

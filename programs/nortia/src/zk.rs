@@ -117,7 +117,7 @@ fn verify(
         accounts: vec![],
         data,
     };
-    invoke(&instruction, &[]).map_err(Into::into)
+    invoke(&instruction, std::slice::from_ref(verifier)).map_err(Into::into)
 }
 
 #[cfg(test)]
@@ -137,8 +137,8 @@ mod tests {
         assert_eq!(
             pubkey_hash(&key).unwrap(),
             [
-                40, 192, 105, 29, 19, 25, 245, 169, 45, 252, 52, 235, 123, 107, 24, 101,
-                211, 46, 48, 194, 152, 111, 56, 35, 168, 165, 174, 116, 28, 33, 218, 80,
+                40, 192, 105, 29, 19, 25, 245, 169, 45, 252, 52, 235, 123, 107, 24, 101, 211, 46,
+                48, 194, 152, 111, 56, 35, 168, 165, 174, 116, 28, 33, 218, 80,
             ]
         );
     }

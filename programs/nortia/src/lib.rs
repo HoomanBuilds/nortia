@@ -83,6 +83,7 @@ pub mod nortia {
                 && now < args.lock_ts
                 && args.lock_ts < args.batch_deadline_ts
                 && args.batch_deadline_ts < args.resolution_deadline_ts
+                && args.fixture_start_ts < args.resolution_deadline_ts
                 && live_timing_valid,
             NortiaError::InvalidMarketConfiguration
         );
@@ -220,7 +221,10 @@ pub mod nortia {
         let market = &mut ctx.accounts.market;
         require!(market.phase == MarketPhase::Open, NortiaError::InvalidPhase);
         require!(now >= market.lock_ts, NortiaError::TooEarly);
-        require!(now <= market.batch_deadline_ts, NortiaError::DeadlineElapsed);
+        require!(
+            now <= market.batch_deadline_ts,
+            NortiaError::DeadlineElapsed
+        );
         require!(args.commitment_root != [0; 32], NortiaError::ZeroCommitment);
         require!(market.order_count > 0, NortiaError::NoOrders);
         require!(
@@ -382,9 +386,13 @@ pub mod nortia {
             MarketPhase::Refunding
         };
         if market.phase == MarketPhase::Closed {
-            emit!(MarketClosed { market: market.key() });
+            emit!(MarketClosed {
+                market: market.key()
+            });
         } else {
-            emit!(RefundsOpened { market: market.key() });
+            emit!(RefundsOpened {
+                market: market.key()
+            });
         }
         Ok(())
     }
@@ -433,7 +441,10 @@ pub mod nortia {
             ctx.accounts.market.phase == MarketPhase::Resolved,
             NortiaError::InvalidPhase
         );
-        require!(ctx.accounts.market.payout_amount > 0, NortiaError::NoWinners);
+        require!(
+            ctx.accounts.market.payout_amount > 0,
+            NortiaError::NoWinners
+        );
         require!(
             ctx.accounts.market.claimed_count < ctx.accounts.market.winner_count(),
             NortiaError::NoWinners
@@ -447,8 +458,8 @@ pub mod nortia {
             &ctx.accounts.redeem_verifier,
         )?;
 
-        let is_final_claim = ctx.accounts.market.claimed_count + 1
-            == ctx.accounts.market.winner_count();
+        let is_final_claim =
+            ctx.accounts.market.claimed_count + 1 == ctx.accounts.market.winner_count();
         let amount = if is_final_claim {
             ctx.accounts
                 .market
@@ -500,7 +511,10 @@ pub mod nortia {
 
 #[derive(Accounts)]
 pub struct InitializeProtocol<'info> {
-    #[account(mut)]
+    #[account(
+        mut,
+        address = PROTOCOL_AUTHORITY @ NortiaError::InvalidProtocolConfiguration
+    )]
     pub authority: Signer<'info>,
     #[account(
         init,
@@ -511,6 +525,7 @@ pub struct InitializeProtocol<'info> {
     )]
     pub protocol: Account<'info, ProtocolConfig>,
     #[account(
+        address = DEVNET_USDC_MINT @ NortiaError::InvalidCollateralMint,
         constraint = collateral_mint.decimals == USDC_DECIMALS
             @ NortiaError::InvalidCollateralMint
     )]
@@ -880,7 +895,10 @@ fn transfer_from_vault<'info>(
     token_program: &Program<'info, Token>,
     amount: u64,
 ) -> Result<()> {
-    require!(vault.amount >= amount, NortiaError::InsufficientVaultBalance);
+    require!(
+        vault.amount >= amount,
+        NortiaError::InsufficientVaultBalance
+    );
     let market_id_bytes = market.market_id.to_le_bytes();
     let bump = [market.bump];
     let signer_seeds: &[&[u8]] = &[
@@ -918,6 +936,19 @@ mod tests {
     }
 
     #[test]
+    fn deployment_identity_is_pinned_to_devnet_configuration() {
+        assert_ne!(PROTOCOL_AUTHORITY, Pubkey::default());
+        assert_eq!(
+            DEVNET_USDC_MINT.to_string(),
+            "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
+        );
+        assert_eq!(
+            TXLINE_PROGRAM_ID.to_string(),
+            "6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J"
+        );
+    }
+
+    #[test]
     fn protocol_space_matches_serialized_configuration() {
         let config = ProtocolConfig {
             bump: 1,
@@ -928,7 +959,11 @@ mod tests {
             collateral_mint: Pubkey::new_unique(),
             token_program: Pubkey::new_unique(),
             txline_program: TXLINE_PROGRAM_ID,
-            committee: [Pubkey::new_unique(), Pubkey::new_unique(), Pubkey::new_unique()],
+            committee: [
+                Pubkey::new_unique(),
+                Pubkey::new_unique(),
+                Pubkey::new_unique(),
+            ],
             placement_verifier: Pubkey::new_unique(),
             redeem_verifier: Pubkey::new_unique(),
         };
