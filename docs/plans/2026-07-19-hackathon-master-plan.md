@@ -24,7 +24,7 @@ The five-minute demo must prove the complete story:
 
 ## 2. Why this architecture
 
-The reference Moros repository succeeded because it validated load-bearing primitives first, wrote a master plan, split it into subsystem specifications, built one complete private market, and planned the demo backward from evidence. This project ports that discipline, not the Stellar-specific contract topology.
+The reference prediction-market repository succeeded because it validated load-bearing primitives first, wrote a master plan, split it into subsystem specifications, built one complete private market, and planned the demo backward from evidence. Nortia ports that discipline, not its chain-specific contract topology.
 
 The Solana version deliberately uses:
 
