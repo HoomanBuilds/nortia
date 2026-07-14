@@ -1,5 +1,12 @@
 # Deployments
 
-`devnet.json` is the canonical machine-readable status for the hackathon deployment. Null values mean the account or transaction does not exist yet. They are intentionally not replaced with demo addresses.
+`devnet.json` is the canonical machine-readable record for the live Solana devnet deployment. It contains only public addresses, protocol configuration, account metadata, and confirmed transaction signatures.
 
-After the payer is funded and both Sunspot verifier programs are deployed, run `scripts/deploy-devnet.sh`, then replace the status and transaction fields with confirmed explorer evidence.
+The deployment includes:
+
+- The Nortia Anchor program.
+- Separate Sunspot-generated placement and redemption verifier programs.
+- A protocol PDA pinned to Circle devnet USDC, a 1% success fee, a 10% keeper share of that fee, and the named 2-of-3 committee.
+- A real TxLINE-covered replay market that remains open through July 27, 2026.
+
+Run `scripts/deploy-devnet.sh` to reproduce program and protocol deployment. Run `npm --prefix services run deploy:replay-market` with `NORTIA_KEYPAIR_PATH` configured to create or verify the canonical sample market.

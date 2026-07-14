@@ -1,19 +1,52 @@
 {
   "network": "solana-devnet",
-  "checkedAt": "2026-07-19T18:59:11Z",
-  "nortiaProgram": "4S2EvdGrbKJ9zazvB4gtR83crTrVJWqqwoVVvEQy8VE9",
-  "nortiaProgramStatus": "not-deployed",
-  "txlineProgram": "6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J",
-  "usdcMint": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
-  "protocolPda": null,
-  "placementVerifier": null,
-  "redeemVerifier": null,
-  "sampleMarket": null,
-  "transactions": {},
-  "deploymentBlocker": {
-    "payerBalanceSol": 0.740084534,
-    "programBytes": 428920,
-    "programRentSol": 2.98617408,
-    "faucet": "rate-limited"
+  "checkedAt": "2026-07-20T05:17:18Z",
+  "status": "deployed",
+  "programs": {
+    "nortia": {
+      "programId": "4S2EvdGrbKJ9zazvB4gtR83crTrVJWqqwoVVvEQy8VE9",
+      "programData": "38zjkVVYSt6A2ZA5vN4grWH4kwY6GUGM4uzhaugNdZWS",
+      "deploySignature": "3VUMoDz8XNJdfJfEHfiXWc7mBPbSaA9DSYXFTKhkZU11zRaFnCnqWE5w9o72pSe4HhYS1r9UUjnXkkNtYgHbvjiu",
+      "dataLengthBytes": 432296
+    },
+    "placementVerifier": {
+      "programId": "6Hbwzfm315jkt1xFgLMbnKxVG6wXMiJH1zTUh2ujzcAt",
+      "programData": "21HEd9PsBfbDYF6qNbSTCyMabryk5qt6e83G3Hbinz3p",
+      "deploySignature": "37g5ufReAz38NVdy9SWS6vRsQKYHpLVMujXvAyNLkioiqaf7ry6T7PYGEi9mRSZFjQwZ49LGkxdMUi9uuTj7kRXA",
+      "dataLengthBytes": 87568
+    },
+    "redeemVerifier": {
+      "programId": "7PQFWh8XRoGya1fJSM69Rpjcec8cqKJi3e3gVYwwk3YW",
+      "programData": "57y8SGwcTUGgTLYfqW93WsckDD5xfTkzNpfkc2hq9gJk",
+      "deploySignature": "5dYRFcS9bwzrh1M4bg6HrZGeZbF4sNi51rHbRN35LtDUntnhq5YhReFKTvGQfNKWrTGENeRCLnmU8ww7TzjZhb3A",
+      "dataLengthBytes": 87568
+    },
+    "txline": {
+      "programId": "6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J"
+    }
+  },
+  "protocol": {
+    "address": "CJi67t1hHprwceArXdPyw6xLrN1Y3QbcvSC4R2SXoKZR",
+    "initializeSignature": "3oeLrSZDj1J7iR3vFvU1KyLoJxLunZbUikRBpiF3ER4VBx8p6BwAJmVboioqv1vY7fJWR7rBZmWd9cBKgUnkxknb",
+    "authority": "5yFHYFS1y8hVuVte6F3ae9NMh3i4F1ZGyTynwb8onb5S",
+    "treasuryOwner": "5yFHYFS1y8hVuVte6F3ae9NMh3i4F1ZGyTynwb8onb5S",
+    "collateralMint": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+    "feeBps": 100,
+    "keeperRewardBps": 1000,
+    "committee": [
+      "9LxudrHenxBM1xeqB3c1Avqc5qEAWzE9twM6KbNyEAcE",
+      "7nenWjHQkdBfuYvpoPBFmgB2Yvkw4Y1a2YdksmeU8Nbv",
+      "GL1retjPLC2jij2Cyy8BP65CR99mT4RtVWaFgA3jGiSs"
+    ]
+  },
+  "sampleMarket": {
+    "address": "44cD1kbvuheo5wSM4gxEZvAfitAXbC25f2u4Mzs48qix",
+    "vault": "EqjB6nuMcvhtTw9Cngs2EgSNjthC6VrxFDthZnoYxtyM",
+    "marketId": "1822244620720",
+    "fixtureId": 18222446,
+    "mode": "replay",
+    "phase": "open",
+    "lockAt": "2026-07-27T05:15:30Z",
+    "initializeSignature": "DUm3uXtDhfv6DqNfLDQ35cBQGFVxzUU9ajpmuLBDVymdQXoGyvcUFUmyWgfx2H92VpLWZB17zm7YC8xhieZj3Hx"
   }
 }
