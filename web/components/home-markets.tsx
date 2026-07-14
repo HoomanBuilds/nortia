@@ -3,21 +3,21 @@
 import { useMemo, useState } from "react";
 import { Search, SlidersHorizontal } from "lucide-react";
 import { MarketCard } from "@/components/market-card";
-import { canPlaceOrder, markets } from "@/lib/markets";
+import { canPlaceOrder, markets, type Market } from "@/lib/markets";
 
 const filters = ["All", "Open", "Resolved"] as const;
 const categories = ["All categories", "Sports", "Crypto", "Politics", "Technology", "Culture"] as const;
 
-export function HomeMarkets() {
+export function HomeMarkets({ initialMarkets = markets }: { initialMarkets?: Market[] }) {
   const [filter, setFilter] = useState<(typeof filters)[number]>("All");
   const [category, setCategory] = useState<(typeof categories)[number]>("All categories");
   const [query, setQuery] = useState("");
-  const visible = useMemo(() => markets.filter((market) => {
+  const visible = useMemo(() => initialMarkets.filter((market) => {
     const matchesFilter = filter === "All" || (filter === "Open" ? canPlaceOrder(market) : market.tradingState === "resolved");
     const matchesCategory = category === "All categories" || market.category === category;
     const haystack = `${market.question} ${market.home} ${market.away} ${market.competition}`.toLowerCase();
     return matchesFilter && matchesCategory && haystack.includes(query.trim().toLowerCase());
-  }), [category, filter, query]);
+  }), [category, filter, initialMarkets, query]);
 
   return (
     <section className="markets-section" id="markets">

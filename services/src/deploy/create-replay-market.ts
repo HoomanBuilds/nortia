@@ -12,6 +12,24 @@ const fixture = {
   rules: "TxLINE participant-one goals plus participant-two goals for final period 100 must be greater than 2.",
 } as const;
 
+function replayMarketId() {
+  const value = process.env.NORTIA_REPLAY_MARKET_ID ?? "1822244620720";
+  if (!/^\d+$/.test(value)) throw new Error("NORTIA_REPLAY_MARKET_ID must be an unsigned decimal integer");
+  const marketId = new BN(value);
+  if (marketId.isZero() || marketId.gt(new BN("18446744073709551615"))) {
+    throw new Error("NORTIA_REPLAY_MARKET_ID is outside the u64 range");
+  }
+  return marketId;
+}
+
+function replayLockHours() {
+  const value = Number(process.env.NORTIA_REPLAY_LOCK_HOURS ?? 168);
+  if (!Number.isInteger(value) || value < 1 || value > 720) {
+    throw new Error("NORTIA_REPLAY_LOCK_HOURS must be an integer from 1 to 720");
+  }
+  return value;
+}
+
 function hash(value: string) {
   return Array.from(createHash("sha256").update(value).digest());
 }
@@ -37,7 +55,7 @@ async function main() {
   const creator = await readKeypair(config.keypairPath);
   const connection = new Connection(config.rpcUrl, "confirmed");
   const program = createProgram(connection, creator);
-  const marketId = new BN(`${fixture.id}21`);
+  const marketId = replayMarketId();
   const protocol = protocolPda(program.programId);
   const market = marketPda(program.programId, creator.publicKey, marketId);
   const vault = vaultPda(program.programId, market);
@@ -49,7 +67,7 @@ async function main() {
 
   const now = Math.floor(Date.now() / 1_000);
   const fixtureStart = Math.floor(Date.parse(fixture.start) / 1_000);
-  const lock = now + 2 * 60 * 60;
+  const lock = now + replayLockHours() * 60 * 60;
   const batchDeadline = lock + 15 * 60;
   const resolutionDeadline = Math.max(batchDeadline + 60 * 60, fixtureStart + 8 * 60 * 60);
   const signature = await program.methods.initializeMarket({

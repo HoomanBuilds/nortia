@@ -3,10 +3,16 @@ import { LockKeyhole, Plus, Radio, ShieldCheck } from "lucide-react";
 import { FeaturedMarket } from "@/components/featured-market";
 import { HomeMarkets } from "@/components/home-markets";
 import { formatCompactUsd, markets } from "@/lib/markets";
+import { DEPLOYED_REPLAY_MARKET_ADDRESS } from "@/lib/solana/constants";
+import { getOnchainMarket } from "@/lib/solana/server-market";
 
-export default function MarketsPage() {
-  const totalVolume = markets.reduce((sum, market) => sum + market.volume, 0);
-  const totalTraders = markets.reduce((sum, market) => sum + market.traders, 0);
+export const revalidate = 15;
+
+export default async function MarketsPage() {
+  const deployedMarket = await getOnchainMarket(DEPLOYED_REPLAY_MARKET_ADDRESS).catch(() => null);
+  const catalog = deployedMarket ? [deployedMarket, ...markets] : markets;
+  const totalVolume = catalog.reduce((sum, market) => sum + market.volume, 0);
+  const totalTraders = catalog.reduce((sum, market) => sum + market.traders, 0);
   return (
     <main className="markets-app-page">
       <section className="markets-app-hero page-frame">
@@ -14,7 +20,7 @@ export default function MarketsPage() {
         <div><div className="intro-stats"><div><span>Demonstrated pool</span><strong>{formatCompactUsd(totalVolume)}</strong><small>replay collateral</small></div><div><span>Private tickets</span><strong>{totalTraders.toLocaleString()}</strong><small>flagship replay</small></div><div><span>Settlement fee</span><strong>1.00%</strong><small>success only</small></div></div><Link className="markets-create-link" href="/markets/create"><Plus size={14} />Create market</Link></div>
       </section>
       <div className="trust-strip"><div className="page-frame"><span><ShieldCheck size={14} />Resolver verified settlement</span><span><LockKeyhole size={14} />Private Noir commitments</span><span><i />TxLINE sports connected</span><b>Replay uses valueless devnet USDC</b></div></div>
-      <div className="page-frame home-content" id="featured"><FeaturedMarket /><HomeMarkets /></div>
+      <div className="page-frame home-content" id="featured"><FeaturedMarket /><HomeMarkets initialMarkets={catalog} /></div>
     </main>
   );
 }
