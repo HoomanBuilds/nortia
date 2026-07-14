@@ -70,6 +70,12 @@ export function PrivateOrderPanel({ market }: { market: Market }) {
       if (!("open" in account.phase) || Date.now() >= account.lockTs.toNumber() * 1_000) {
         throw new Error("The market locked before this order could be prepared");
       }
+      const payerToken = getAssociatedTokenAddressSync(account.collateralMint, publicKey);
+      const tokenBalance = await program.provider.connection.getTokenAccountBalance(payerToken, "confirmed").catch(() => null);
+      if (!tokenBalance) throw new Error("The connected wallet needs devnet USDC from the Circle faucet");
+      if (BigInt(tokenBalance.value.amount) < BigInt(account.ticketAmount.toString())) {
+        throw new Error("The connected wallet needs at least 1.00 devnet USDC");
+      }
       const proofResponse = await fetch("/api/proofs/place", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -107,10 +113,6 @@ export function PrivateOrderPanel({ market }: { market: Market }) {
       savePrivatePosition(prepared);
 
       const commitment = fieldBytes(proof.commitment);
-      const payerToken = getAssociatedTokenAddressSync(account.collateralMint, publicKey);
-      if (!await program.provider.connection.getAccountInfo(payerToken, "confirmed")) {
-        throw new Error("The connected wallet has no devnet USDC token account");
-      }
       const order = PublicKey.findProgramAddressSync(
         [Buffer.from("order"), marketAddress.toBuffer(), Buffer.from(commitment)],
         program.programId,
@@ -203,6 +205,7 @@ export function PrivateOrderPanel({ market }: { market: Market }) {
             <div className="payout-row"><span>Refund path</span><strong>1.00 USDC - no fee</strong></div>
           </div>
           {!connected ? <button type="button" className="primary-order-button" onClick={() => setVisible(true)}><Wallet size={16} />Connect wallet</button> : !actionable ? <button type="button" className="primary-order-button" disabled><AlertTriangle size={16} />Create this covered fixture onchain first</button> : <button type="button" className="primary-order-button" onClick={() => setPreview(true)}><Sparkles size={16} />Review private order</button>}
+          <a className="faucet-link" href="https://faucet.circle.com/" target="_blank" rel="noreferrer">Need test collateral? Get Circle devnet USDC</a>
           {preview && actionable && (
             <div className="commitment-preview">
               <div className="preview-title"><ShieldCheck size={16} /><div><strong>Order preflight</strong><span>Recovery data is saved locally before signing</span></div></div>
