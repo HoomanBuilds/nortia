@@ -10,6 +10,7 @@ pub const HYBRID_MARKET_SEED: &[u8] = b"hybrid-market-v2";
 pub const HYBRID_VAULT_SEED: &[u8] = b"hybrid-vault-v2";
 pub const ORACLE_CONFIG_SEED: &[u8] = b"oracle-config-v2";
 pub const POSITION_SEED: &[u8] = b"position-v2";
+pub const RESOLUTION_RECEIPT_SEED: &[u8] = b"resolution-receipt-v2";
 pub const DAILY_SCORES_ROOT_SEED: &[u8] = b"daily_scores_roots";
 pub const COMMITTEE_SIZE: usize = 3;
 pub const COMMITTEE_THRESHOLD: usize = 2;

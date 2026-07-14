@@ -364,14 +364,16 @@ Verification:
 - Use a Pyth-owned `PriceUpdateV2` account with full verification.
 - Pin the 32-byte feed ID.
 - Pin the target observation time and accepted interval.
-- Reject stale or prematurely published values.
+- Require the unique update that brackets the target time with `prev_publish_time < target <= publish_time`.
+- Reject reports whose publish lag from the target exceeds the configured staleness bound.
+- Reject prematurely published or future-dated values.
 - Normalize the signed price and exponent with checked arithmetic.
 - Reject confidence wider than the market's configured maximum.
 - Store publish time, confidence, feed ID, price account, and evidence hash.
 
 Timestamped markets should use an ephemeral historical price update for the specified observation time, not an arbitrary current push-feed account. A narrow time window and permissionless keepers reduce selection risk. Rules must state the exact timestamp and comparison semantics.
 
-Status: first new resolver to implement.
+Status: implemented in V2 with normalized receipts and invalid-market timeout handling.
 
 ### Resolver tier A or B: Switchboard canonical quote
 

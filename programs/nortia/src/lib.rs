@@ -1,6 +1,7 @@
 pub mod constants;
 pub mod error;
 pub mod lmsr;
+pub mod oracles;
 pub mod state;
 pub mod txline;
 pub mod zk;
@@ -8,6 +9,7 @@ pub mod zk;
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, TransferChecked};
 use core::cmp::max;
+use pyth_solana_receiver_sdk::price_update::PriceUpdateV2;
 use solana_sha256_hasher::hashv;
 
 pub use constants::*;
@@ -837,6 +839,101 @@ pub mod nortia {
         Ok(())
     }
 
+    pub fn resolve_hybrid_with_pyth(ctx: Context<ResolveHybridWithPyth>) -> Result<()> {
+        let clock = Clock::get()?;
+        let observation = oracles::validate_pyth_observation(
+            &ctx.accounts.price_update,
+            &ctx.accounts.oracle_config,
+            &clock,
+        )?;
+        let value_bytes = observation.value.to_le_bytes();
+        let exponent_bytes = observation.exponent.to_le_bytes();
+        let timestamp_bytes = observation.timestamp.to_le_bytes();
+        let confidence_bytes = observation.confidence.to_le_bytes();
+        let previous_timestamp_bytes = ctx
+            .accounts
+            .price_update
+            .price_message
+            .prev_publish_time
+            .to_le_bytes();
+        let ema_price_bytes = ctx
+            .accounts
+            .price_update
+            .price_message
+            .ema_price
+            .to_le_bytes();
+        let ema_confidence_bytes = ctx
+            .accounts
+            .price_update
+            .price_message
+            .ema_conf
+            .to_le_bytes();
+        let posted_slot_bytes = ctx.accounts.price_update.posted_slot.to_le_bytes();
+        let evidence_hash = hashv(&[
+            b"nortia-pyth-resolution-v1",
+            ctx.accounts.market.key().as_ref(),
+            ctx.accounts.oracle_config.config_hash.as_ref(),
+            ctx.accounts.oracle_config.source_id.as_ref(),
+            ctx.accounts.price_update.key().as_ref(),
+            ctx.accounts.price_update.write_authority.as_ref(),
+            &value_bytes,
+            &exponent_bytes,
+            &timestamp_bytes,
+            &previous_timestamp_bytes,
+            &confidence_bytes,
+            &ema_price_bytes,
+            &ema_confidence_bytes,
+            &posted_slot_bytes,
+        ])
+        .to_bytes();
+        finalize_hybrid_resolution(
+            &mut ctx.accounts.market,
+            &mut ctx.accounts.oracle_config,
+            &mut ctx.accounts.receipt,
+            FinalizeHybridResolutionArgs {
+                receipt_bump: ctx.bumps.receipt,
+                source_account: ctx.accounts.price_update.key(),
+                observation,
+                evidence_hash,
+                now: clock.unix_timestamp,
+                vault_balance: ctx.accounts.vault.amount,
+                timeout: false,
+            },
+        )
+    }
+
+    pub fn resolve_hybrid_timeout(ctx: Context<ResolveHybridTimeout>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let deadline_bytes = ctx.accounts.market.resolution_deadline_ts.to_le_bytes();
+        let evidence_hash = hashv(&[
+            b"nortia-oracle-timeout-v1",
+            ctx.accounts.market.key().as_ref(),
+            ctx.accounts.oracle_config.config_hash.as_ref(),
+            &deadline_bytes,
+        ])
+        .to_bytes();
+        finalize_hybrid_resolution(
+            &mut ctx.accounts.market,
+            &mut ctx.accounts.oracle_config,
+            &mut ctx.accounts.receipt,
+            FinalizeHybridResolutionArgs {
+                receipt_bump: ctx.bumps.receipt,
+                source_account: Pubkey::default(),
+                observation: oracles::NormalizedObservation {
+                    outcome: HybridMarket::OUTCOME_INVALID,
+                    value: 0,
+                    exponent: 0,
+                    timestamp: now,
+                    confidence: 0,
+                },
+                evidence_hash,
+                now,
+                vault_balance: ctx.accounts.vault.amount,
+                timeout: true,
+            },
+        )
+    }
+
     pub fn settle_hybrid_position(ctx: Context<SettleHybridPosition>) -> Result<()> {
         require!(
             ctx.accounts.market.phase == HybridPhase::Resolved,
@@ -1349,6 +1446,91 @@ pub struct LockHybridMarket<'info> {
 }
 
 #[derive(Accounts)]
+pub struct ResolveHybridWithPyth<'info> {
+    #[account(mut)]
+    pub keeper: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [HYBRID_MARKET_SEED, market.creator.as_ref(), &market.market_id.to_le_bytes()],
+        bump = market.bump,
+        constraint = market.oracle_config == oracle_config.key()
+            @ NortiaError::InvalidOracleConfiguration,
+        constraint = market.collateral_mint == vault.mint
+            @ NortiaError::InvalidCollateralMint
+    )]
+    pub market: Box<Account<'info, HybridMarket>>,
+    #[account(
+        mut,
+        seeds = [ORACLE_CONFIG_SEED, market.key().as_ref()],
+        bump = oracle_config.bump,
+        constraint = oracle_config.market == market.key()
+            @ NortiaError::InvalidOracleConfiguration,
+        constraint = oracle_config.resolver == OracleResolverV2::PythPriceV2
+            @ NortiaError::InvalidOracleConfiguration,
+        constraint = !oracle_config.consumed @ NortiaError::ResolutionReplay
+    )]
+    pub oracle_config: Box<Account<'info, OracleConfig>>,
+    #[account(
+        init,
+        payer = keeper,
+        space = ResolutionReceipt::SPACE,
+        seeds = [RESOLUTION_RECEIPT_SEED, market.key().as_ref()],
+        bump
+    )]
+    pub receipt: Box<Account<'info, ResolutionReceipt>>,
+    pub price_update: Box<Account<'info, PriceUpdateV2>>,
+    #[account(
+        seeds = [HYBRID_VAULT_SEED, market.key().as_ref()],
+        bump = market.vault_bump,
+        token::mint = market.collateral_mint,
+        token::authority = market
+    )]
+    pub vault: Box<Account<'info, TokenAccount>>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct ResolveHybridTimeout<'info> {
+    #[account(mut)]
+    pub keeper: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [HYBRID_MARKET_SEED, market.creator.as_ref(), &market.market_id.to_le_bytes()],
+        bump = market.bump,
+        constraint = market.oracle_config == oracle_config.key()
+            @ NortiaError::InvalidOracleConfiguration,
+        constraint = market.collateral_mint == vault.mint
+            @ NortiaError::InvalidCollateralMint
+    )]
+    pub market: Box<Account<'info, HybridMarket>>,
+    #[account(
+        mut,
+        seeds = [ORACLE_CONFIG_SEED, market.key().as_ref()],
+        bump = oracle_config.bump,
+        constraint = oracle_config.market == market.key()
+            @ NortiaError::InvalidOracleConfiguration,
+        constraint = !oracle_config.consumed @ NortiaError::ResolutionReplay
+    )]
+    pub oracle_config: Box<Account<'info, OracleConfig>>,
+    #[account(
+        init,
+        payer = keeper,
+        space = ResolutionReceipt::SPACE,
+        seeds = [RESOLUTION_RECEIPT_SEED, market.key().as_ref()],
+        bump
+    )]
+    pub receipt: Box<Account<'info, ResolutionReceipt>>,
+    #[account(
+        seeds = [HYBRID_VAULT_SEED, market.key().as_ref()],
+        bump = market.vault_bump,
+        token::mint = market.collateral_mint,
+        token::authority = market
+    )]
+    pub vault: Box<Account<'info, TokenAccount>>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
 pub struct SettleHybridPosition<'info> {
     #[account(mut)]
     pub owner: Signer<'info>,
@@ -1426,6 +1608,107 @@ pub struct WithdrawHybridLiquidity<'info> {
     pub token_program: Program<'info, Token>,
 }
 
+struct FinalizeHybridResolutionArgs {
+    receipt_bump: u8,
+    source_account: Pubkey,
+    observation: oracles::NormalizedObservation,
+    evidence_hash: [u8; 32],
+    now: i64,
+    vault_balance: u64,
+    timeout: bool,
+}
+
+fn finalize_hybrid_resolution(
+    market: &mut HybridMarket,
+    oracle: &mut OracleConfig,
+    receipt: &mut ResolutionReceipt,
+    args: FinalizeHybridResolutionArgs,
+) -> Result<()> {
+    let FinalizeHybridResolutionArgs {
+        receipt_bump,
+        source_account,
+        observation,
+        evidence_hash,
+        now,
+        vault_balance,
+        timeout,
+    } = args;
+    require!(
+        market.phase == HybridPhase::Open || market.phase == HybridPhase::Locked,
+        NortiaError::InvalidPhase
+    );
+    require!(now >= market.lock_ts, NortiaError::MarketLocked);
+    require!(
+        now >= market.resolve_not_before_ts,
+        NortiaError::MarketNotReadyForResolution
+    );
+    if timeout {
+        require!(now > market.resolution_deadline_ts, NortiaError::TooEarly);
+        require!(
+            observation.outcome == HybridMarket::OUTCOME_INVALID,
+            NortiaError::InvalidOutcome
+        );
+    } else {
+        require!(
+            now <= market.resolution_deadline_ts,
+            NortiaError::DeadlineElapsed
+        );
+        require!(
+            observation.outcome == HybridMarket::OUTCOME_YES
+                || observation.outcome == HybridMarket::OUTCOME_NO,
+            NortiaError::InvalidOutcome
+        );
+    }
+    require!(!oracle.consumed, NortiaError::ResolutionReplay);
+    require!(evidence_hash != [0; 32], NortiaError::ZeroCommitment);
+    let liability =
+        hybrid_market_liability(market.yes_quantity, market.no_quantity, observation.outcome)?;
+    require!(vault_balance >= liability, NortiaError::InsolventMarket);
+
+    oracle.consumed = true;
+    market.phase = HybridPhase::Resolved;
+    market.outcome = observation.outcome;
+    market.outstanding_liability = liability;
+    market.settled_at = now;
+    market.settlement_evidence_hash = evidence_hash;
+
+    receipt.bump = receipt_bump;
+    receipt.version = ResolutionReceipt::VERSION;
+    receipt.market = oracle.market;
+    receipt.resolver = oracle.resolver;
+    receipt.outcome = observation.outcome;
+    receipt.observation_value = observation.value;
+    receipt.observation_exponent = observation.exponent;
+    receipt.observation_ts = observation.timestamp;
+    receipt.confidence = observation.confidence;
+    receipt.source_id = oracle.source_id;
+    receipt.source_account = source_account;
+    receipt.evidence_hash = evidence_hash;
+    receipt.finalized_at = now;
+
+    emit!(HybridMarketResolved {
+        market: oracle.market,
+        outcome: market.outcome,
+        resolver: oracle.resolver,
+        outstanding_liability: market.outstanding_liability,
+        evidence_hash,
+        settled_at: now,
+    });
+    Ok(())
+}
+
+fn hybrid_market_liability(yes_quantity: u64, no_quantity: u64, outcome: u8) -> Result<u64> {
+    match outcome {
+        HybridMarket::OUTCOME_YES => Ok(yes_quantity),
+        HybridMarket::OUTCOME_NO => Ok(no_quantity),
+        HybridMarket::OUTCOME_INVALID => yes_quantity
+            .checked_add(no_quantity)
+            .map(|shares| shares / 2)
+            .ok_or_else(|| error!(NortiaError::ArithmeticOverflow)),
+        _ => err!(NortiaError::InvalidOutcome),
+    }
+}
+
 fn validate_oracle_config(
     category: &MarketCategory,
     args: &OracleConfigArgs,
@@ -1447,6 +1730,7 @@ fn validate_oracle_config(
         ),
         OracleResolverV2::PythPriceV2 => require!(
             args.source_program == PYTH_RECEIVER_PROGRAM_ID
+                && (-18..=18).contains(&args.threshold_exponent)
                 && args.max_staleness_secs > 0
                 && args.max_confidence_bps > 0
                 && args.max_confidence_bps <= FEE_SPLIT_DENOMINATOR,
@@ -1864,6 +2148,112 @@ fn transfer_from_vault<'info>(
 mod tests {
     use super::*;
 
+    fn resolution_market() -> HybridMarket {
+        HybridMarket {
+            bump: 1,
+            vault_bump: 2,
+            version: HybridMarket::VERSION,
+            market_id: 9,
+            creator: Pubkey::new_unique(),
+            liquidity_owner: Pubkey::new_unique(),
+            category: MarketCategory::Crypto,
+            trading_mode: HybridTradingMode::Continuous,
+            pricing_model: HybridPricingModel::Lmsr,
+            question_hash: [1; 32],
+            rules_hash: [2; 32],
+            outcome_labels_hash: [3; 32],
+            collateral_mint: DEVNET_USDC_MINT,
+            token_program: anchor_spl::token::ID,
+            treasury_owner: Pubkey::new_unique(),
+            oracle_config: Pubkey::new_unique(),
+            liquidity_parameter: 10_000_000,
+            initial_subsidy: 6_931_474,
+            rounding_reserve: 2,
+            max_trade_shares: 10_000_000,
+            yes_quantity: 8_000_000,
+            no_quantity: 4_000_000,
+            trade_fee_bps: 100,
+            treasury_fee_share_bps: 7_000,
+            open_ts: 1_000,
+            lock_ts: 1_900,
+            resolve_not_before_ts: 2_000,
+            resolution_deadline_ts: 2_200,
+            phase: HybridPhase::Locked,
+            outcome: HybridMarket::OUTCOME_UNSET,
+            trade_count: 2,
+            volume: 5_000_000,
+            treasury_fees: 35_000,
+            liquidity_fees: 15_000,
+            outstanding_liability: 0,
+            redeemed_liability: 0,
+            settled_at: 0,
+            settlement_evidence_hash: [0; 32],
+        }
+    }
+
+    fn resolution_oracle(market: Pubkey) -> OracleConfig {
+        OracleConfig {
+            bump: 3,
+            version: OracleConfig::VERSION,
+            market,
+            resolver: OracleResolverV2::PythPriceV2,
+            source_program: PYTH_RECEIVER_PROGRAM_ID,
+            source_id: [7; 32],
+            comparator: ValueComparator::GreaterThanOrEqual,
+            threshold: 100_000,
+            threshold_exponent: -3,
+            observation_ts: 2_000,
+            observation_window_secs: 30,
+            max_staleness_secs: 5,
+            max_confidence_bps: 100,
+            min_samples: 1,
+            challenge_period_secs: 0,
+            config_hash: [8; 32],
+            consumed: false,
+        }
+    }
+
+    fn empty_receipt() -> ResolutionReceipt {
+        ResolutionReceipt {
+            bump: 0,
+            version: 0,
+            market: Pubkey::default(),
+            resolver: OracleResolverV2::PythPriceV2,
+            outcome: HybridMarket::OUTCOME_UNSET,
+            observation_value: 0,
+            observation_exponent: 0,
+            observation_ts: 0,
+            confidence: 0,
+            source_id: [0; 32],
+            source_account: Pubkey::default(),
+            evidence_hash: [0; 32],
+            finalized_at: 0,
+        }
+    }
+
+    fn resolution_args(
+        outcome: u8,
+        now: i64,
+        vault_balance: u64,
+        timeout: bool,
+    ) -> FinalizeHybridResolutionArgs {
+        FinalizeHybridResolutionArgs {
+            receipt_bump: 4,
+            source_account: Pubkey::new_unique(),
+            observation: oracles::NormalizedObservation {
+                outcome,
+                value: 100_000_000,
+                exponent: -6,
+                timestamp: 2_001,
+                confidence: 500_000,
+            },
+            evidence_hash: [9; 32],
+            now,
+            vault_balance,
+            timeout,
+        }
+    }
+
     #[test]
     fn committee_requires_three_distinct_nonzero_keys() {
         let one = Pubkey::new_unique();
@@ -1885,6 +2275,7 @@ mod tests {
             TXLINE_PROGRAM_ID.to_string(),
             "6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J"
         );
+        assert_eq!(PYTH_RECEIVER_PROGRAM_ID, pyth_solana_receiver_sdk::ID);
     }
 
     #[test]
@@ -1996,6 +2387,100 @@ mod tests {
     }
 
     #[test]
+    fn hybrid_resolution_finalizes_binary_liability_and_receipt() {
+        let mut market = resolution_market();
+        let market_key = Pubkey::new_unique();
+        let mut oracle = resolution_oracle(market_key);
+        let mut receipt = empty_receipt();
+
+        finalize_hybrid_resolution(
+            &mut market,
+            &mut oracle,
+            &mut receipt,
+            resolution_args(HybridMarket::OUTCOME_YES, 2_050, 8_000_000, false),
+        )
+        .unwrap();
+
+        assert_eq!(market.phase, HybridPhase::Resolved);
+        assert_eq!(market.outcome, HybridMarket::OUTCOME_YES);
+        assert_eq!(market.outstanding_liability, 8_000_000);
+        assert_eq!(market.settlement_evidence_hash, [9; 32]);
+        assert!(oracle.consumed);
+        assert_eq!(receipt.market, market_key);
+        assert_eq!(receipt.outcome, HybridMarket::OUTCOME_YES);
+        assert_eq!(receipt.source_id, [7; 32]);
+    }
+
+    #[test]
+    fn hybrid_resolution_rejects_replay_and_insolvency() {
+        let mut market = resolution_market();
+        let mut oracle = resolution_oracle(Pubkey::new_unique());
+        let mut receipt = empty_receipt();
+        oracle.consumed = true;
+        assert!(finalize_hybrid_resolution(
+            &mut market,
+            &mut oracle,
+            &mut receipt,
+            resolution_args(HybridMarket::OUTCOME_YES, 2_050, 8_000_000, false),
+        )
+        .is_err());
+
+        oracle.consumed = false;
+        assert!(finalize_hybrid_resolution(
+            &mut market,
+            &mut oracle,
+            &mut receipt,
+            resolution_args(HybridMarket::OUTCOME_YES, 2_050, 7_999_999, false),
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn hybrid_timeout_only_opens_after_deadline_and_refunds_half() {
+        let mut market = resolution_market();
+        let mut oracle = resolution_oracle(Pubkey::new_unique());
+        let mut receipt = empty_receipt();
+        assert!(finalize_hybrid_resolution(
+            &mut market,
+            &mut oracle,
+            &mut receipt,
+            resolution_args(HybridMarket::OUTCOME_INVALID, 2_200, 6_000_000, true),
+        )
+        .is_err());
+
+        finalize_hybrid_resolution(
+            &mut market,
+            &mut oracle,
+            &mut receipt,
+            resolution_args(HybridMarket::OUTCOME_INVALID, 2_201, 6_000_000, true),
+        )
+        .unwrap();
+        assert_eq!(market.outcome, HybridMarket::OUTCOME_INVALID);
+        assert_eq!(market.outstanding_liability, 6_000_000);
+    }
+
+    #[test]
+    fn hybrid_normal_resolution_rejects_late_and_premature_calls() {
+        let mut market = resolution_market();
+        let mut oracle = resolution_oracle(Pubkey::new_unique());
+        let mut receipt = empty_receipt();
+        assert!(finalize_hybrid_resolution(
+            &mut market,
+            &mut oracle,
+            &mut receipt,
+            resolution_args(HybridMarket::OUTCOME_YES, 1_999, 8_000_000, false),
+        )
+        .is_err());
+        assert!(finalize_hybrid_resolution(
+            &mut market,
+            &mut oracle,
+            &mut receipt,
+            resolution_args(HybridMarket::OUTCOME_YES, 2_201, 8_000_000, false),
+        )
+        .is_err());
+    }
+
+    #[test]
     fn oracle_templates_reject_disabled_and_mismatched_resolvers() {
         let mut oracle = OracleConfigArgs {
             resolver: OracleResolverV2::PythPriceV2,
@@ -2013,6 +2498,9 @@ mod tests {
             config_hash: [2; 32],
         };
         assert!(validate_oracle_config(&MarketCategory::Crypto, &oracle, 2_000).is_ok());
+        oracle.threshold_exponent = -19;
+        assert!(validate_oracle_config(&MarketCategory::Crypto, &oracle, 2_000).is_err());
+        oracle.threshold_exponent = -2;
         oracle.source_program = Pubkey::new_unique();
         assert!(validate_oracle_config(&MarketCategory::Crypto, &oracle, 2_000).is_err());
         oracle.source_program = PYTH_RECEIVER_PROGRAM_ID;
