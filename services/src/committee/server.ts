@@ -19,9 +19,9 @@ type EncodedShare = Omit<CommitteeShare, "orderCommitment" | "share" | "salt" | 
 
 type OrderAccount = {
   market: PublicKey;
-  orderIndex: number;
+  order_index: number;
   commitment: number[];
-  shareCommitments: number[][];
+  share_commitments: number[][];
 };
 
 function fieldBytes(value: bigint) {
@@ -87,11 +87,11 @@ async function main() {
     );
     const orderInfo = await connection.getAccountInfo(orderAddress, "confirmed");
     if (!orderInfo || !orderInfo.owner.equals(NORTIA_PROGRAM)) throw new Error("Onchain order account was not found");
-    const order = coder.decode("order", orderInfo.data) as OrderAccount;
+    const order = coder.decode("Order", orderInfo.data) as OrderAccount;
     if (!order.market.equals(market)) throw new Error("Onchain order belongs to a different market");
-    if (order.orderIndex !== share.orderIndex) throw new Error("Onchain order index does not match");
+    if (order.order_index !== share.orderIndex) throw new Error("Onchain order index does not match");
     if (!Buffer.from(order.commitment).equals(commitment)) throw new Error("Onchain order commitment does not match");
-    const expected = order.shareCommitments[share.memberIndex - 1];
+    const expected = order.share_commitments[share.memberIndex - 1];
     if (!expected || !Buffer.from(expected).equals(fieldBytes(share.expectedShareCommitment))) {
       throw new Error("Onchain share commitment does not match this committee member");
     }
