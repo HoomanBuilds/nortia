@@ -60,4 +60,32 @@ pub enum NortiaError {
     InvalidScorePayload,
     #[msg("TxLINE did not return a valid boolean")]
     InvalidTxlineReturn,
+    #[msg("The V2 engine configuration is invalid")]
+    InvalidEngineConfiguration,
+    #[msg("The LMSR quote or market state is outside protocol bounds")]
+    InvalidLmsrState,
+    #[msg("The trade price guard was exceeded")]
+    PriceGuardExceeded,
+    #[msg("The trade deadline has elapsed")]
+    TradeDeadlineElapsed,
+    #[msg("The position is invalid for this owner or market")]
+    InvalidPosition,
+    #[msg("The position does not have enough outcome shares")]
+    InsufficientPosition,
+    #[msg("The market vault would become undercollateralized")]
+    InsolventMarket,
+    #[msg("The oracle configuration is invalid for this market")]
+    InvalidOracleConfiguration,
+    #[msg("The configured resolver is not enabled")]
+    ResolverNotEnabled,
+    #[msg("The resolution evidence is stale, early, or outside the observation window")]
+    InvalidObservationTime,
+    #[msg("The oracle evidence has already been consumed")]
+    ResolutionReplay,
+    #[msg("The market outcome is invalid")]
+    InvalidOutcome,
+    #[msg("The position was already settled")]
+    PositionAlreadySettled,
+    #[msg("The market is not ready for resolution")]
+    MarketNotReadyForResolution,
 }

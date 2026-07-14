@@ -146,6 +146,183 @@ impl Claim {
     pub const SPACE: usize = 8 + 1 + 32 + 32 + 32 + 32 + 8;
 }
 
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HybridPhase {
+    Open,
+    Locked,
+    Resolving,
+    Disputed,
+    Resolved,
+    Closed,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HybridTradingMode {
+    Continuous,
+    PrivateBatch,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HybridPricingModel {
+    Lmsr,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OracleResolverV2 {
+    TxlineStatV2,
+    PythPriceV2,
+    SwitchboardQuoteV1,
+    OptimisticV1,
+    UmaWormholeV1,
+    ChainlinkReportV1,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ValueComparator {
+    GreaterThan,
+    GreaterThanOrEqual,
+    LessThan,
+    LessThanOrEqual,
+    Equal,
+}
+
+#[account]
+pub struct EngineConfig {
+    pub bump: u8,
+    pub version: u8,
+    pub authority: Pubkey,
+    pub treasury_owner: Pubkey,
+    pub collateral_mint: Pubkey,
+    pub token_program: Pubkey,
+    pub treasury_fee_share_bps: u16,
+    pub pyth_receiver_program: Pubkey,
+    pub switchboard_quote_program: Pubkey,
+    pub paused: bool,
+}
+
+impl EngineConfig {
+    pub const VERSION: u8 = 2;
+    pub const SPACE: usize = 8 + 197;
+}
+
+#[account]
+pub struct HybridMarket {
+    pub bump: u8,
+    pub vault_bump: u8,
+    pub version: u8,
+    pub market_id: u64,
+    pub creator: Pubkey,
+    pub liquidity_owner: Pubkey,
+    pub category: MarketCategory,
+    pub trading_mode: HybridTradingMode,
+    pub pricing_model: HybridPricingModel,
+    pub question_hash: [u8; 32],
+    pub rules_hash: [u8; 32],
+    pub outcome_labels_hash: [u8; 32],
+    pub collateral_mint: Pubkey,
+    pub token_program: Pubkey,
+    pub treasury_owner: Pubkey,
+    pub oracle_config: Pubkey,
+    pub liquidity_parameter: u64,
+    pub initial_subsidy: u64,
+    pub rounding_reserve: u64,
+    pub max_trade_shares: u64,
+    pub yes_quantity: u64,
+    pub no_quantity: u64,
+    pub trade_fee_bps: u16,
+    pub treasury_fee_share_bps: u16,
+    pub open_ts: i64,
+    pub lock_ts: i64,
+    pub resolve_not_before_ts: i64,
+    pub resolution_deadline_ts: i64,
+    pub phase: HybridPhase,
+    pub outcome: u8,
+    pub trade_count: u64,
+    pub volume: u64,
+    pub treasury_fees: u64,
+    pub liquidity_fees: u64,
+    pub outstanding_liability: u64,
+    pub redeemed_liability: u64,
+    pub settled_at: i64,
+    pub settlement_evidence_hash: [u8; 32],
+}
+
+impl HybridMarket {
+    pub const VERSION: u8 = 2;
+    pub const SPACE: usize = 8 + 768;
+    pub const OUTCOME_YES: u8 = 1;
+    pub const OUTCOME_NO: u8 = 0;
+    pub const OUTCOME_INVALID: u8 = 2;
+    pub const OUTCOME_UNSET: u8 = 3;
+}
+
+#[account]
+pub struct OracleConfig {
+    pub bump: u8,
+    pub version: u8,
+    pub market: Pubkey,
+    pub resolver: OracleResolverV2,
+    pub source_program: Pubkey,
+    pub source_id: [u8; 32],
+    pub comparator: ValueComparator,
+    pub threshold: i64,
+    pub threshold_exponent: i32,
+    pub observation_ts: i64,
+    pub observation_window_secs: u32,
+    pub max_staleness_secs: u32,
+    pub max_confidence_bps: u16,
+    pub min_samples: u8,
+    pub challenge_period_secs: u32,
+    pub config_hash: [u8; 32],
+    pub consumed: bool,
+}
+
+impl OracleConfig {
+    pub const VERSION: u8 = 1;
+    pub const SPACE: usize = 8 + 256;
+}
+
+#[account]
+pub struct Position {
+    pub bump: u8,
+    pub version: u8,
+    pub market: Pubkey,
+    pub owner: Pubkey,
+    pub yes_shares: u64,
+    pub no_shares: u64,
+    pub total_spent: u64,
+    pub total_proceeds: u64,
+    pub settled_amount: u64,
+    pub settled: bool,
+}
+
+impl Position {
+    pub const VERSION: u8 = 1;
+    pub const SPACE: usize = 8 + 128;
+}
+
+#[account]
+pub struct ResolutionReceipt {
+    pub bump: u8,
+    pub version: u8,
+    pub market: Pubkey,
+    pub resolver: OracleResolverV2,
+    pub outcome: u8,
+    pub observation_value: i64,
+    pub observation_exponent: i32,
+    pub observation_ts: i64,
+    pub confidence: u64,
+    pub source_id: [u8; 32],
+    pub source_account: Pubkey,
+    pub evidence_hash: [u8; 32],
+    pub finalized_at: i64,
+}
+
+impl ResolutionReceipt {
+    pub const VERSION: u8 = 1;
+    pub const SPACE: usize = 8 + 224;
+}
+
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct InitializeProtocolArgs {
     pub treasury_owner: Pubkey,
@@ -192,6 +369,54 @@ pub struct RedeemArgs {
     pub nullifier_hash: [u8; 32],
     pub proof: Vec<u8>,
     pub public_witness: Vec<u8>,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct InitializeEngineArgs {
+    pub treasury_fee_share_bps: u16,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct OracleConfigArgs {
+    pub resolver: OracleResolverV2,
+    pub source_program: Pubkey,
+    pub source_id: [u8; 32],
+    pub comparator: ValueComparator,
+    pub threshold: i64,
+    pub threshold_exponent: i32,
+    pub observation_ts: i64,
+    pub observation_window_secs: u32,
+    pub max_staleness_secs: u32,
+    pub max_confidence_bps: u16,
+    pub min_samples: u8,
+    pub challenge_period_secs: u32,
+    pub config_hash: [u8; 32],
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct InitializeHybridMarketArgs {
+    pub market_id: u64,
+    pub category: MarketCategory,
+    pub trading_mode: HybridTradingMode,
+    pub question_hash: [u8; 32],
+    pub rules_hash: [u8; 32],
+    pub outcome_labels_hash: [u8; 32],
+    pub liquidity_parameter: u64,
+    pub rounding_reserve: u64,
+    pub max_trade_shares: u64,
+    pub trade_fee_bps: u16,
+    pub lock_ts: i64,
+    pub resolve_not_before_ts: i64,
+    pub resolution_deadline_ts: i64,
+    pub oracle: OracleConfigArgs,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct TradeSharesArgs {
+    pub side: u8,
+    pub shares: u64,
+    pub amount_guard: u64,
+    pub deadline_ts: i64,
 }
 
 #[event]
@@ -296,4 +521,85 @@ pub struct WinningsRedeemed {
 #[event]
 pub struct MarketClosed {
     pub market: Pubkey,
+}
+
+#[event]
+pub struct EngineInitialized {
+    pub engine: Pubkey,
+    pub authority: Pubkey,
+    pub treasury_owner: Pubkey,
+    pub collateral_mint: Pubkey,
+    pub treasury_fee_share_bps: u16,
+    pub pyth_receiver_program: Pubkey,
+    pub switchboard_quote_program: Pubkey,
+}
+
+#[event]
+pub struct HybridMarketCreated {
+    pub market: Pubkey,
+    pub market_id: u64,
+    pub creator: Pubkey,
+    pub category: MarketCategory,
+    pub resolver: OracleResolverV2,
+    pub liquidity_parameter: u64,
+    pub initial_subsidy: u64,
+    pub trade_fee_bps: u16,
+    pub lock_ts: i64,
+}
+
+#[event]
+pub struct HybridPositionOpened {
+    pub market: Pubkey,
+    pub position: Pubkey,
+    pub owner: Pubkey,
+}
+
+#[event]
+pub struct HybridTradeExecuted {
+    pub market: Pubkey,
+    pub position: Pubkey,
+    pub owner: Pubkey,
+    pub direction: u8,
+    pub side: u8,
+    pub shares: u64,
+    pub raw_amount: u64,
+    pub fee_amount: u64,
+    pub total_amount: u64,
+    pub before_yes_probability: u64,
+    pub after_yes_probability: u64,
+    pub yes_quantity: u64,
+    pub no_quantity: u64,
+}
+
+#[event]
+pub struct HybridMarketLocked {
+    pub market: Pubkey,
+    pub locked_at: i64,
+}
+
+#[event]
+pub struct HybridMarketResolved {
+    pub market: Pubkey,
+    pub outcome: u8,
+    pub resolver: OracleResolverV2,
+    pub outstanding_liability: u64,
+    pub evidence_hash: [u8; 32],
+    pub settled_at: i64,
+}
+
+#[event]
+pub struct HybridPositionSettled {
+    pub market: Pubkey,
+    pub position: Pubkey,
+    pub owner: Pubkey,
+    pub outcome: u8,
+    pub amount: u64,
+}
+
+#[event]
+pub struct HybridLiquidityWithdrawn {
+    pub market: Pubkey,
+    pub liquidity_owner: Pubkey,
+    pub amount: u64,
+    pub outstanding_liability: u64,
 }

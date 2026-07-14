@@ -7,6 +7,7 @@ pub mod zk;
 
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, TransferChecked};
+use core::cmp::max;
 use solana_sha256_hasher::hashv;
 
 pub use constants::*;
@@ -508,6 +509,405 @@ pub mod nortia {
         });
         Ok(())
     }
+
+    pub fn initialize_engine(
+        ctx: Context<InitializeEngine>,
+        args: InitializeEngineArgs,
+    ) -> Result<()> {
+        require!(
+            args.treasury_fee_share_bps > 0 && args.treasury_fee_share_bps < FEE_SPLIT_DENOMINATOR,
+            NortiaError::InvalidEngineConfiguration
+        );
+        let engine = &mut ctx.accounts.engine;
+        engine.bump = ctx.bumps.engine;
+        engine.version = EngineConfig::VERSION;
+        engine.authority = ctx.accounts.authority.key();
+        engine.treasury_owner = ctx.accounts.protocol.treasury_owner;
+        engine.collateral_mint = ctx.accounts.protocol.collateral_mint;
+        engine.token_program = ctx.accounts.protocol.token_program;
+        engine.treasury_fee_share_bps = args.treasury_fee_share_bps;
+        engine.pyth_receiver_program = PYTH_RECEIVER_PROGRAM_ID;
+        engine.switchboard_quote_program = SWITCHBOARD_QUOTE_PROGRAM_ID;
+        engine.paused = false;
+        emit!(EngineInitialized {
+            engine: engine.key(),
+            authority: engine.authority,
+            treasury_owner: engine.treasury_owner,
+            collateral_mint: engine.collateral_mint,
+            treasury_fee_share_bps: engine.treasury_fee_share_bps,
+            pyth_receiver_program: engine.pyth_receiver_program,
+            switchboard_quote_program: engine.switchboard_quote_program,
+        });
+        Ok(())
+    }
+
+    pub fn initialize_hybrid_market(
+        ctx: Context<InitializeHybridMarket>,
+        args: InitializeHybridMarketArgs,
+    ) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        require!(!ctx.accounts.engine.paused, NortiaError::InvalidPhase);
+        require!(
+            args.market_id > 0
+                && args.question_hash != [0; 32]
+                && args.rules_hash != [0; 32]
+                && args.outcome_labels_hash != [0; 32]
+                && args.trading_mode == HybridTradingMode::Continuous
+                && args.rounding_reserve >= HYBRID_ROUNDING_RESERVE
+                && args.max_trade_shares >= lmsr::MIN_TRADE_SHARES
+                && args.max_trade_shares <= lmsr::MAX_TRADE_SHARES
+                && args.trade_fee_bps <= lmsr::MAX_TRADING_FEE_BPS
+                && now < args.lock_ts
+                && args.lock_ts <= args.resolve_not_before_ts
+                && args.resolve_not_before_ts < args.resolution_deadline_ts,
+            NortiaError::InvalidMarketConfiguration
+        );
+        validate_oracle_config(&args.category, &args.oracle, args.resolve_not_before_ts)?;
+        let initial_subsidy =
+            lmsr::required_subsidy(args.liquidity_parameter, args.rounding_reserve)
+                .map_err(|_| error!(NortiaError::InvalidLmsrState))?;
+
+        let market = &mut ctx.accounts.market;
+        market.bump = ctx.bumps.market;
+        market.vault_bump = ctx.bumps.vault;
+        market.version = HybridMarket::VERSION;
+        market.market_id = args.market_id;
+        market.creator = ctx.accounts.creator.key();
+        market.liquidity_owner = ctx.accounts.creator.key();
+        market.category = args.category;
+        market.trading_mode = args.trading_mode;
+        market.pricing_model = HybridPricingModel::Lmsr;
+        market.question_hash = args.question_hash;
+        market.rules_hash = args.rules_hash;
+        market.outcome_labels_hash = args.outcome_labels_hash;
+        market.collateral_mint = ctx.accounts.engine.collateral_mint;
+        market.token_program = ctx.accounts.engine.token_program;
+        market.treasury_owner = ctx.accounts.engine.treasury_owner;
+        market.oracle_config = ctx.accounts.oracle_config.key();
+        market.liquidity_parameter = args.liquidity_parameter;
+        market.initial_subsidy = initial_subsidy;
+        market.rounding_reserve = args.rounding_reserve;
+        market.max_trade_shares = args.max_trade_shares;
+        market.yes_quantity = 0;
+        market.no_quantity = 0;
+        market.trade_fee_bps = args.trade_fee_bps;
+        market.treasury_fee_share_bps = ctx.accounts.engine.treasury_fee_share_bps;
+        market.open_ts = now;
+        market.lock_ts = args.lock_ts;
+        market.resolve_not_before_ts = args.resolve_not_before_ts;
+        market.resolution_deadline_ts = args.resolution_deadline_ts;
+        market.phase = HybridPhase::Open;
+        market.outcome = HybridMarket::OUTCOME_UNSET;
+        market.trade_count = 0;
+        market.volume = 0;
+        market.treasury_fees = 0;
+        market.liquidity_fees = 0;
+        market.outstanding_liability = 0;
+        market.redeemed_liability = 0;
+        market.settled_at = 0;
+        market.settlement_evidence_hash = [0; 32];
+
+        let oracle = &mut ctx.accounts.oracle_config;
+        oracle.bump = ctx.bumps.oracle_config;
+        oracle.version = OracleConfig::VERSION;
+        oracle.market = market.key();
+        oracle.resolver = args.oracle.resolver;
+        oracle.source_program = args.oracle.source_program;
+        oracle.source_id = args.oracle.source_id;
+        oracle.comparator = args.oracle.comparator;
+        oracle.threshold = args.oracle.threshold;
+        oracle.threshold_exponent = args.oracle.threshold_exponent;
+        oracle.observation_ts = args.oracle.observation_ts;
+        oracle.observation_window_secs = args.oracle.observation_window_secs;
+        oracle.max_staleness_secs = args.oracle.max_staleness_secs;
+        oracle.max_confidence_bps = args.oracle.max_confidence_bps;
+        oracle.min_samples = args.oracle.min_samples;
+        oracle.challenge_period_secs = args.oracle.challenge_period_secs;
+        oracle.config_hash = args.oracle.config_hash;
+        oracle.consumed = false;
+
+        transfer_to_vault(
+            &ctx.accounts.creator,
+            &ctx.accounts.creator_token,
+            &ctx.accounts.vault,
+            &ctx.accounts.collateral_mint,
+            &ctx.accounts.token_program,
+            initial_subsidy,
+        )?;
+
+        emit!(HybridMarketCreated {
+            market: market.key(),
+            market_id: market.market_id,
+            creator: market.creator,
+            category: market.category,
+            resolver: oracle.resolver,
+            liquidity_parameter: market.liquidity_parameter,
+            initial_subsidy: market.initial_subsidy,
+            trade_fee_bps: market.trade_fee_bps,
+            lock_ts: market.lock_ts,
+        });
+        Ok(())
+    }
+
+    pub fn initialize_position(ctx: Context<InitializePosition>) -> Result<()> {
+        require!(
+            ctx.accounts.market.phase == HybridPhase::Open,
+            NortiaError::InvalidPhase
+        );
+        let position = &mut ctx.accounts.position;
+        position.bump = ctx.bumps.position;
+        position.version = Position::VERSION;
+        position.market = ctx.accounts.market.key();
+        position.owner = ctx.accounts.owner.key();
+        position.yes_shares = 0;
+        position.no_shares = 0;
+        position.total_spent = 0;
+        position.total_proceeds = 0;
+        position.settled_amount = 0;
+        position.settled = false;
+        emit!(HybridPositionOpened {
+            market: position.market,
+            position: position.key(),
+            owner: position.owner,
+        });
+        Ok(())
+    }
+
+    pub fn buy_hybrid_shares(ctx: Context<TradeHybridShares>, args: TradeSharesArgs) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        validate_hybrid_trade(&ctx.accounts.market, &args, now)?;
+        let side = lmsr_side(args.side)?;
+        let quantities = lmsr_quantities(&ctx.accounts.market);
+        let quote = lmsr::quote_buy(
+            quantities,
+            ctx.accounts.market.liquidity_parameter,
+            side,
+            args.shares,
+            ctx.accounts.market.trade_fee_bps,
+        )
+        .map_err(|_| error!(NortiaError::InvalidLmsrState))?;
+        require!(
+            quote.total_amount <= args.amount_guard,
+            NortiaError::PriceGuardExceeded
+        );
+        let (treasury_fee, liquidity_fee) =
+            split_hybrid_fee(quote.fee_amount, ctx.accounts.market.treasury_fee_share_bps)?;
+        let projected_vault = ctx
+            .accounts
+            .vault
+            .amount
+            .checked_add(quote.raw_amount)
+            .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
+        require!(
+            projected_vault >= max(quote.after.yes, quote.after.no),
+            NortiaError::InsolventMarket
+        );
+
+        apply_position_buy(&mut ctx.accounts.position, side, &quote)?;
+        apply_market_trade(
+            &mut ctx.accounts.market,
+            &quote,
+            treasury_fee,
+            liquidity_fee,
+        )?;
+
+        transfer_to_vault(
+            &ctx.accounts.owner,
+            &ctx.accounts.owner_token,
+            &ctx.accounts.vault,
+            &ctx.accounts.collateral_mint,
+            &ctx.accounts.token_program,
+            quote.raw_amount,
+        )?;
+        transfer_from_owner(
+            &ctx.accounts.owner,
+            &ctx.accounts.owner_token,
+            &ctx.accounts.treasury_token,
+            &ctx.accounts.collateral_mint,
+            &ctx.accounts.token_program,
+            treasury_fee,
+        )?;
+        transfer_from_owner(
+            &ctx.accounts.owner,
+            &ctx.accounts.owner_token,
+            &ctx.accounts.liquidity_token,
+            &ctx.accounts.collateral_mint,
+            &ctx.accounts.token_program,
+            liquidity_fee,
+        )?;
+        emit_hybrid_trade(
+            &ctx.accounts.market,
+            ctx.accounts.position.key(),
+            &ctx.accounts.position,
+            &quote,
+        );
+        Ok(())
+    }
+
+    pub fn sell_hybrid_shares(
+        ctx: Context<TradeHybridShares>,
+        args: TradeSharesArgs,
+    ) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        validate_hybrid_trade(&ctx.accounts.market, &args, now)?;
+        let side = lmsr_side(args.side)?;
+        require!(
+            position_shares(&ctx.accounts.position, side) >= args.shares,
+            NortiaError::InsufficientPosition
+        );
+        let quantities = lmsr_quantities(&ctx.accounts.market);
+        let quote = lmsr::quote_sell(
+            quantities,
+            ctx.accounts.market.liquidity_parameter,
+            side,
+            args.shares,
+            ctx.accounts.market.trade_fee_bps,
+        )
+        .map_err(|_| error!(NortiaError::InvalidLmsrState))?;
+        require!(
+            quote.total_amount >= args.amount_guard,
+            NortiaError::PriceGuardExceeded
+        );
+        let (treasury_fee, liquidity_fee) =
+            split_hybrid_fee(quote.fee_amount, ctx.accounts.market.treasury_fee_share_bps)?;
+        let projected_vault = ctx
+            .accounts
+            .vault
+            .amount
+            .checked_sub(quote.raw_amount)
+            .ok_or_else(|| error!(NortiaError::InsufficientVaultBalance))?;
+        require!(
+            projected_vault >= max(quote.after.yes, quote.after.no),
+            NortiaError::InsolventMarket
+        );
+
+        apply_position_sell(&mut ctx.accounts.position, side, &quote)?;
+        apply_market_trade(
+            &mut ctx.accounts.market,
+            &quote,
+            treasury_fee,
+            liquidity_fee,
+        )?;
+
+        transfer_from_hybrid_vault(
+            &ctx.accounts.market,
+            &ctx.accounts.vault,
+            &ctx.accounts.owner_token,
+            &ctx.accounts.collateral_mint,
+            &ctx.accounts.token_program,
+            quote.total_amount,
+        )?;
+        transfer_from_hybrid_vault(
+            &ctx.accounts.market,
+            &ctx.accounts.vault,
+            &ctx.accounts.treasury_token,
+            &ctx.accounts.collateral_mint,
+            &ctx.accounts.token_program,
+            treasury_fee,
+        )?;
+        transfer_from_hybrid_vault(
+            &ctx.accounts.market,
+            &ctx.accounts.vault,
+            &ctx.accounts.liquidity_token,
+            &ctx.accounts.collateral_mint,
+            &ctx.accounts.token_program,
+            liquidity_fee,
+        )?;
+        emit_hybrid_trade(
+            &ctx.accounts.market,
+            ctx.accounts.position.key(),
+            &ctx.accounts.position,
+            &quote,
+        );
+        Ok(())
+    }
+
+    pub fn lock_hybrid_market(ctx: Context<LockHybridMarket>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        require!(
+            ctx.accounts.market.phase == HybridPhase::Open,
+            NortiaError::InvalidPhase
+        );
+        require!(now >= ctx.accounts.market.lock_ts, NortiaError::TooEarly);
+        ctx.accounts.market.phase = HybridPhase::Locked;
+        emit!(HybridMarketLocked {
+            market: ctx.accounts.market.key(),
+            locked_at: now,
+        });
+        Ok(())
+    }
+
+    pub fn settle_hybrid_position(ctx: Context<SettleHybridPosition>) -> Result<()> {
+        require!(
+            ctx.accounts.market.phase == HybridPhase::Resolved,
+            NortiaError::InvalidPhase
+        );
+        require!(
+            !ctx.accounts.position.settled,
+            NortiaError::PositionAlreadySettled
+        );
+        let amount = hybrid_position_payout(&ctx.accounts.position, ctx.accounts.market.outcome)?;
+        require!(
+            ctx.accounts.market.outstanding_liability >= amount,
+            NortiaError::InsolventMarket
+        );
+        ctx.accounts.position.settled = true;
+        ctx.accounts.position.settled_amount = amount;
+        ctx.accounts.market.outstanding_liability -= amount;
+        ctx.accounts.market.redeemed_liability = ctx
+            .accounts
+            .market
+            .redeemed_liability
+            .checked_add(amount)
+            .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
+        if amount > 0 {
+            transfer_from_hybrid_vault(
+                &ctx.accounts.market,
+                &ctx.accounts.vault,
+                &ctx.accounts.owner_token,
+                &ctx.accounts.collateral_mint,
+                &ctx.accounts.token_program,
+                amount,
+            )?;
+        }
+        emit!(HybridPositionSettled {
+            market: ctx.accounts.market.key(),
+            position: ctx.accounts.position.key(),
+            owner: ctx.accounts.owner.key(),
+            outcome: ctx.accounts.market.outcome,
+            amount,
+        });
+        Ok(())
+    }
+
+    pub fn withdraw_hybrid_liquidity(ctx: Context<WithdrawHybridLiquidity>) -> Result<()> {
+        require!(
+            ctx.accounts.market.phase == HybridPhase::Resolved,
+            NortiaError::InvalidPhase
+        );
+        let amount = ctx
+            .accounts
+            .vault
+            .amount
+            .checked_sub(ctx.accounts.market.outstanding_liability)
+            .ok_or_else(|| error!(NortiaError::InsolventMarket))?;
+        require!(amount > 0, NortiaError::ZeroCommitment);
+        transfer_from_hybrid_vault(
+            &ctx.accounts.market,
+            &ctx.accounts.vault,
+            &ctx.accounts.liquidity_token,
+            &ctx.accounts.collateral_mint,
+            &ctx.accounts.token_program,
+            amount,
+        )?;
+        emit!(HybridLiquidityWithdrawn {
+            market: ctx.accounts.market.key(),
+            liquidity_owner: ctx.accounts.liquidity_owner.key(),
+            amount,
+            outstanding_liability: ctx.accounts.market.outstanding_liability,
+        });
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -777,6 +1177,544 @@ pub struct Redeem<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[derive(Accounts)]
+pub struct InitializeEngine<'info> {
+    #[account(
+        mut,
+        address = protocol.authority @ NortiaError::InvalidEngineConfiguration
+    )]
+    pub authority: Signer<'info>,
+    #[account(
+        seeds = [PROTOCOL_SEED],
+        bump = protocol.bump,
+        constraint = protocol.collateral_mint == DEVNET_USDC_MINT
+            @ NortiaError::InvalidCollateralMint
+    )]
+    pub protocol: Account<'info, ProtocolConfig>,
+    #[account(
+        init,
+        payer = authority,
+        space = EngineConfig::SPACE,
+        seeds = [ENGINE_SEED],
+        bump
+    )]
+    pub engine: Account<'info, EngineConfig>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+#[instruction(args: InitializeHybridMarketArgs)]
+pub struct InitializeHybridMarket<'info> {
+    #[account(mut)]
+    pub creator: Signer<'info>,
+    #[account(
+        seeds = [ENGINE_SEED],
+        bump = engine.bump,
+        constraint = engine.collateral_mint == collateral_mint.key()
+            @ NortiaError::InvalidCollateralMint,
+        constraint = engine.token_program == token_program.key()
+            @ NortiaError::InvalidTokenAccount
+    )]
+    pub engine: Account<'info, EngineConfig>,
+    #[account(
+        address = engine.collateral_mint @ NortiaError::InvalidCollateralMint,
+        constraint = collateral_mint.decimals == USDC_DECIMALS
+            @ NortiaError::InvalidCollateralMint
+    )]
+    pub collateral_mint: Account<'info, Mint>,
+    #[account(
+        mut,
+        constraint = creator_token.owner == creator.key()
+            @ NortiaError::InvalidTokenAccount,
+        constraint = creator_token.mint == collateral_mint.key()
+            @ NortiaError::InvalidTokenAccount
+    )]
+    pub creator_token: Account<'info, TokenAccount>,
+    #[account(
+        init,
+        payer = creator,
+        space = HybridMarket::SPACE,
+        seeds = [HYBRID_MARKET_SEED, creator.key().as_ref(), &args.market_id.to_le_bytes()],
+        bump
+    )]
+    pub market: Box<Account<'info, HybridMarket>>,
+    #[account(
+        init,
+        payer = creator,
+        space = OracleConfig::SPACE,
+        seeds = [ORACLE_CONFIG_SEED, market.key().as_ref()],
+        bump
+    )]
+    pub oracle_config: Box<Account<'info, OracleConfig>>,
+    #[account(
+        init,
+        payer = creator,
+        seeds = [HYBRID_VAULT_SEED, market.key().as_ref()],
+        bump,
+        token::mint = collateral_mint,
+        token::authority = market
+    )]
+    pub vault: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct InitializePosition<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    #[account(
+        seeds = [HYBRID_MARKET_SEED, market.creator.as_ref(), &market.market_id.to_le_bytes()],
+        bump = market.bump
+    )]
+    pub market: Box<Account<'info, HybridMarket>>,
+    #[account(
+        init,
+        payer = owner,
+        space = Position::SPACE,
+        seeds = [POSITION_SEED, market.key().as_ref(), owner.key().as_ref()],
+        bump
+    )]
+    pub position: Account<'info, Position>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct TradeHybridShares<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [HYBRID_MARKET_SEED, market.creator.as_ref(), &market.market_id.to_le_bytes()],
+        bump = market.bump,
+        constraint = market.collateral_mint == collateral_mint.key()
+            @ NortiaError::InvalidCollateralMint,
+        constraint = market.token_program == token_program.key()
+            @ NortiaError::InvalidTokenAccount,
+        constraint = market.treasury_owner == treasury_token.owner
+            @ NortiaError::InvalidTreasury,
+        constraint = market.liquidity_owner == liquidity_token.owner
+            @ NortiaError::InvalidTokenAccount
+    )]
+    pub market: Box<Account<'info, HybridMarket>>,
+    #[account(
+        mut,
+        seeds = [POSITION_SEED, market.key().as_ref(), owner.key().as_ref()],
+        bump = position.bump,
+        constraint = position.market == market.key() @ NortiaError::InvalidPosition,
+        constraint = position.owner == owner.key() @ NortiaError::InvalidPosition,
+        constraint = !position.settled @ NortiaError::PositionAlreadySettled
+    )]
+    pub position: Box<Account<'info, Position>>,
+    pub collateral_mint: Box<Account<'info, Mint>>,
+    #[account(
+        mut,
+        constraint = owner_token.owner == owner.key()
+            @ NortiaError::InvalidTokenAccount,
+        constraint = owner_token.mint == collateral_mint.key()
+            @ NortiaError::InvalidTokenAccount
+    )]
+    pub owner_token: Box<Account<'info, TokenAccount>>,
+    #[account(
+        mut,
+        seeds = [HYBRID_VAULT_SEED, market.key().as_ref()],
+        bump = market.vault_bump,
+        token::mint = collateral_mint,
+        token::authority = market
+    )]
+    pub vault: Box<Account<'info, TokenAccount>>,
+    #[account(
+        mut,
+        constraint = treasury_token.mint == collateral_mint.key()
+            @ NortiaError::InvalidTreasury
+    )]
+    pub treasury_token: Box<Account<'info, TokenAccount>>,
+    #[account(
+        mut,
+        constraint = liquidity_token.mint == collateral_mint.key()
+            @ NortiaError::InvalidTokenAccount
+    )]
+    pub liquidity_token: Box<Account<'info, TokenAccount>>,
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct LockHybridMarket<'info> {
+    #[account(
+        mut,
+        seeds = [HYBRID_MARKET_SEED, market.creator.as_ref(), &market.market_id.to_le_bytes()],
+        bump = market.bump
+    )]
+    pub market: Account<'info, HybridMarket>,
+}
+
+#[derive(Accounts)]
+pub struct SettleHybridPosition<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [HYBRID_MARKET_SEED, market.creator.as_ref(), &market.market_id.to_le_bytes()],
+        bump = market.bump,
+        constraint = market.collateral_mint == collateral_mint.key()
+            @ NortiaError::InvalidCollateralMint,
+        constraint = market.token_program == token_program.key()
+            @ NortiaError::InvalidTokenAccount
+    )]
+    pub market: Box<Account<'info, HybridMarket>>,
+    #[account(
+        mut,
+        seeds = [POSITION_SEED, market.key().as_ref(), owner.key().as_ref()],
+        bump = position.bump,
+        constraint = position.market == market.key() @ NortiaError::InvalidPosition,
+        constraint = position.owner == owner.key() @ NortiaError::InvalidPosition
+    )]
+    pub position: Account<'info, Position>,
+    pub collateral_mint: Account<'info, Mint>,
+    #[account(
+        mut,
+        seeds = [HYBRID_VAULT_SEED, market.key().as_ref()],
+        bump = market.vault_bump,
+        token::mint = collateral_mint,
+        token::authority = market
+    )]
+    pub vault: Account<'info, TokenAccount>,
+    #[account(
+        mut,
+        constraint = owner_token.owner == owner.key()
+            @ NortiaError::InvalidTokenAccount,
+        constraint = owner_token.mint == collateral_mint.key()
+            @ NortiaError::InvalidTokenAccount
+    )]
+    pub owner_token: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct WithdrawHybridLiquidity<'info> {
+    #[account(mut)]
+    pub liquidity_owner: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [HYBRID_MARKET_SEED, market.creator.as_ref(), &market.market_id.to_le_bytes()],
+        bump = market.bump,
+        constraint = market.liquidity_owner == liquidity_owner.key()
+            @ NortiaError::InvalidTokenAccount,
+        constraint = market.collateral_mint == collateral_mint.key()
+            @ NortiaError::InvalidCollateralMint,
+        constraint = market.token_program == token_program.key()
+            @ NortiaError::InvalidTokenAccount
+    )]
+    pub market: Box<Account<'info, HybridMarket>>,
+    pub collateral_mint: Account<'info, Mint>,
+    #[account(
+        mut,
+        seeds = [HYBRID_VAULT_SEED, market.key().as_ref()],
+        bump = market.vault_bump,
+        token::mint = collateral_mint,
+        token::authority = market
+    )]
+    pub vault: Account<'info, TokenAccount>,
+    #[account(
+        mut,
+        constraint = liquidity_token.owner == liquidity_owner.key()
+            @ NortiaError::InvalidTokenAccount,
+        constraint = liquidity_token.mint == collateral_mint.key()
+            @ NortiaError::InvalidTokenAccount
+    )]
+    pub liquidity_token: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
+}
+
+fn validate_oracle_config(
+    category: &MarketCategory,
+    args: &OracleConfigArgs,
+    resolve_not_before_ts: i64,
+) -> Result<()> {
+    require!(
+        args.source_id != [0; 32]
+            && args.config_hash != [0; 32]
+            && args.observation_ts >= resolve_not_before_ts
+            && args.observation_window_secs > 0,
+        NortiaError::InvalidOracleConfiguration
+    );
+    match args.resolver {
+        OracleResolverV2::TxlineStatV2 => require!(
+            *category == MarketCategory::Sports
+                && args.source_program == TXLINE_PROGRAM_ID
+                && args.threshold_exponent == 0,
+            NortiaError::InvalidOracleConfiguration
+        ),
+        OracleResolverV2::PythPriceV2 => require!(
+            args.source_program == PYTH_RECEIVER_PROGRAM_ID
+                && args.max_staleness_secs > 0
+                && args.max_confidence_bps > 0
+                && args.max_confidence_bps <= FEE_SPLIT_DENOMINATOR,
+            NortiaError::InvalidOracleConfiguration
+        ),
+        OracleResolverV2::SwitchboardQuoteV1 => require!(
+            args.source_program == SWITCHBOARD_QUOTE_PROGRAM_ID
+                && args.max_staleness_secs > 0
+                && args.min_samples >= 2,
+            NortiaError::InvalidOracleConfiguration
+        ),
+        OracleResolverV2::OptimisticV1 => require!(
+            args.source_program == crate::ID && args.challenge_period_secs >= 3_600,
+            NortiaError::InvalidOracleConfiguration
+        ),
+        OracleResolverV2::UmaWormholeV1 | OracleResolverV2::ChainlinkReportV1 => {
+            return err!(NortiaError::ResolverNotEnabled)
+        }
+    }
+    Ok(())
+}
+
+fn validate_hybrid_trade(market: &HybridMarket, args: &TradeSharesArgs, now: i64) -> Result<()> {
+    require!(market.phase == HybridPhase::Open, NortiaError::InvalidPhase);
+    require!(now < market.lock_ts, NortiaError::MarketLocked);
+    require!(now <= args.deadline_ts, NortiaError::TradeDeadlineElapsed);
+    require!(
+        args.shares >= lmsr::MIN_TRADE_SHARES && args.shares <= market.max_trade_shares,
+        NortiaError::InvalidLmsrState
+    );
+    Ok(())
+}
+
+fn lmsr_side(side: u8) -> Result<lmsr::OutcomeSide> {
+    match side {
+        0 => Ok(lmsr::OutcomeSide::No),
+        1 => Ok(lmsr::OutcomeSide::Yes),
+        _ => err!(NortiaError::InvalidOutcome),
+    }
+}
+
+fn side_value(side: lmsr::OutcomeSide) -> u8 {
+    match side {
+        lmsr::OutcomeSide::No => 0,
+        lmsr::OutcomeSide::Yes => 1,
+    }
+}
+
+fn lmsr_quantities(market: &HybridMarket) -> lmsr::MarketQuantities {
+    lmsr::MarketQuantities {
+        yes: market.yes_quantity,
+        no: market.no_quantity,
+    }
+}
+
+fn position_shares(position: &Position, side: lmsr::OutcomeSide) -> u64 {
+    match side {
+        lmsr::OutcomeSide::Yes => position.yes_shares,
+        lmsr::OutcomeSide::No => position.no_shares,
+    }
+}
+
+fn split_hybrid_fee(fee: u64, treasury_share_bps: u16) -> Result<(u64, u64)> {
+    require!(
+        treasury_share_bps < FEE_SPLIT_DENOMINATOR,
+        NortiaError::InvalidProtocolFee
+    );
+    let treasury = (fee as u128)
+        .checked_mul(treasury_share_bps as u128)
+        .and_then(|value| value.checked_div(FEE_SPLIT_DENOMINATOR as u128))
+        .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
+    let treasury = u64::try_from(treasury).map_err(|_| error!(NortiaError::ArithmeticOverflow))?;
+    let liquidity = fee
+        .checked_sub(treasury)
+        .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
+    Ok((treasury, liquidity))
+}
+
+fn apply_position_buy(
+    position: &mut Position,
+    side: lmsr::OutcomeSide,
+    quote: &lmsr::TradeQuote,
+) -> Result<()> {
+    match side {
+        lmsr::OutcomeSide::Yes => {
+            position.yes_shares = position
+                .yes_shares
+                .checked_add(quote.shares)
+                .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
+        }
+        lmsr::OutcomeSide::No => {
+            position.no_shares = position
+                .no_shares
+                .checked_add(quote.shares)
+                .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
+        }
+    }
+    position.total_spent = position
+        .total_spent
+        .checked_add(quote.total_amount)
+        .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
+    Ok(())
+}
+
+fn apply_position_sell(
+    position: &mut Position,
+    side: lmsr::OutcomeSide,
+    quote: &lmsr::TradeQuote,
+) -> Result<()> {
+    match side {
+        lmsr::OutcomeSide::Yes => {
+            position.yes_shares = position
+                .yes_shares
+                .checked_sub(quote.shares)
+                .ok_or_else(|| error!(NortiaError::InsufficientPosition))?;
+        }
+        lmsr::OutcomeSide::No => {
+            position.no_shares = position
+                .no_shares
+                .checked_sub(quote.shares)
+                .ok_or_else(|| error!(NortiaError::InsufficientPosition))?;
+        }
+    }
+    position.total_proceeds = position
+        .total_proceeds
+        .checked_add(quote.total_amount)
+        .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
+    Ok(())
+}
+
+fn apply_market_trade(
+    market: &mut HybridMarket,
+    quote: &lmsr::TradeQuote,
+    treasury_fee: u64,
+    liquidity_fee: u64,
+) -> Result<()> {
+    market.yes_quantity = quote.after.yes;
+    market.no_quantity = quote.after.no;
+    market.trade_count = market
+        .trade_count
+        .checked_add(1)
+        .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
+    market.volume = market
+        .volume
+        .checked_add(quote.raw_amount)
+        .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
+    market.treasury_fees = market
+        .treasury_fees
+        .checked_add(treasury_fee)
+        .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
+    market.liquidity_fees = market
+        .liquidity_fees
+        .checked_add(liquidity_fee)
+        .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
+    Ok(())
+}
+
+fn emit_hybrid_trade(
+    market: &HybridMarket,
+    position_key: Pubkey,
+    position: &Position,
+    quote: &lmsr::TradeQuote,
+) {
+    emit!(HybridTradeExecuted {
+        market: position.market,
+        position: position_key,
+        owner: position.owner,
+        direction: match quote.direction {
+            lmsr::TradeDirection::Buy => 0,
+            lmsr::TradeDirection::Sell => 1,
+        },
+        side: side_value(quote.side),
+        shares: quote.shares,
+        raw_amount: quote.raw_amount,
+        fee_amount: quote.fee_amount,
+        total_amount: quote.total_amount,
+        before_yes_probability: quote.before_yes_probability,
+        after_yes_probability: quote.after_yes_probability,
+        yes_quantity: market.yes_quantity,
+        no_quantity: market.no_quantity,
+    });
+}
+
+fn hybrid_position_payout(position: &Position, outcome: u8) -> Result<u64> {
+    match outcome {
+        HybridMarket::OUTCOME_YES => Ok(position.yes_shares),
+        HybridMarket::OUTCOME_NO => Ok(position.no_shares),
+        HybridMarket::OUTCOME_INVALID => position
+            .yes_shares
+            .checked_add(position.no_shares)
+            .map(|shares| shares / 2)
+            .ok_or_else(|| error!(NortiaError::ArithmeticOverflow)),
+        _ => err!(NortiaError::InvalidOutcome),
+    }
+}
+
+fn transfer_to_vault<'info>(
+    owner: &Signer<'info>,
+    source: &Account<'info, TokenAccount>,
+    vault: &Account<'info, TokenAccount>,
+    collateral_mint: &Account<'info, Mint>,
+    token_program: &Program<'info, Token>,
+    amount: u64,
+) -> Result<()> {
+    transfer_from_owner(owner, source, vault, collateral_mint, token_program, amount)
+}
+
+fn transfer_from_owner<'info>(
+    owner: &Signer<'info>,
+    source: &Account<'info, TokenAccount>,
+    destination: &Account<'info, TokenAccount>,
+    collateral_mint: &Account<'info, Mint>,
+    token_program: &Program<'info, Token>,
+    amount: u64,
+) -> Result<()> {
+    if amount == 0 {
+        return Ok(());
+    }
+    let transfer_accounts = TransferChecked {
+        from: source.to_account_info(),
+        mint: collateral_mint.to_account_info(),
+        to: destination.to_account_info(),
+        authority: owner.to_account_info(),
+    };
+    token::transfer_checked(
+        CpiContext::new(token_program.key(), transfer_accounts),
+        amount,
+        collateral_mint.decimals,
+    )
+}
+
+fn transfer_from_hybrid_vault<'info>(
+    market: &Account<'info, HybridMarket>,
+    vault: &Account<'info, TokenAccount>,
+    destination: &Account<'info, TokenAccount>,
+    collateral_mint: &Account<'info, Mint>,
+    token_program: &Program<'info, Token>,
+    amount: u64,
+) -> Result<()> {
+    if amount == 0 {
+        return Ok(());
+    }
+    require!(
+        vault.amount >= amount,
+        NortiaError::InsufficientVaultBalance
+    );
+    let market_id_bytes = market.market_id.to_le_bytes();
+    let bump = [market.bump];
+    let signer_seeds: &[&[u8]] = &[
+        HYBRID_MARKET_SEED,
+        market.creator.as_ref(),
+        &market_id_bytes,
+        &bump,
+    ];
+    let signer = &[signer_seeds];
+    let transfer_accounts = TransferChecked {
+        from: vault.to_account_info(),
+        mint: collateral_mint.to_account_info(),
+        to: destination.to_account_info(),
+        authority: market.to_account_info(),
+    };
+    token::transfer_checked(
+        CpiContext::new_with_signer(token_program.key(), transfer_accounts, signer),
+        amount,
+        collateral_mint.decimals,
+    )
+}
+
 fn valid_committee(committee: &[Pubkey; COMMITTEE_SIZE]) -> bool {
     committee.iter().all(|key| *key != Pubkey::default())
         && committee[0] != committee[1]
@@ -1019,5 +1957,101 @@ mod tests {
     #[test]
     fn settlement_rejects_values_that_do_not_fit_u64() {
         assert!(calculate_settlement(u64::MAX, 2, 1, 100, 1_000).is_err());
+    }
+
+    #[test]
+    fn hybrid_fee_split_assigns_rounding_to_liquidity() {
+        assert_eq!(split_hybrid_fee(100, 7_000).unwrap(), (70, 30));
+        assert_eq!(split_hybrid_fee(1, 7_000).unwrap(), (0, 1));
+        assert!(split_hybrid_fee(100, 10_000).is_err());
+    }
+
+    #[test]
+    fn hybrid_position_payout_covers_binary_and_invalid_results() {
+        let position = Position {
+            bump: 1,
+            version: Position::VERSION,
+            market: Pubkey::new_unique(),
+            owner: Pubkey::new_unique(),
+            yes_shares: 5_000_000,
+            no_shares: 3_000_000,
+            total_spent: 4_000_000,
+            total_proceeds: 0,
+            settled_amount: 0,
+            settled: false,
+        };
+        assert_eq!(
+            hybrid_position_payout(&position, HybridMarket::OUTCOME_YES).unwrap(),
+            5_000_000
+        );
+        assert_eq!(
+            hybrid_position_payout(&position, HybridMarket::OUTCOME_NO).unwrap(),
+            3_000_000
+        );
+        assert_eq!(
+            hybrid_position_payout(&position, HybridMarket::OUTCOME_INVALID).unwrap(),
+            4_000_000
+        );
+        assert!(hybrid_position_payout(&position, HybridMarket::OUTCOME_UNSET).is_err());
+    }
+
+    #[test]
+    fn oracle_templates_reject_disabled_and_mismatched_resolvers() {
+        let mut oracle = OracleConfigArgs {
+            resolver: OracleResolverV2::PythPriceV2,
+            source_program: PYTH_RECEIVER_PROGRAM_ID,
+            source_id: [1; 32],
+            comparator: ValueComparator::GreaterThan,
+            threshold: 100_000,
+            threshold_exponent: -2,
+            observation_ts: 2_000,
+            observation_window_secs: 60,
+            max_staleness_secs: 60,
+            max_confidence_bps: 100,
+            min_samples: 1,
+            challenge_period_secs: 0,
+            config_hash: [2; 32],
+        };
+        assert!(validate_oracle_config(&MarketCategory::Crypto, &oracle, 2_000).is_ok());
+        oracle.source_program = Pubkey::new_unique();
+        assert!(validate_oracle_config(&MarketCategory::Crypto, &oracle, 2_000).is_err());
+        oracle.source_program = PYTH_RECEIVER_PROGRAM_ID;
+        oracle.resolver = OracleResolverV2::UmaWormholeV1;
+        assert!(validate_oracle_config(&MarketCategory::Politics, &oracle, 2_000).is_err());
+    }
+
+    #[test]
+    fn v2_account_allocations_cover_serialized_state() {
+        let engine = EngineConfig {
+            bump: 1,
+            version: EngineConfig::VERSION,
+            authority: Pubkey::new_unique(),
+            treasury_owner: Pubkey::new_unique(),
+            collateral_mint: DEVNET_USDC_MINT,
+            token_program: anchor_spl::token::ID,
+            treasury_fee_share_bps: DEFAULT_TREASURY_FEE_SHARE_BPS,
+            pyth_receiver_program: PYTH_RECEIVER_PROGRAM_ID,
+            switchboard_quote_program: SWITCHBOARD_QUOTE_PROGRAM_ID,
+            paused: false,
+        };
+        let mut engine_data = Vec::new();
+        engine.try_serialize(&mut engine_data).unwrap();
+        assert!(engine_data.len() <= EngineConfig::SPACE);
+
+        let position = Position {
+            bump: 1,
+            version: Position::VERSION,
+            market: Pubkey::new_unique(),
+            owner: Pubkey::new_unique(),
+            yes_shares: 1,
+            no_shares: 2,
+            total_spent: 3,
+            total_proceeds: 4,
+            settled_amount: 5,
+            settled: false,
+        };
+        let mut position_data = Vec::new();
+        position.try_serialize(&mut position_data).unwrap();
+        assert!(position_data.len() <= Position::SPACE);
     }
 }
