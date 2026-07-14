@@ -1,5 +1,6 @@
 pub mod constants;
 pub mod error;
+pub mod lmsr;
 pub mod state;
 pub mod txline;
 pub mod zk;

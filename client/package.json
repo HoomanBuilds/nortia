@@ -6,7 +6,8 @@
   "exports": {
     "./committee": "./src/committee.ts",
     "./commitments": "./src/commitments.ts",
-    "./economics": "./src/economics.ts"
+    "./economics": "./src/economics.ts",
+    "./lmsr": "./src/lmsr.ts"
   },
   "scripts": {
     "proof:fixtures": "node --import tsx scripts/generate-proof-fixtures.ts",
