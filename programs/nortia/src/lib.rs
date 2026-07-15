@@ -3,6 +3,7 @@ pub mod error;
 pub mod lmsr;
 pub mod oracles;
 pub mod state;
+pub mod switchboard;
 pub mod txline;
 pub mod zk;
 
@@ -947,6 +948,56 @@ pub mod nortia {
         )
     }
 
+    pub fn resolve_hybrid_with_switchboard(
+        ctx: Context<ResolveHybridWithSwitchboard>,
+    ) -> Result<()> {
+        let clock = Clock::get()?;
+        let observation = switchboard::validate_switchboard_account(
+            &ctx.accounts.quote_account,
+            &ctx.accounts.oracle_config,
+            &clock,
+        )?;
+        let value_bytes = observation.value.to_le_bytes();
+        let exponent_bytes = observation.exponent.to_le_bytes();
+        let timestamp_bytes = observation.timestamp.to_le_bytes();
+        let slot_bytes = observation.slot.to_le_bytes();
+        let quote_data = ctx
+            .accounts
+            .quote_account
+            .try_borrow_data()
+            .map_err(|_| error!(NortiaError::InvalidSwitchboardQuote))?;
+        let evidence_hash = hashv(&[
+            b"nortia-switchboard-resolution-v1",
+            ctx.accounts.market.key().as_ref(),
+            ctx.accounts.oracle_config.config_hash.as_ref(),
+            ctx.accounts.oracle_config.source_queue.as_ref(),
+            ctx.accounts.oracle_config.source_id.as_ref(),
+            ctx.accounts.quote_account.key().as_ref(),
+            &value_bytes,
+            &exponent_bytes,
+            &timestamp_bytes,
+            &slot_bytes,
+            &[observation.sample_count],
+            quote_data.as_ref(),
+        ])
+        .to_bytes();
+        drop(quote_data);
+        finalize_hybrid_resolution(
+            &mut ctx.accounts.market,
+            &mut ctx.accounts.oracle_config,
+            &mut ctx.accounts.receipt,
+            FinalizeHybridResolutionArgs {
+                receipt_bump: ctx.bumps.receipt,
+                source_account: ctx.accounts.quote_account.key(),
+                observation,
+                evidence_hash,
+                now: clock.unix_timestamp,
+                vault_balance: ctx.accounts.vault.amount,
+                timeout: false,
+            },
+        )
+    }
+
     pub fn resolve_hybrid_timeout(ctx: Context<ResolveHybridTimeout>) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
         let deadline_bytes = ctx.accounts.market.resolution_deadline_ts.to_le_bytes();
@@ -969,7 +1020,9 @@ pub mod nortia {
                     value: 0,
                     exponent: 0,
                     timestamp: now,
+                    slot: 0,
                     confidence: 0,
+                    sample_count: 0,
                 },
                 evidence_hash,
                 now,
@@ -1582,6 +1635,51 @@ pub struct ResolveHybridWithTxline<'info> {
 }
 
 #[derive(Accounts)]
+pub struct ResolveHybridWithSwitchboard<'info> {
+    #[account(mut)]
+    pub keeper: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [HYBRID_MARKET_SEED, market.creator.as_ref(), &market.market_id.to_le_bytes()],
+        bump = market.bump,
+        constraint = market.oracle_config == oracle_config.key()
+            @ NortiaError::InvalidOracleConfiguration,
+        constraint = market.collateral_mint == vault.mint
+            @ NortiaError::InvalidCollateralMint
+    )]
+    pub market: Box<Account<'info, HybridMarket>>,
+    #[account(
+        mut,
+        seeds = [ORACLE_CONFIG_SEED, market.key().as_ref()],
+        bump = oracle_config.bump,
+        constraint = oracle_config.market == market.key()
+            @ NortiaError::InvalidOracleConfiguration,
+        constraint = oracle_config.resolver == OracleResolverV2::SwitchboardQuoteV1
+            @ NortiaError::InvalidOracleConfiguration,
+        constraint = !oracle_config.consumed @ NortiaError::ResolutionReplay
+    )]
+    pub oracle_config: Box<Account<'info, OracleConfig>>,
+    #[account(
+        init,
+        payer = keeper,
+        space = ResolutionReceipt::SPACE,
+        seeds = [RESOLUTION_RECEIPT_SEED, market.key().as_ref()],
+        bump
+    )]
+    pub receipt: Box<Account<'info, ResolutionReceipt>>,
+    #[account(
+        seeds = [HYBRID_VAULT_SEED, market.key().as_ref()],
+        bump = market.vault_bump,
+        token::mint = market.collateral_mint,
+        token::authority = market
+    )]
+    pub vault: Box<Account<'info, TokenAccount>>,
+    /// CHECK: Owner, canonical PDA, queue, feed, samples, and payload are verified in the handler.
+    pub quote_account: UncheckedAccount<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
 pub struct ResolveHybridTimeout<'info> {
     #[account(mut)]
     pub keeper: Signer<'info>,
@@ -1772,7 +1870,10 @@ fn finalize_hybrid_resolution(
     receipt.observation_value = observation.value;
     receipt.observation_exponent = observation.exponent;
     receipt.observation_ts = observation.timestamp;
+    receipt.observation_slot = observation.slot;
     receipt.confidence = observation.confidence;
+    receipt.sample_count = observation.sample_count;
+    receipt.source_queue = oracle.source_queue;
     receipt.source_id = oracle.source_id;
     receipt.source_account = source_account;
     receipt.evidence_hash = evidence_hash;
@@ -1836,12 +1937,15 @@ fn validate_oracle_config(
             NortiaError::InvalidOracleConfiguration
         ),
         OracleResolverV2::SwitchboardQuoteV1 => require!(
-            args.source_program == SWITCHBOARD_QUOTE_PROGRAM_ID
-                && args.source_queue != Pubkey::default()
+            *category != MarketCategory::Sports
+                && *category != MarketCategory::Crypto
+                && args.source_program == SWITCHBOARD_QUOTE_PROGRAM_ID
+                && args.source_queue == SWITCHBOARD_DEVNET_QUEUE
                 && (-18..=18).contains(&args.threshold_exponent)
                 && args.max_staleness_secs == 0
                 && args.max_staleness_slots > 0
-                && args.min_samples >= 2,
+                && args.max_confidence_bps == 0
+                && (2..=8).contains(&args.min_samples),
             NortiaError::InvalidOracleConfiguration
         ),
         OracleResolverV2::OptimisticV1 => require!(
@@ -2331,7 +2435,10 @@ mod tests {
             observation_value: 0,
             observation_exponent: 0,
             observation_ts: 0,
+            observation_slot: 0,
             confidence: 0,
+            sample_count: 0,
+            source_queue: Pubkey::default(),
             source_id: [0; 32],
             source_account: Pubkey::default(),
             evidence_hash: [0; 32],
@@ -2353,7 +2460,9 @@ mod tests {
                 value: 100_000_000,
                 exponent: -6,
                 timestamp: 2_001,
+                slot: 100,
                 confidence: 500_000,
+                sample_count: 0,
             },
             evidence_hash: [9; 32],
             now,
@@ -2384,6 +2493,10 @@ mod tests {
             "6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J"
         );
         assert_eq!(PYTH_RECEIVER_PROGRAM_ID, pyth_solana_receiver_sdk::ID);
+        assert_eq!(
+            SWITCHBOARD_DEVNET_QUEUE.to_string(),
+            "EYiAmGSdsQTuCw413V5BzaruWuCCSDgTPtBGvLkXHbe7"
+        );
     }
 
     #[test]
@@ -2644,6 +2757,37 @@ mod tests {
         oracle.threshold_exponent = 0;
         oracle.source_id[8] = 1;
         assert!(validate_oracle_config(&MarketCategory::Sports, &oracle, 2_000).is_err());
+    }
+
+    #[test]
+    fn switchboard_template_requires_queue_slots_and_multiple_samples() {
+        let mut oracle = OracleConfigArgs {
+            resolver: OracleResolverV2::SwitchboardQuoteV1,
+            source_program: SWITCHBOARD_QUOTE_PROGRAM_ID,
+            source_queue: SWITCHBOARD_DEVNET_QUEUE,
+            source_id: [7; 32],
+            comparator: ValueComparator::GreaterThanOrEqual,
+            threshold: 100_000_000_000_000_000_000,
+            threshold_exponent: -18,
+            observation_ts: 2_000,
+            observation_window_secs: 60,
+            max_staleness_secs: 0,
+            max_staleness_slots: 20,
+            max_confidence_bps: 0,
+            min_samples: 2,
+            challenge_period_secs: 0,
+            config_hash: [2; 32],
+        };
+        assert!(validate_oracle_config(&MarketCategory::Other, &oracle, 2_000).is_ok());
+        assert!(validate_oracle_config(&MarketCategory::Crypto, &oracle, 2_000).is_err());
+        oracle.min_samples = 1;
+        assert!(validate_oracle_config(&MarketCategory::Other, &oracle, 2_000).is_err());
+        oracle.min_samples = 2;
+        oracle.source_queue = Pubkey::default();
+        assert!(validate_oracle_config(&MarketCategory::Other, &oracle, 2_000).is_err());
+        oracle.source_queue = SWITCHBOARD_DEVNET_QUEUE;
+        oracle.max_staleness_slots = 0;
+        assert!(validate_oracle_config(&MarketCategory::Other, &oracle, 2_000).is_err());
     }
 
     #[test]

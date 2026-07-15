@@ -390,17 +390,19 @@ Use for:
 
 Verification:
 
-- Pin the Switchboard queue and canonical quote program.
+- Pin the official Switchboard devnet queue and canonical quote program.
 - Pin the feed hash generated from the source jobs.
-- Validate canonical quote PDA derivation.
-- Require configured minimum oracle samples.
-- Enforce maximum age and maximum variance.
+- Require a quote-program-owned, single-feed canonical quote PDA derived from the pinned queue and feed hash.
+- Reject authority-written quotes and require distinct oracle indices with at least two configured samples.
+- Enforce slot age independently from the wall-clock observation window.
 - Bind numeric scale, source job definition hash, and predicate.
-- Store quote slot, source count, feed hash, and evidence hash.
+- Store quote slot, source count, queue, feed hash, signed 18-decimal value, and evidence hash.
 
 A custom feed is only as credible as its source jobs. One HTTP endpoint repeated across several nodes is still one data source.
 
-Status: implement after Pyth, with devnet feed configuration committed under `deployments/`.
+Switchboard V1 is restricted away from sports and volatile crypto price templates. Pyth handles timestamped crypto prices, while Switchboard is used for finalized custom numeric facts whose source value is stable during the observation window.
+
+Status: implemented in V2 using the official 0.13 quote parser through its Pinocchio-compatible feature set.
 
 ### Resolver tier B: native bonded optimistic assertion
 

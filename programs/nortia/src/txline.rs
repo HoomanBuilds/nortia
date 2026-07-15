@@ -185,7 +185,9 @@ pub fn resolve_hybrid_total_goals<'info>(
             .update_stats
             .max_timestamp
             .div_euclid(1_000),
+        slot: 0,
         confidence: 0,
+        sample_count: 0,
     })
 }
 

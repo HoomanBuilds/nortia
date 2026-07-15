@@ -27,6 +27,7 @@ solana-poseidon = "=3.0.0"
 solana-sha256-hasher = "=3.1.0"
 base64ct = "=1.6.0"
 pyth-solana-receiver-sdk = "=2.0.0"
+switchboard-on-demand = { version = "=0.13.0", default-features = false, features = ["pinocchio", "solana-v3", "devnet"] }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }

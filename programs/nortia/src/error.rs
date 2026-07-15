@@ -88,4 +88,6 @@ pub enum NortiaError {
     PositionAlreadySettled,
     #[msg("The market is not ready for resolution")]
     MarketNotReadyForResolution,
+    #[msg("The Switchboard quote account or payload is invalid")]
+    InvalidSwitchboardQuote,
 }

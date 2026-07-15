@@ -14,7 +14,9 @@ pub struct NormalizedObservation {
     pub value: i128,
     pub exponent: i32,
     pub timestamp: i64,
+    pub slot: u64,
     pub confidence: u64,
+    pub sample_count: u8,
 }
 
 pub fn validate_pyth_observation(
@@ -76,7 +78,9 @@ pub fn validate_pyth_observation(
         value: price.price as i128,
         exponent: price.exponent,
         timestamp: price.publish_time,
+        slot: update.posted_slot,
         confidence: price.conf,
+        sample_count: 0,
     })
 }
 

@@ -34,3 +34,5 @@ pub const TXLINE_PROGRAM_ID: Pubkey = pubkey!("6pW64gN1s2uqjHkn1unFeEjAwJkPGHopp
 pub const PYTH_RECEIVER_PROGRAM_ID: Pubkey = pubkey!("rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ");
 pub const SWITCHBOARD_QUOTE_PROGRAM_ID: Pubkey =
     pubkey!("orac1eFjzWL5R3RbbdMV68K9H6TaCVVcL6LjvQQWAbz");
+pub const SWITCHBOARD_DEVNET_QUEUE: Pubkey =
+    pubkey!("EYiAmGSdsQTuCw413V5BzaruWuCCSDgTPtBGvLkXHbe7");
