@@ -7,7 +7,8 @@
     "./committee": "./src/committee.ts",
     "./commitments": "./src/commitments.ts",
     "./economics": "./src/economics.ts",
-    "./lmsr": "./src/lmsr.ts"
+    "./lmsr": "./src/lmsr.ts",
+    "./v2": "./src/v2.ts"
   },
   "scripts": {
     "proof:fixtures": "node --import tsx scripts/generate-proof-fixtures.ts",
@@ -15,6 +16,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@solana/web3.js": "1.98.4",
     "poseidon-lite": "0.3.0"
   },
   "devDependencies": {
