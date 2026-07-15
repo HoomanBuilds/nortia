@@ -19,3 +19,5 @@ Pyth configuration:
 - `PYTH_COMPUTE_UNIT_PRICE_MICROLAMPORTS` defaults to `50000`.
 
 Pyth push accounts are intended for current UI prices. V2 settlement fetches the update at the configured market timestamp, posts it with full verification, consumes it in the Nortia resolution instruction, and closes temporary update accounts when the transaction sequence succeeds.
+
+The indexer emits schema version 2 with backward-compatible `markets` for V1 pools and `hybridMarkets` for V2. V2 entries preserve token amounts as integer strings and include LMSR probability, current vault balance, oracle configuration, lifecycle state, fee totals, trader count, and the resolution receipt when present.
