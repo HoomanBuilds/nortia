@@ -615,6 +615,7 @@ pub mod nortia {
         oracle.market = market.key();
         oracle.resolver = args.oracle.resolver;
         oracle.source_program = args.oracle.source_program;
+        oracle.source_queue = args.oracle.source_queue;
         oracle.source_id = args.oracle.source_id;
         oracle.comparator = args.oracle.comparator;
         oracle.threshold = args.oracle.threshold;
@@ -622,6 +623,7 @@ pub mod nortia {
         oracle.observation_ts = args.oracle.observation_ts;
         oracle.observation_window_secs = args.oracle.observation_window_secs;
         oracle.max_staleness_secs = args.oracle.max_staleness_secs;
+        oracle.max_staleness_slots = args.oracle.max_staleness_slots;
         oracle.max_confidence_bps = args.oracle.max_confidence_bps;
         oracle.min_samples = args.oracle.min_samples;
         oracle.challenge_period_secs = args.oracle.challenge_period_secs;
@@ -1815,28 +1817,39 @@ fn validate_oracle_config(
         OracleResolverV2::TxlineStatV2 => require!(
             *category == MarketCategory::Sports
                 && args.source_program == TXLINE_PROGRAM_ID
+                && args.source_queue == Pubkey::default()
                 && args.threshold_exponent == 0
                 && i32::try_from(args.threshold).is_ok()
                 && args.max_staleness_secs > 0
+                && args.max_staleness_slots == 0
                 && txline::fixture_id_from_source_id(&args.source_id).is_ok(),
             NortiaError::InvalidOracleConfiguration
         ),
         OracleResolverV2::PythPriceV2 => require!(
             args.source_program == PYTH_RECEIVER_PROGRAM_ID
+                && args.source_queue == Pubkey::default()
                 && (-18..=18).contains(&args.threshold_exponent)
                 && args.max_staleness_secs > 0
+                && args.max_staleness_slots == 0
                 && args.max_confidence_bps > 0
                 && args.max_confidence_bps <= FEE_SPLIT_DENOMINATOR,
             NortiaError::InvalidOracleConfiguration
         ),
         OracleResolverV2::SwitchboardQuoteV1 => require!(
             args.source_program == SWITCHBOARD_QUOTE_PROGRAM_ID
-                && args.max_staleness_secs > 0
+                && args.source_queue != Pubkey::default()
+                && (-18..=18).contains(&args.threshold_exponent)
+                && args.max_staleness_secs == 0
+                && args.max_staleness_slots > 0
                 && args.min_samples >= 2,
             NortiaError::InvalidOracleConfiguration
         ),
         OracleResolverV2::OptimisticV1 => require!(
-            args.source_program == crate::ID && args.challenge_period_secs >= 3_600,
+            args.source_program == crate::ID
+                && args.source_queue == Pubkey::default()
+                && args.max_staleness_secs == 0
+                && args.max_staleness_slots == 0
+                && args.challenge_period_secs >= 3_600,
             NortiaError::InvalidOracleConfiguration
         ),
         OracleResolverV2::UmaWormholeV1 | OracleResolverV2::ChainlinkReportV1 => {
@@ -2291,6 +2304,7 @@ mod tests {
             market,
             resolver: OracleResolverV2::PythPriceV2,
             source_program: PYTH_RECEIVER_PROGRAM_ID,
+            source_queue: Pubkey::default(),
             source_id: [7; 32],
             comparator: ValueComparator::GreaterThanOrEqual,
             threshold: 100_000,
@@ -2298,6 +2312,7 @@ mod tests {
             observation_ts: 2_000,
             observation_window_secs: 30,
             max_staleness_secs: 5,
+            max_staleness_slots: 0,
             max_confidence_bps: 100,
             min_samples: 1,
             challenge_period_secs: 0,
@@ -2578,6 +2593,7 @@ mod tests {
         let mut oracle = OracleConfigArgs {
             resolver: OracleResolverV2::PythPriceV2,
             source_program: PYTH_RECEIVER_PROGRAM_ID,
+            source_queue: Pubkey::default(),
             source_id: [1; 32],
             comparator: ValueComparator::GreaterThan,
             threshold: 100_000,
@@ -2585,6 +2601,7 @@ mod tests {
             observation_ts: 2_000,
             observation_window_secs: 60,
             max_staleness_secs: 60,
+            max_staleness_slots: 0,
             max_confidence_bps: 100,
             min_samples: 1,
             challenge_period_secs: 0,
@@ -2606,6 +2623,7 @@ mod tests {
         let mut oracle = OracleConfigArgs {
             resolver: OracleResolverV2::TxlineStatV2,
             source_program: TXLINE_PROGRAM_ID,
+            source_queue: Pubkey::default(),
             source_id: txline::txline_source_id(42).unwrap(),
             comparator: ValueComparator::GreaterThan,
             threshold: 2,
@@ -2613,6 +2631,7 @@ mod tests {
             observation_ts: 2_000,
             observation_window_secs: 60,
             max_staleness_secs: 30,
+            max_staleness_slots: 0,
             max_confidence_bps: 0,
             min_samples: 1,
             challenge_period_secs: 0,

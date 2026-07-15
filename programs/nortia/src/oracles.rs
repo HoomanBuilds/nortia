@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use core::cmp::Ordering;
 use pyth_solana_receiver_sdk::price_update::{PriceUpdateV2, VerificationLevel};
 
 use crate::{
@@ -10,7 +11,7 @@ use crate::{
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct NormalizedObservation {
     pub outcome: u8,
-    pub value: i64,
+    pub value: i128,
     pub exponent: i32,
     pub timestamp: i64,
     pub confidence: u64,
@@ -64,7 +65,7 @@ pub fn validate_pyth_observation(
         NortiaError::InvalidOracleConfiguration
     );
     let outcome = u8::from(compare_values(
-        price.price,
+        price.price as i128,
         price.exponent,
         oracle.threshold,
         oracle.threshold_exponent,
@@ -72,7 +73,7 @@ pub fn validate_pyth_observation(
     )?);
     Ok(NormalizedObservation {
         outcome,
-        value: price.price,
+        value: price.price as i128,
         exponent: price.exponent,
         timestamp: price.publish_time,
         confidence: price.conf,
@@ -80,9 +81,9 @@ pub fn validate_pyth_observation(
 }
 
 pub fn compare_values(
-    left: i64,
+    left: i128,
     left_exponent: i32,
-    right: i64,
+    right: i128,
     right_exponent: i32,
     comparator: ValueComparator,
 ) -> Result<bool> {
@@ -90,32 +91,66 @@ pub fn compare_values(
         (-18..=18).contains(&left_exponent) && (-18..=18).contains(&right_exponent),
         NortiaError::InvalidOracleConfiguration
     );
-    let common_exponent = left_exponent.min(right_exponent);
-    let normalized_left = normalize_value(left, left_exponent, common_exponent)?;
-    let normalized_right = normalize_value(right, right_exponent, common_exponent)?;
+    let ordering = compare_decimal_values(left, left_exponent, right, right_exponent);
     Ok(match comparator {
-        ValueComparator::GreaterThan => normalized_left > normalized_right,
-        ValueComparator::GreaterThanOrEqual => normalized_left >= normalized_right,
-        ValueComparator::LessThan => normalized_left < normalized_right,
-        ValueComparator::LessThanOrEqual => normalized_left <= normalized_right,
-        ValueComparator::Equal => normalized_left == normalized_right,
+        ValueComparator::GreaterThan => ordering == Ordering::Greater,
+        ValueComparator::GreaterThanOrEqual => ordering != Ordering::Less,
+        ValueComparator::LessThan => ordering == Ordering::Less,
+        ValueComparator::LessThanOrEqual => ordering != Ordering::Greater,
+        ValueComparator::Equal => ordering == Ordering::Equal,
     })
 }
 
-fn normalize_value(value: i64, exponent: i32, common_exponent: i32) -> Result<i128> {
-    let difference = exponent
-        .checked_sub(common_exponent)
-        .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
-    require!(
-        (0..=18).contains(&difference),
-        NortiaError::InvalidOracleConfiguration
-    );
-    let scale = 10i128
-        .checked_pow(difference as u32)
-        .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
-    (value as i128)
-        .checked_mul(scale)
-        .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))
+fn compare_decimal_values(
+    left: i128,
+    left_exponent: i32,
+    right: i128,
+    right_exponent: i32,
+) -> Ordering {
+    match (left.cmp(&0), right.cmp(&0)) {
+        (Ordering::Less, Ordering::Less) => compare_magnitudes(
+            left.unsigned_abs(),
+            left_exponent,
+            right.unsigned_abs(),
+            right_exponent,
+        )
+        .reverse(),
+        (Ordering::Less, _) | (Ordering::Equal, Ordering::Greater) => Ordering::Less,
+        (Ordering::Equal, Ordering::Less)
+        | (Ordering::Greater, Ordering::Less)
+        | (Ordering::Greater, Ordering::Equal) => Ordering::Greater,
+        (Ordering::Equal, Ordering::Equal) => Ordering::Equal,
+        _ => compare_magnitudes(
+            left.unsigned_abs(),
+            left_exponent,
+            right.unsigned_abs(),
+            right_exponent,
+        ),
+    }
+}
+
+fn compare_magnitudes(
+    left: u128,
+    left_exponent: i32,
+    right: u128,
+    right_exponent: i32,
+) -> Ordering {
+    match left_exponent.cmp(&right_exponent) {
+        Ordering::Equal => left.cmp(&right),
+        Ordering::Greater => {
+            let scale = 10u128.pow((left_exponent - right_exponent) as u32);
+            left.checked_mul(scale)
+                .map(|normalized| normalized.cmp(&right))
+                .unwrap_or(Ordering::Greater)
+        }
+        Ordering::Less => {
+            let scale = 10u128.pow((right_exponent - left_exponent) as u32);
+            right
+                .checked_mul(scale)
+                .map(|normalized| left.cmp(&normalized))
+                .unwrap_or(Ordering::Less)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -133,6 +168,7 @@ mod tests {
             market: Pubkey::new_unique(),
             resolver: OracleResolverV2::PythPriceV2,
             source_program: PYTH_RECEIVER_PROGRAM_ID,
+            source_queue: Pubkey::default(),
             source_id: FEED_ID,
             comparator: ValueComparator::GreaterThanOrEqual,
             threshold: 100_000,
@@ -140,6 +176,7 @@ mod tests {
             observation_ts: OBSERVATION_TS,
             observation_window_secs: 30,
             max_staleness_secs: 5,
+            max_staleness_slots: 0,
             max_confidence_bps: 100,
             min_samples: 1,
             challenge_period_secs: 0,
@@ -194,6 +231,26 @@ mod tests {
     fn comparison_rejects_unbounded_exponents() {
         assert!(compare_values(1, -19, 1, 0, ValueComparator::Equal).is_err());
         assert!(compare_values(1, 0, 1, 19, ValueComparator::Equal).is_err());
+    }
+
+    #[test]
+    fn comparison_handles_signed_i128_and_scaling_overflow() {
+        assert!(compare_values(
+            100_000_000_000_000_000_000_000,
+            -18,
+            100_000,
+            0,
+            ValueComparator::Equal,
+        )
+        .unwrap());
+        assert!(
+            compare_values(i128::MAX, 18, i128::MAX, -18, ValueComparator::GreaterThan,).unwrap()
+        );
+        assert!(
+            compare_values(-i128::MAX, 18, -i128::MAX, -18, ValueComparator::LessThan,).unwrap()
+        );
+        assert!(compare_values(0, 0, -1, 0, ValueComparator::GreaterThan).unwrap());
+        assert!(compare_values(0, 0, 1, 0, ValueComparator::LessThan).unwrap());
     }
 
     #[test]

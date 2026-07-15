@@ -166,8 +166,8 @@ pub fn resolve_hybrid_total_goals<'info>(
         .map_err(|_| error!(NortiaError::InvalidOracleConfiguration))?;
     let strategy = total_goals_strategy(threshold, oracle.comparator)?;
     let oracle_outcome = invoke_stat_validation(payload, &strategy, daily_root, txline_program)?;
-    let score_a = payload.stats[0].stat.value as i64;
-    let score_b = payload.stats[1].stat.value as i64;
+    let score_a = payload.stats[0].stat.value as i128;
+    let score_b = payload.stats[1].stat.value as i128;
     let total = score_a
         .checked_add(score_b)
         .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
@@ -422,6 +422,7 @@ mod tests {
             market: Pubkey::new_unique(),
             resolver: OracleResolverV2::TxlineStatV2,
             source_program: TXLINE_PROGRAM_ID,
+            source_queue: Pubkey::default(),
             source_id: txline_source_id(FIXTURE_ID).unwrap(),
             comparator: ValueComparator::GreaterThan,
             threshold: 2,
@@ -429,6 +430,7 @@ mod tests {
             observation_ts: OBSERVATION_TS,
             observation_window_secs: 60,
             max_staleness_secs: 30,
+            max_staleness_slots: 0,
             max_confidence_bps: 0,
             min_samples: 1,
             challenge_period_secs: 0,

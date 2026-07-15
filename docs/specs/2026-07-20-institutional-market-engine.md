@@ -299,10 +299,12 @@ V2 is additive so deployed V1 accounts remain decodable.
 ### `OracleConfig`
 
 - Market and resolver kind.
-- Pinned source program, account, feed ID, emitter, or committee set.
+- Pinned source program, queue where applicable, account, feed ID, emitter, or committee set.
 - Comparator and normalized threshold.
 - Observation timestamp or event identifier.
-- Freshness, confidence, publisher, finality, and challenge parameters.
+- Signed 128-bit normalized values preserve 18-decimal custom-feed precision.
+- Separate second and slot freshness limits avoid treating chain slots as wall-clock time.
+- Confidence, publisher, finality, and challenge parameters.
 - Primary and fallback resolver policy.
 - Canonical source and rules hashes.
 
