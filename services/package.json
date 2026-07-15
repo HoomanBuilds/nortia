@@ -16,6 +16,9 @@
   },
   "dependencies": {
     "@anchor-lang/core": "1.1.2",
+    "@coral-xyz/anchor": "0.31.1",
+    "@pythnetwork/hermes-client": "2.1.0",
+    "@pythnetwork/pyth-solana-receiver": "0.13.0",
     "@solana/spl-token": "0.4.15",
     "@solana/web3.js": "1.98.4",
     "bn.js": "5.2.5",
@@ -27,5 +30,10 @@
     "@types/node": "22.20.1",
     "tsx": "4.23.1",
     "typescript": "5.9.3"
+  },
+  "overrides": {
+    "jito-ts": {
+      "rpc-websockets": "7.5.1"
+    }
   }
 }
