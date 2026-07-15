@@ -345,11 +345,13 @@ Use for:
 Verification:
 
 - Pin the TxLINE program ID.
-- Bind fixture ID, stat keys, predicate, proof timestamp, daily root PDA, and final sequence.
+- Bind fixture ID, stat keys, predicate, proof timestamp, and daily root PDA.
+- Treat an API sequence as retrieval metadata unless it is included in the TxLINE-verified payload.
 - Require the final match state where the market rules require finality.
 - CPI into `validate_stat_v2` and validate return-data origin.
+- Derive the root PDA from the batch minimum timestamp and enforce final-stat freshness from the fixture summary maximum timestamp.
 
-Status: implemented in V1 and retained as the flagship hackathon resolver.
+Status: implemented in V1 and V2 with CPI validation and normalized resolution receipts.
 
 ### Resolver tier A: Pyth verified price
 

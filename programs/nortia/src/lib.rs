@@ -902,6 +902,49 @@ pub mod nortia {
         )
     }
 
+    pub fn resolve_hybrid_with_txline(
+        ctx: Context<ResolveHybridWithTxline>,
+        payload: StatValidationInput,
+    ) -> Result<()> {
+        let clock = Clock::get()?;
+        let observation = txline::resolve_hybrid_total_goals(
+            &ctx.accounts.market,
+            &ctx.accounts.oracle_config,
+            &payload,
+            &ctx.accounts.daily_scores_merkle_roots,
+            &ctx.accounts.txline_program,
+            clock.unix_timestamp,
+        )?;
+        let mut evidence_bytes = Vec::new();
+        payload
+            .serialize(&mut evidence_bytes)
+            .map_err(|_| error!(NortiaError::InvalidScorePayload))?;
+        let evidence_hash = hashv(&[
+            b"nortia-txline-resolution-v2",
+            ctx.accounts.market.key().as_ref(),
+            ctx.accounts.oracle_config.config_hash.as_ref(),
+            ctx.accounts.oracle_config.source_id.as_ref(),
+            TXLINE_PROGRAM_ID.as_ref(),
+            ctx.accounts.daily_scores_merkle_roots.key.as_ref(),
+            evidence_bytes.as_slice(),
+        ])
+        .to_bytes();
+        finalize_hybrid_resolution(
+            &mut ctx.accounts.market,
+            &mut ctx.accounts.oracle_config,
+            &mut ctx.accounts.receipt,
+            FinalizeHybridResolutionArgs {
+                receipt_bump: ctx.bumps.receipt,
+                source_account: ctx.accounts.daily_scores_merkle_roots.key(),
+                observation,
+                evidence_hash,
+                now: clock.unix_timestamp,
+                vault_balance: ctx.accounts.vault.amount,
+                timeout: false,
+            },
+        )
+    }
+
     pub fn resolve_hybrid_timeout(ctx: Context<ResolveHybridTimeout>) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
         let deadline_bytes = ctx.accounts.market.resolution_deadline_ts.to_le_bytes();
@@ -1490,6 +1533,53 @@ pub struct ResolveHybridWithPyth<'info> {
 }
 
 #[derive(Accounts)]
+pub struct ResolveHybridWithTxline<'info> {
+    #[account(mut)]
+    pub keeper: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [HYBRID_MARKET_SEED, market.creator.as_ref(), &market.market_id.to_le_bytes()],
+        bump = market.bump,
+        constraint = market.oracle_config == oracle_config.key()
+            @ NortiaError::InvalidOracleConfiguration,
+        constraint = market.collateral_mint == vault.mint
+            @ NortiaError::InvalidCollateralMint
+    )]
+    pub market: Box<Account<'info, HybridMarket>>,
+    #[account(
+        mut,
+        seeds = [ORACLE_CONFIG_SEED, market.key().as_ref()],
+        bump = oracle_config.bump,
+        constraint = oracle_config.market == market.key()
+            @ NortiaError::InvalidOracleConfiguration,
+        constraint = oracle_config.resolver == OracleResolverV2::TxlineStatV2
+            @ NortiaError::InvalidOracleConfiguration,
+        constraint = !oracle_config.consumed @ NortiaError::ResolutionReplay
+    )]
+    pub oracle_config: Box<Account<'info, OracleConfig>>,
+    #[account(
+        init,
+        payer = keeper,
+        space = ResolutionReceipt::SPACE,
+        seeds = [RESOLUTION_RECEIPT_SEED, market.key().as_ref()],
+        bump
+    )]
+    pub receipt: Box<Account<'info, ResolutionReceipt>>,
+    #[account(
+        seeds = [HYBRID_VAULT_SEED, market.key().as_ref()],
+        bump = market.vault_bump,
+        token::mint = market.collateral_mint,
+        token::authority = market
+    )]
+    pub vault: Box<Account<'info, TokenAccount>>,
+    /// CHECK: Ownership and PDA derivation are checked against the pinned TxLINE program.
+    pub daily_scores_merkle_roots: UncheckedAccount<'info>,
+    /// CHECK: The address and executable flag are checked against the pinned TxLINE ID.
+    pub txline_program: UncheckedAccount<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
 pub struct ResolveHybridTimeout<'info> {
     #[account(mut)]
     pub keeper: Signer<'info>,
@@ -1725,7 +1815,10 @@ fn validate_oracle_config(
         OracleResolverV2::TxlineStatV2 => require!(
             *category == MarketCategory::Sports
                 && args.source_program == TXLINE_PROGRAM_ID
-                && args.threshold_exponent == 0,
+                && args.threshold_exponent == 0
+                && i32::try_from(args.threshold).is_ok()
+                && args.max_staleness_secs > 0
+                && txline::fixture_id_from_source_id(&args.source_id).is_ok(),
             NortiaError::InvalidOracleConfiguration
         ),
         OracleResolverV2::PythPriceV2 => require!(
@@ -2509,6 +2602,32 @@ mod tests {
     }
 
     #[test]
+    fn txline_template_requires_sports_fixture_and_integer_threshold() {
+        let mut oracle = OracleConfigArgs {
+            resolver: OracleResolverV2::TxlineStatV2,
+            source_program: TXLINE_PROGRAM_ID,
+            source_id: txline::txline_source_id(42).unwrap(),
+            comparator: ValueComparator::GreaterThan,
+            threshold: 2,
+            threshold_exponent: 0,
+            observation_ts: 2_000,
+            observation_window_secs: 60,
+            max_staleness_secs: 30,
+            max_confidence_bps: 0,
+            min_samples: 1,
+            challenge_period_secs: 0,
+            config_hash: [2; 32],
+        };
+        assert!(validate_oracle_config(&MarketCategory::Sports, &oracle, 2_000).is_ok());
+        assert!(validate_oracle_config(&MarketCategory::Crypto, &oracle, 2_000).is_err());
+        oracle.threshold_exponent = -1;
+        assert!(validate_oracle_config(&MarketCategory::Sports, &oracle, 2_000).is_err());
+        oracle.threshold_exponent = 0;
+        oracle.source_id[8] = 1;
+        assert!(validate_oracle_config(&MarketCategory::Sports, &oracle, 2_000).is_err());
+    }
+
+    #[test]
     fn v2_account_allocations_cover_serialized_state() {
         let engine = EngineConfig {
             bump: 1,
@@ -2541,5 +2660,19 @@ mod tests {
         let mut position_data = Vec::new();
         position.try_serialize(&mut position_data).unwrap();
         assert!(position_data.len() <= Position::SPACE);
+
+        let mut market_data = Vec::new();
+        resolution_market().try_serialize(&mut market_data).unwrap();
+        assert!(market_data.len() <= HybridMarket::SPACE);
+
+        let mut oracle_data = Vec::new();
+        resolution_oracle(Pubkey::new_unique())
+            .try_serialize(&mut oracle_data)
+            .unwrap();
+        assert!(oracle_data.len() <= OracleConfig::SPACE);
+
+        let mut receipt_data = Vec::new();
+        empty_receipt().try_serialize(&mut receipt_data).unwrap();
+        assert!(receipt_data.len() <= ResolutionReceipt::SPACE);
     }
 }
