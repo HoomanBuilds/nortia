@@ -569,6 +569,15 @@ pub mod nortia {
         let initial_subsidy =
             lmsr::required_subsidy(args.liquidity_parameter, args.rounding_reserve)
                 .map_err(|_| error!(NortiaError::InvalidLmsrState))?;
+        let resolver_security_cap = if args.oracle.resolver == OracleResolverV2::OptimisticV1 {
+            require!(
+                args.oracle.bond_amount >= initial_subsidy,
+                NortiaError::InvalidOracleConfiguration
+            );
+            args.oracle.bond_amount
+        } else {
+            u64::MAX
+        };
 
         let market = &mut ctx.accounts.market;
         market.bump = ctx.bumps.market;
@@ -591,6 +600,7 @@ pub mod nortia {
         market.initial_subsidy = initial_subsidy;
         market.rounding_reserve = args.rounding_reserve;
         market.max_trade_shares = args.max_trade_shares;
+        market.resolver_security_cap = resolver_security_cap;
         market.yes_quantity = 0;
         market.no_quantity = 0;
         market.trade_fee_bps = args.trade_fee_bps;
@@ -628,7 +638,9 @@ pub mod nortia {
         oracle.max_confidence_bps = args.oracle.max_confidence_bps;
         oracle.min_samples = args.oracle.min_samples;
         oracle.challenge_period_secs = args.oracle.challenge_period_secs;
+        oracle.bond_amount = args.oracle.bond_amount;
         oracle.config_hash = args.oracle.config_hash;
+        oracle.optimistic_proposal = Pubkey::default();
         oracle.consumed = false;
 
         transfer_to_vault(
@@ -649,6 +661,7 @@ pub mod nortia {
             liquidity_parameter: market.liquidity_parameter,
             initial_subsidy: market.initial_subsidy,
             trade_fee_bps: market.trade_fee_bps,
+            resolver_security_cap: market.resolver_security_cap,
             lock_ts: market.lock_ts,
         });
         Ok(())
@@ -707,6 +720,7 @@ pub mod nortia {
             projected_vault >= max(quote.after.yes, quote.after.no),
             NortiaError::InsolventMarket
         );
+        validate_resolver_security_cap(ctx.accounts.market.resolver_security_cap, quote.after)?;
 
         apply_position_buy(&mut ctx.accounts.position, side, &quote)?;
         apply_market_trade(
@@ -998,8 +1012,319 @@ pub mod nortia {
         )
     }
 
+    pub fn propose_optimistic_resolution(
+        ctx: Context<ProposeOptimisticResolution>,
+        args: ProposeOptimisticArgs,
+    ) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let challenge_deadline = validate_optimistic_proposal(
+            &ctx.accounts.market,
+            &ctx.accounts.oracle_config,
+            args.outcome,
+            &args.assertion_hash,
+            now,
+        )?;
+
+        let proposal = &mut ctx.accounts.proposal;
+        proposal.bump = ctx.bumps.proposal;
+        proposal.bond_vault_bump = ctx.bumps.bond_vault;
+        proposal.version = OptimisticProposal::VERSION;
+        proposal.market = ctx.accounts.market.key();
+        proposal.proposer = ctx.accounts.proposer.key();
+        proposal.proposer_token = ctx.accounts.proposer_token.key();
+        proposal.proposed_outcome = args.outcome;
+        proposal.assertion_hash = args.assertion_hash;
+        proposal.proposed_at = now;
+        proposal.challenge_deadline = challenge_deadline;
+        proposal.challenger = Pubkey::default();
+        proposal.challenger_token = Pubkey::default();
+        proposal.challenged_outcome = HybridMarket::OUTCOME_UNSET;
+        proposal.challenge_hash = [0; 32];
+        proposal.challenged_at = 0;
+        proposal.bond_amount = ctx.accounts.oracle_config.bond_amount;
+        proposal.proposer_payout = 0;
+        proposal.challenger_payout = 0;
+        proposal.treasury_payout = 0;
+        proposal.proposer_claimed = false;
+        proposal.challenger_claimed = false;
+        proposal.treasury_claimed = false;
+        proposal.finalized = false;
+        proposal.winner = Pubkey::default();
+        proposal.decision_hash = [0; 32];
+
+        ctx.accounts.oracle_config.optimistic_proposal = proposal.key();
+        ctx.accounts.market.phase = HybridPhase::Resolving;
+        transfer_to_vault(
+            &ctx.accounts.proposer,
+            &ctx.accounts.proposer_token,
+            &ctx.accounts.bond_vault,
+            &ctx.accounts.collateral_mint,
+            &ctx.accounts.token_program,
+            proposal.bond_amount,
+        )?;
+        emit!(OptimisticResolutionProposed {
+            market: ctx.accounts.market.key(),
+            proposal: proposal.key(),
+            proposer: proposal.proposer,
+            outcome: proposal.proposed_outcome,
+            assertion_hash: proposal.assertion_hash,
+            bond_amount: proposal.bond_amount,
+            challenge_deadline,
+        });
+        Ok(())
+    }
+
+    pub fn challenge_optimistic_resolution(
+        ctx: Context<ChallengeOptimisticResolution>,
+        args: ChallengeOptimisticArgs,
+    ) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        validate_optimistic_challenge(
+            &ctx.accounts.market,
+            &ctx.accounts.proposal,
+            ctx.accounts.challenger.key(),
+            args.outcome,
+            &args.challenge_hash,
+            now,
+        )?;
+        let proposal = &mut ctx.accounts.proposal;
+        transfer_to_vault(
+            &ctx.accounts.challenger,
+            &ctx.accounts.challenger_token,
+            &ctx.accounts.bond_vault,
+            &ctx.accounts.collateral_mint,
+            &ctx.accounts.token_program,
+            proposal.bond_amount,
+        )?;
+        proposal.challenger = ctx.accounts.challenger.key();
+        proposal.challenger_token = ctx.accounts.challenger_token.key();
+        proposal.challenged_outcome = args.outcome;
+        proposal.challenge_hash = args.challenge_hash;
+        proposal.challenged_at = now;
+        ctx.accounts.market.phase = HybridPhase::Disputed;
+        emit!(OptimisticResolutionChallenged {
+            market: ctx.accounts.market.key(),
+            proposal: proposal.key(),
+            challenger: proposal.challenger,
+            outcome: proposal.challenged_outcome,
+            challenge_hash: proposal.challenge_hash,
+            bond_amount: proposal.bond_amount,
+        });
+        Ok(())
+    }
+
+    pub fn finalize_optimistic_resolution(
+        ctx: Context<FinalizeOptimisticResolution>,
+    ) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let (outcome, timed_out) =
+            optimistic_finalize_outcome(&ctx.accounts.market, &ctx.accounts.proposal, now)?;
+        let evidence_hash = hashv(&[
+            if timed_out {
+                b"nortia-optimistic-proposal-timeout-v1"
+            } else {
+                b"nortia-optimistic-unchallenged-v1"
+            },
+            ctx.accounts.market.key().as_ref(),
+            ctx.accounts.oracle_config.config_hash.as_ref(),
+            ctx.accounts.proposal.key().as_ref(),
+            ctx.accounts.proposal.assertion_hash.as_ref(),
+            &[ctx.accounts.proposal.proposed_outcome],
+            &ctx.accounts.proposal.proposed_at.to_le_bytes(),
+            &ctx.accounts.proposal.challenge_deadline.to_le_bytes(),
+        ])
+        .to_bytes();
+        finalize_hybrid_resolution(
+            &mut ctx.accounts.market,
+            &mut ctx.accounts.oracle_config,
+            &mut ctx.accounts.receipt,
+            FinalizeHybridResolutionArgs {
+                receipt_bump: ctx.bumps.receipt,
+                source_account: ctx.accounts.proposal.key(),
+                observation: optimistic_observation(outcome, now),
+                evidence_hash,
+                now,
+                vault_balance: ctx.accounts.vault.amount,
+                timeout: timed_out,
+            },
+        )?;
+        let bond_amount = ctx.accounts.proposal.bond_amount;
+        record_optimistic_payouts(&mut ctx.accounts.proposal, bond_amount, 0, 0)?;
+        ctx.accounts.proposal.finalized = true;
+        ctx.accounts.proposal.winner = if timed_out {
+            Pubkey::default()
+        } else {
+            ctx.accounts.proposal.proposer
+        };
+        ctx.accounts.proposal.decision_hash = evidence_hash;
+        emit!(OptimisticResolutionFinalized {
+            market: ctx.accounts.market.key(),
+            proposal: ctx.accounts.proposal.key(),
+            outcome,
+            winner: ctx.accounts.proposal.winner,
+            winner_payout: if timed_out {
+                0
+            } else {
+                ctx.accounts.proposal.bond_amount
+            },
+            treasury_fee: 0,
+            decision_hash: evidence_hash,
+            invalid_refund: timed_out,
+        });
+        Ok(())
+    }
+
+    pub fn arbitrate_optimistic_resolution(
+        ctx: Context<ArbitrateOptimisticResolution>,
+        args: ArbitrateOptimisticArgs,
+    ) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let proposal = &ctx.accounts.proposal;
+        validate_optimistic_arbitration(
+            &ctx.accounts.market,
+            proposal,
+            args.outcome,
+            &args.decision_hash,
+            now,
+        )?;
+        verify_committee_quorum(&ctx.accounts.protocol.committee, ctx.remaining_accounts)?;
+        let winner = if args.outcome == proposal.proposed_outcome {
+            proposal.proposer
+        } else {
+            proposal.challenger
+        };
+        let (winner_payout, treasury_fee) = optimistic_dispute_payout(proposal.bond_amount)?;
+        let evidence_hash = hashv(&[
+            b"nortia-optimistic-arbitration-v1",
+            ctx.accounts.market.key().as_ref(),
+            ctx.accounts.oracle_config.config_hash.as_ref(),
+            ctx.accounts.proposal.key().as_ref(),
+            proposal.assertion_hash.as_ref(),
+            proposal.challenge_hash.as_ref(),
+            args.decision_hash.as_ref(),
+            winner.as_ref(),
+            &[args.outcome],
+        ])
+        .to_bytes();
+        finalize_hybrid_resolution(
+            &mut ctx.accounts.market,
+            &mut ctx.accounts.oracle_config,
+            &mut ctx.accounts.receipt,
+            FinalizeHybridResolutionArgs {
+                receipt_bump: ctx.bumps.receipt,
+                source_account: ctx.accounts.proposal.key(),
+                observation: optimistic_observation(args.outcome, now),
+                evidence_hash,
+                now,
+                vault_balance: ctx.accounts.vault.amount,
+                timeout: false,
+            },
+        )?;
+        let proposal = &mut ctx.accounts.proposal;
+        let (proposer_payout, challenger_payout) = if winner == proposal.proposer {
+            (winner_payout, 0)
+        } else {
+            (0, winner_payout)
+        };
+        record_optimistic_payouts(proposal, proposer_payout, challenger_payout, treasury_fee)?;
+        proposal.finalized = true;
+        proposal.winner = winner;
+        proposal.decision_hash = args.decision_hash;
+        emit!(OptimisticResolutionFinalized {
+            market: ctx.accounts.market.key(),
+            proposal: proposal.key(),
+            outcome: args.outcome,
+            winner,
+            winner_payout,
+            treasury_fee,
+            decision_hash: args.decision_hash,
+            invalid_refund: false,
+        });
+        Ok(())
+    }
+
+    pub fn timeout_optimistic_dispute(ctx: Context<TimeoutOptimisticDispute>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        require!(
+            ctx.accounts.market.phase == HybridPhase::Disputed
+                && !ctx.accounts.proposal.finalized
+                && ctx.accounts.proposal.challenger != Pubkey::default()
+                && now > ctx.accounts.market.resolution_deadline_ts,
+            NortiaError::InvalidPhase
+        );
+        let evidence_hash = hashv(&[
+            b"nortia-optimistic-dispute-timeout-v1",
+            ctx.accounts.market.key().as_ref(),
+            ctx.accounts.oracle_config.config_hash.as_ref(),
+            ctx.accounts.proposal.key().as_ref(),
+            ctx.accounts.proposal.assertion_hash.as_ref(),
+            ctx.accounts.proposal.challenge_hash.as_ref(),
+            &ctx.accounts.market.resolution_deadline_ts.to_le_bytes(),
+        ])
+        .to_bytes();
+        finalize_hybrid_resolution(
+            &mut ctx.accounts.market,
+            &mut ctx.accounts.oracle_config,
+            &mut ctx.accounts.receipt,
+            FinalizeHybridResolutionArgs {
+                receipt_bump: ctx.bumps.receipt,
+                source_account: ctx.accounts.proposal.key(),
+                observation: optimistic_observation(HybridMarket::OUTCOME_INVALID, now),
+                evidence_hash,
+                now,
+                vault_balance: ctx.accounts.vault.amount,
+                timeout: true,
+            },
+        )?;
+        let bond_amount = ctx.accounts.proposal.bond_amount;
+        record_optimistic_payouts(&mut ctx.accounts.proposal, bond_amount, bond_amount, 0)?;
+        ctx.accounts.proposal.finalized = true;
+        ctx.accounts.proposal.winner = Pubkey::default();
+        ctx.accounts.proposal.decision_hash = evidence_hash;
+        emit!(OptimisticResolutionFinalized {
+            market: ctx.accounts.market.key(),
+            proposal: ctx.accounts.proposal.key(),
+            outcome: HybridMarket::OUTCOME_INVALID,
+            winner: Pubkey::default(),
+            winner_payout: 0,
+            treasury_fee: 0,
+            decision_hash: evidence_hash,
+            invalid_refund: true,
+        });
+        Ok(())
+    }
+
+    pub fn claim_optimistic_bond(ctx: Context<ClaimOptimisticBond>) -> Result<()> {
+        let claimant = ctx.accounts.claimant.key();
+        let amount = prepare_optimistic_bond_claim(
+            &mut ctx.accounts.proposal,
+            ctx.accounts.market.treasury_owner,
+            claimant,
+        )?;
+        transfer_from_hybrid_vault(
+            &ctx.accounts.market,
+            &ctx.accounts.bond_vault,
+            &ctx.accounts.destination,
+            &ctx.accounts.collateral_mint,
+            &ctx.accounts.token_program,
+            amount,
+        )?;
+        emit!(OptimisticBondClaimed {
+            market: ctx.accounts.market.key(),
+            proposal: ctx.accounts.proposal.key(),
+            claimant,
+            destination: ctx.accounts.destination.key(),
+            amount,
+        });
+        Ok(())
+    }
+
     pub fn resolve_hybrid_timeout(ctx: Context<ResolveHybridTimeout>) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
+        require!(
+            ctx.accounts.oracle_config.optimistic_proposal == Pubkey::default(),
+            NortiaError::InvalidPhase
+        );
         let deadline_bytes = ctx.accounts.market.resolution_deadline_ts.to_le_bytes();
         let evidence_hash = hashv(&[
             b"nortia-oracle-timeout-v1",
@@ -1680,6 +2005,300 @@ pub struct ResolveHybridWithSwitchboard<'info> {
 }
 
 #[derive(Accounts)]
+pub struct ProposeOptimisticResolution<'info> {
+    #[account(mut)]
+    pub proposer: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [HYBRID_MARKET_SEED, market.creator.as_ref(), &market.market_id.to_le_bytes()],
+        bump = market.bump,
+        constraint = market.oracle_config == oracle_config.key()
+            @ NortiaError::InvalidOracleConfiguration,
+        constraint = market.collateral_mint == collateral_mint.key()
+            @ NortiaError::InvalidCollateralMint
+    )]
+    pub market: Box<Account<'info, HybridMarket>>,
+    #[account(
+        mut,
+        seeds = [ORACLE_CONFIG_SEED, market.key().as_ref()],
+        bump = oracle_config.bump,
+        constraint = oracle_config.market == market.key()
+            @ NortiaError::InvalidOracleConfiguration,
+        constraint = oracle_config.resolver == OracleResolverV2::OptimisticV1
+            @ NortiaError::InvalidOracleConfiguration,
+        constraint = !oracle_config.consumed @ NortiaError::ResolutionReplay
+    )]
+    pub oracle_config: Box<Account<'info, OracleConfig>>,
+    #[account(
+        init,
+        payer = proposer,
+        space = OptimisticProposal::SPACE,
+        seeds = [OPTIMISTIC_PROPOSAL_SEED, market.key().as_ref()],
+        bump
+    )]
+    pub proposal: Box<Account<'info, OptimisticProposal>>,
+    #[account(
+        init,
+        payer = proposer,
+        seeds = [OPTIMISTIC_BOND_VAULT_SEED, market.key().as_ref()],
+        bump,
+        token::mint = collateral_mint,
+        token::authority = market
+    )]
+    pub bond_vault: Box<Account<'info, TokenAccount>>,
+    pub collateral_mint: Box<Account<'info, Mint>>,
+    #[account(
+        mut,
+        constraint = proposer_token.owner == proposer.key()
+            @ NortiaError::InvalidTokenAccount,
+        constraint = proposer_token.mint == collateral_mint.key()
+            @ NortiaError::InvalidTokenAccount
+    )]
+    pub proposer_token: Box<Account<'info, TokenAccount>>,
+    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct ChallengeOptimisticResolution<'info> {
+    #[account(mut)]
+    pub challenger: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [HYBRID_MARKET_SEED, market.creator.as_ref(), &market.market_id.to_le_bytes()],
+        bump = market.bump,
+        constraint = market.oracle_config == oracle_config.key()
+            @ NortiaError::InvalidOracleConfiguration,
+        constraint = market.collateral_mint == collateral_mint.key()
+            @ NortiaError::InvalidCollateralMint
+    )]
+    pub market: Box<Account<'info, HybridMarket>>,
+    #[account(
+        seeds = [ORACLE_CONFIG_SEED, market.key().as_ref()],
+        bump = oracle_config.bump,
+        constraint = oracle_config.market == market.key()
+            @ NortiaError::InvalidOracleConfiguration,
+        constraint = oracle_config.optimistic_proposal == proposal.key()
+            @ NortiaError::InvalidAssertion,
+        constraint = !oracle_config.consumed @ NortiaError::ResolutionReplay
+    )]
+    pub oracle_config: Box<Account<'info, OracleConfig>>,
+    #[account(
+        mut,
+        seeds = [OPTIMISTIC_PROPOSAL_SEED, market.key().as_ref()],
+        bump = proposal.bump,
+        constraint = proposal.market == market.key() @ NortiaError::InvalidAssertion
+    )]
+    pub proposal: Box<Account<'info, OptimisticProposal>>,
+    #[account(
+        mut,
+        seeds = [OPTIMISTIC_BOND_VAULT_SEED, market.key().as_ref()],
+        bump = proposal.bond_vault_bump,
+        token::mint = collateral_mint,
+        token::authority = market
+    )]
+    pub bond_vault: Box<Account<'info, TokenAccount>>,
+    pub collateral_mint: Box<Account<'info, Mint>>,
+    #[account(
+        mut,
+        constraint = challenger_token.owner == challenger.key()
+            @ NortiaError::InvalidTokenAccount,
+        constraint = challenger_token.mint == collateral_mint.key()
+            @ NortiaError::InvalidTokenAccount
+    )]
+    pub challenger_token: Box<Account<'info, TokenAccount>>,
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct FinalizeOptimisticResolution<'info> {
+    #[account(mut)]
+    pub keeper: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [HYBRID_MARKET_SEED, market.creator.as_ref(), &market.market_id.to_le_bytes()],
+        bump = market.bump,
+        constraint = market.oracle_config == oracle_config.key()
+            @ NortiaError::InvalidOracleConfiguration,
+        constraint = market.collateral_mint == vault.mint
+            @ NortiaError::InvalidCollateralMint
+    )]
+    pub market: Box<Account<'info, HybridMarket>>,
+    #[account(
+        mut,
+        seeds = [ORACLE_CONFIG_SEED, market.key().as_ref()],
+        bump = oracle_config.bump,
+        constraint = oracle_config.optimistic_proposal == proposal.key()
+            @ NortiaError::InvalidAssertion,
+        constraint = !oracle_config.consumed @ NortiaError::ResolutionReplay
+    )]
+    pub oracle_config: Box<Account<'info, OracleConfig>>,
+    #[account(
+        mut,
+        seeds = [OPTIMISTIC_PROPOSAL_SEED, market.key().as_ref()],
+        bump = proposal.bump,
+        constraint = proposal.market == market.key() @ NortiaError::InvalidAssertion
+    )]
+    pub proposal: Box<Account<'info, OptimisticProposal>>,
+    #[account(
+        init,
+        payer = keeper,
+        space = ResolutionReceipt::SPACE,
+        seeds = [RESOLUTION_RECEIPT_SEED, market.key().as_ref()],
+        bump
+    )]
+    pub receipt: Box<Account<'info, ResolutionReceipt>>,
+    #[account(
+        seeds = [HYBRID_VAULT_SEED, market.key().as_ref()],
+        bump = market.vault_bump,
+        token::mint = market.collateral_mint,
+        token::authority = market
+    )]
+    pub vault: Box<Account<'info, TokenAccount>>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct ArbitrateOptimisticResolution<'info> {
+    #[account(mut)]
+    pub keeper: Signer<'info>,
+    #[account(
+        seeds = [PROTOCOL_SEED],
+        bump = protocol.bump,
+        constraint = protocol.treasury_owner == market.treasury_owner
+            @ NortiaError::InvalidTreasury
+    )]
+    pub protocol: Box<Account<'info, ProtocolConfig>>,
+    #[account(
+        mut,
+        seeds = [HYBRID_MARKET_SEED, market.creator.as_ref(), &market.market_id.to_le_bytes()],
+        bump = market.bump,
+        constraint = market.oracle_config == oracle_config.key()
+            @ NortiaError::InvalidOracleConfiguration,
+        constraint = market.collateral_mint == vault.mint
+            @ NortiaError::InvalidCollateralMint
+    )]
+    pub market: Box<Account<'info, HybridMarket>>,
+    #[account(
+        mut,
+        seeds = [ORACLE_CONFIG_SEED, market.key().as_ref()],
+        bump = oracle_config.bump,
+        constraint = oracle_config.optimistic_proposal == proposal.key()
+            @ NortiaError::InvalidAssertion,
+        constraint = !oracle_config.consumed @ NortiaError::ResolutionReplay
+    )]
+    pub oracle_config: Box<Account<'info, OracleConfig>>,
+    #[account(
+        mut,
+        seeds = [OPTIMISTIC_PROPOSAL_SEED, market.key().as_ref()],
+        bump = proposal.bump,
+        constraint = proposal.market == market.key() @ NortiaError::InvalidAssertion
+    )]
+    pub proposal: Box<Account<'info, OptimisticProposal>>,
+    #[account(
+        init,
+        payer = keeper,
+        space = ResolutionReceipt::SPACE,
+        seeds = [RESOLUTION_RECEIPT_SEED, market.key().as_ref()],
+        bump
+    )]
+    pub receipt: Box<Account<'info, ResolutionReceipt>>,
+    #[account(
+        seeds = [HYBRID_VAULT_SEED, market.key().as_ref()],
+        bump = market.vault_bump,
+        token::mint = market.collateral_mint,
+        token::authority = market
+    )]
+    pub vault: Box<Account<'info, TokenAccount>>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct TimeoutOptimisticDispute<'info> {
+    #[account(mut)]
+    pub keeper: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [HYBRID_MARKET_SEED, market.creator.as_ref(), &market.market_id.to_le_bytes()],
+        bump = market.bump,
+        constraint = market.oracle_config == oracle_config.key()
+            @ NortiaError::InvalidOracleConfiguration,
+        constraint = market.collateral_mint == vault.mint
+            @ NortiaError::InvalidCollateralMint
+    )]
+    pub market: Box<Account<'info, HybridMarket>>,
+    #[account(
+        mut,
+        seeds = [ORACLE_CONFIG_SEED, market.key().as_ref()],
+        bump = oracle_config.bump,
+        constraint = oracle_config.optimistic_proposal == proposal.key()
+            @ NortiaError::InvalidAssertion,
+        constraint = !oracle_config.consumed @ NortiaError::ResolutionReplay
+    )]
+    pub oracle_config: Box<Account<'info, OracleConfig>>,
+    #[account(
+        mut,
+        seeds = [OPTIMISTIC_PROPOSAL_SEED, market.key().as_ref()],
+        bump = proposal.bump,
+        constraint = proposal.market == market.key() @ NortiaError::InvalidAssertion
+    )]
+    pub proposal: Box<Account<'info, OptimisticProposal>>,
+    #[account(
+        init,
+        payer = keeper,
+        space = ResolutionReceipt::SPACE,
+        seeds = [RESOLUTION_RECEIPT_SEED, market.key().as_ref()],
+        bump
+    )]
+    pub receipt: Box<Account<'info, ResolutionReceipt>>,
+    #[account(
+        seeds = [HYBRID_VAULT_SEED, market.key().as_ref()],
+        bump = market.vault_bump,
+        token::mint = market.collateral_mint,
+        token::authority = market
+    )]
+    pub vault: Box<Account<'info, TokenAccount>>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct ClaimOptimisticBond<'info> {
+    pub claimant: Signer<'info>,
+    #[account(
+        seeds = [HYBRID_MARKET_SEED, market.creator.as_ref(), &market.market_id.to_le_bytes()],
+        bump = market.bump,
+        constraint = market.collateral_mint == collateral_mint.key()
+            @ NortiaError::InvalidCollateralMint
+    )]
+    pub market: Box<Account<'info, HybridMarket>>,
+    #[account(
+        mut,
+        seeds = [OPTIMISTIC_PROPOSAL_SEED, market.key().as_ref()],
+        bump = proposal.bump,
+        constraint = proposal.market == market.key() @ NortiaError::InvalidAssertion
+    )]
+    pub proposal: Box<Account<'info, OptimisticProposal>>,
+    #[account(
+        mut,
+        seeds = [OPTIMISTIC_BOND_VAULT_SEED, market.key().as_ref()],
+        bump = proposal.bond_vault_bump,
+        token::mint = collateral_mint,
+        token::authority = market
+    )]
+    pub bond_vault: Box<Account<'info, TokenAccount>>,
+    pub collateral_mint: Box<Account<'info, Mint>>,
+    #[account(
+        mut,
+        constraint = destination.owner == claimant.key()
+            @ NortiaError::InvalidTokenAccount,
+        constraint = destination.mint == collateral_mint.key()
+            @ NortiaError::InvalidTokenAccount
+    )]
+    pub destination: Box<Account<'info, TokenAccount>>,
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
 pub struct ResolveHybridTimeout<'info> {
     #[account(mut)]
     pub keeper: Signer<'info>,
@@ -1824,7 +2443,10 @@ fn finalize_hybrid_resolution(
         timeout,
     } = args;
     require!(
-        market.phase == HybridPhase::Open || market.phase == HybridPhase::Locked,
+        market.phase == HybridPhase::Open
+            || market.phase == HybridPhase::Locked
+            || market.phase == HybridPhase::Resolving
+            || market.phase == HybridPhase::Disputed,
         NortiaError::InvalidPhase
     );
     require!(now >= market.lock_ts, NortiaError::MarketLocked);
@@ -1902,6 +2524,220 @@ fn hybrid_market_liability(yes_quantity: u64, no_quantity: u64, outcome: u8) -> 
     }
 }
 
+fn validate_optimistic_proposal(
+    market: &HybridMarket,
+    oracle: &OracleConfig,
+    outcome: u8,
+    assertion_hash: &[u8; 32],
+    now: i64,
+) -> Result<i64> {
+    require!(
+        market.phase == HybridPhase::Open || market.phase == HybridPhase::Locked,
+        NortiaError::InvalidPhase
+    );
+    require!(
+        now >= market.lock_ts
+            && now >= market.resolve_not_before_ts
+            && now >= oracle.observation_ts
+            && now <= market.resolution_deadline_ts,
+        NortiaError::MarketNotReadyForResolution
+    );
+    let observation_window_end = oracle
+        .observation_ts
+        .checked_add(oracle.observation_window_secs as i64)
+        .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
+    require!(
+        now <= observation_window_end,
+        NortiaError::InvalidObservationTime
+    );
+    require!(
+        *assertion_hash != [0; 32]
+            && (outcome == HybridMarket::OUTCOME_YES || outcome == HybridMarket::OUTCOME_NO)
+            && oracle.optimistic_proposal == Pubkey::default()
+            && !oracle.consumed,
+        NortiaError::InvalidAssertion
+    );
+    let challenge_deadline = now
+        .checked_add(oracle.challenge_period_secs as i64)
+        .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
+    require!(
+        challenge_deadline < market.resolution_deadline_ts,
+        NortiaError::ChallengeWindowClosed
+    );
+    Ok(challenge_deadline)
+}
+
+fn validate_optimistic_challenge(
+    market: &HybridMarket,
+    proposal: &OptimisticProposal,
+    challenger: Pubkey,
+    outcome: u8,
+    challenge_hash: &[u8; 32],
+    now: i64,
+) -> Result<()> {
+    require!(
+        market.phase == HybridPhase::Resolving && !proposal.finalized,
+        NortiaError::InvalidPhase
+    );
+    require!(
+        now <= proposal.challenge_deadline,
+        NortiaError::ChallengeWindowClosed
+    );
+    require!(
+        proposal.challenger == Pubkey::default()
+            && challenger != proposal.proposer
+            && outcome != proposal.proposed_outcome
+            && (outcome == HybridMarket::OUTCOME_YES || outcome == HybridMarket::OUTCOME_NO)
+            && *challenge_hash != [0; 32],
+        NortiaError::InvalidAssertion
+    );
+    Ok(())
+}
+
+fn optimistic_finalize_outcome(
+    market: &HybridMarket,
+    proposal: &OptimisticProposal,
+    now: i64,
+) -> Result<(u8, bool)> {
+    let timed_out = now > market.resolution_deadline_ts;
+    require!(
+        market.phase == HybridPhase::Resolving
+            && !proposal.finalized
+            && proposal.challenger == Pubkey::default(),
+        NortiaError::InvalidPhase
+    );
+    if timed_out {
+        Ok((HybridMarket::OUTCOME_INVALID, true))
+    } else {
+        require!(
+            now > proposal.challenge_deadline,
+            NortiaError::ChallengeWindowClosed
+        );
+        Ok((proposal.proposed_outcome, false))
+    }
+}
+
+fn validate_optimistic_arbitration(
+    market: &HybridMarket,
+    proposal: &OptimisticProposal,
+    outcome: u8,
+    decision_hash: &[u8; 32],
+    now: i64,
+) -> Result<()> {
+    require!(
+        market.phase == HybridPhase::Disputed
+            && !proposal.finalized
+            && proposal.challenger != Pubkey::default()
+            && now <= market.resolution_deadline_ts,
+        NortiaError::InvalidPhase
+    );
+    require!(
+        *decision_hash != [0; 32]
+            && (outcome == proposal.proposed_outcome || outcome == proposal.challenged_outcome),
+        NortiaError::InvalidDisputeDecision
+    );
+    Ok(())
+}
+
+fn optimistic_observation(outcome: u8, now: i64) -> oracles::NormalizedObservation {
+    oracles::NormalizedObservation {
+        outcome,
+        value: outcome as i128,
+        exponent: 0,
+        timestamp: now,
+        slot: 0,
+        confidence: 0,
+        sample_count: 0,
+    }
+}
+
+fn optimistic_dispute_payout(bond_amount: u64) -> Result<(u64, u64)> {
+    let treasury_fee = (bond_amount as u128)
+        .checked_mul(OPTIMISTIC_DISPUTE_FEE_BPS as u128)
+        .and_then(|value| value.checked_div(FEE_SPLIT_DENOMINATOR as u128))
+        .and_then(|value| u64::try_from(value).ok())
+        .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
+    let winner_payout = bond_amount
+        .checked_mul(2)
+        .and_then(|value| value.checked_sub(treasury_fee))
+        .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
+    Ok((winner_payout, treasury_fee))
+}
+
+fn record_optimistic_payouts(
+    proposal: &mut OptimisticProposal,
+    proposer_payout: u64,
+    challenger_payout: u64,
+    treasury_payout: u64,
+) -> Result<()> {
+    require!(
+        !proposal.finalized
+            && proposal.proposer_payout == 0
+            && proposal.challenger_payout == 0
+            && proposal.treasury_payout == 0
+            && !proposal.proposer_claimed
+            && !proposal.challenger_claimed
+            && !proposal.treasury_claimed,
+        NortiaError::InvalidPhase
+    );
+    let deposited_bonds = if proposal.challenger == Pubkey::default() {
+        proposal.bond_amount
+    } else {
+        proposal
+            .bond_amount
+            .checked_mul(2)
+            .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?
+    };
+    let recorded_payouts = proposer_payout
+        .checked_add(challenger_payout)
+        .and_then(|amount| amount.checked_add(treasury_payout))
+        .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
+    require!(
+        recorded_payouts == deposited_bonds,
+        NortiaError::InvalidDisputeDecision
+    );
+    proposal.proposer_payout = proposer_payout;
+    proposal.challenger_payout = challenger_payout;
+    proposal.treasury_payout = treasury_payout;
+    Ok(())
+}
+
+fn prepare_optimistic_bond_claim(
+    proposal: &mut OptimisticProposal,
+    treasury_owner: Pubkey,
+    claimant: Pubkey,
+) -> Result<u64> {
+    require!(proposal.finalized, NortiaError::InvalidPhase);
+    let claim_proposer =
+        claimant == proposal.proposer && proposal.proposer_payout > 0 && !proposal.proposer_claimed;
+    let claim_challenger = claimant == proposal.challenger
+        && proposal.challenger_payout > 0
+        && !proposal.challenger_claimed;
+    let claim_treasury =
+        claimant == treasury_owner && proposal.treasury_payout > 0 && !proposal.treasury_claimed;
+    let mut amount = 0u64;
+    if claim_proposer {
+        amount = amount
+            .checked_add(proposal.proposer_payout)
+            .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
+    }
+    if claim_challenger {
+        amount = amount
+            .checked_add(proposal.challenger_payout)
+            .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
+    }
+    if claim_treasury {
+        amount = amount
+            .checked_add(proposal.treasury_payout)
+            .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
+    }
+    require!(amount > 0, NortiaError::NoOptimisticBondPayout);
+    proposal.proposer_claimed |= claim_proposer;
+    proposal.challenger_claimed |= claim_challenger;
+    proposal.treasury_claimed |= claim_treasury;
+    Ok(amount)
+}
+
 fn validate_oracle_config(
     category: &MarketCategory,
     args: &OracleConfigArgs,
@@ -1923,6 +2759,7 @@ fn validate_oracle_config(
                 && i32::try_from(args.threshold).is_ok()
                 && args.max_staleness_secs > 0
                 && args.max_staleness_slots == 0
+                && args.bond_amount == 0
                 && txline::fixture_id_from_source_id(&args.source_id).is_ok(),
             NortiaError::InvalidOracleConfiguration
         ),
@@ -1933,7 +2770,8 @@ fn validate_oracle_config(
                 && args.max_staleness_secs > 0
                 && args.max_staleness_slots == 0
                 && args.max_confidence_bps > 0
-                && args.max_confidence_bps <= FEE_SPLIT_DENOMINATOR,
+                && args.max_confidence_bps <= FEE_SPLIT_DENOMINATOR
+                && args.bond_amount == 0,
             NortiaError::InvalidOracleConfiguration
         ),
         OracleResolverV2::SwitchboardQuoteV1 => require!(
@@ -1945,15 +2783,23 @@ fn validate_oracle_config(
                 && args.max_staleness_secs == 0
                 && args.max_staleness_slots > 0
                 && args.max_confidence_bps == 0
-                && (2..=8).contains(&args.min_samples),
+                && (2..=8).contains(&args.min_samples)
+                && args.bond_amount == 0,
             NortiaError::InvalidOracleConfiguration
         ),
         OracleResolverV2::OptimisticV1 => require!(
-            args.source_program == crate::ID
+            *category != MarketCategory::Sports
+                && *category != MarketCategory::Crypto
+                && args.source_program == crate::ID
                 && args.source_queue == Pubkey::default()
+                && args.threshold == 0
+                && args.threshold_exponent == 0
                 && args.max_staleness_secs == 0
                 && args.max_staleness_slots == 0
-                && args.challenge_period_secs >= 3_600,
+                && args.max_confidence_bps == 0
+                && args.min_samples == 0
+                && args.challenge_period_secs >= 3_600
+                && args.bond_amount >= MIN_OPTIMISTIC_BOND,
             NortiaError::InvalidOracleConfiguration
         ),
         OracleResolverV2::UmaWormholeV1 | OracleResolverV2::ChainlinkReportV1 => {
@@ -1994,6 +2840,17 @@ fn lmsr_quantities(market: &HybridMarket) -> lmsr::MarketQuantities {
         yes: market.yes_quantity,
         no: market.no_quantity,
     }
+}
+
+fn validate_resolver_security_cap(
+    security_cap: u64,
+    quantities: lmsr::MarketQuantities,
+) -> Result<()> {
+    require!(
+        max(quantities.yes, quantities.no) <= security_cap,
+        NortiaError::ResolverSecurityCapExceeded
+    );
+    Ok(())
 }
 
 fn position_shares(position: &Position, side: lmsr::OutcomeSide) -> u64 {
@@ -2380,6 +3237,7 @@ mod tests {
             initial_subsidy: 6_931_474,
             rounding_reserve: 2,
             max_trade_shares: 10_000_000,
+            resolver_security_cap: u64::MAX,
             yes_quantity: 8_000_000,
             no_quantity: 4_000_000,
             trade_fee_bps: 100,
@@ -2420,7 +3278,9 @@ mod tests {
             max_confidence_bps: 100,
             min_samples: 1,
             challenge_period_secs: 0,
+            bond_amount: 0,
             config_hash: [8; 32],
+            optimistic_proposal: Pubkey::default(),
             consumed: false,
         }
     }
@@ -2468,6 +3328,57 @@ mod tests {
             now,
             vault_balance,
             timeout,
+        }
+    }
+
+    fn optimistic_oracle_args() -> OracleConfigArgs {
+        OracleConfigArgs {
+            resolver: OracleResolverV2::OptimisticV1,
+            source_program: crate::ID,
+            source_queue: Pubkey::default(),
+            source_id: [7; 32],
+            comparator: ValueComparator::Equal,
+            threshold: 0,
+            threshold_exponent: 0,
+            observation_ts: 2_000,
+            observation_window_secs: 7_200,
+            max_staleness_secs: 0,
+            max_staleness_slots: 0,
+            max_confidence_bps: 0,
+            min_samples: 0,
+            challenge_period_secs: 3_600,
+            bond_amount: MIN_OPTIMISTIC_BOND,
+            config_hash: [8; 32],
+        }
+    }
+
+    fn optimistic_proposal() -> OptimisticProposal {
+        OptimisticProposal {
+            bump: 1,
+            bond_vault_bump: 2,
+            version: OptimisticProposal::VERSION,
+            market: Pubkey::new_unique(),
+            proposer: Pubkey::new_unique(),
+            proposer_token: Pubkey::new_unique(),
+            proposed_outcome: HybridMarket::OUTCOME_YES,
+            assertion_hash: [3; 32],
+            proposed_at: 2_010,
+            challenge_deadline: 2_110,
+            challenger: Pubkey::default(),
+            challenger_token: Pubkey::default(),
+            challenged_outcome: HybridMarket::OUTCOME_UNSET,
+            challenge_hash: [0; 32],
+            challenged_at: 0,
+            bond_amount: MIN_OPTIMISTIC_BOND,
+            proposer_payout: 0,
+            challenger_payout: 0,
+            treasury_payout: 0,
+            proposer_claimed: false,
+            challenger_claimed: false,
+            treasury_claimed: false,
+            finalized: false,
+            winner: Pubkey::default(),
+            decision_hash: [0; 32],
         }
     }
 
@@ -2718,6 +3629,7 @@ mod tests {
             max_confidence_bps: 100,
             min_samples: 1,
             challenge_period_secs: 0,
+            bond_amount: 0,
             config_hash: [2; 32],
         };
         assert!(validate_oracle_config(&MarketCategory::Crypto, &oracle, 2_000).is_ok());
@@ -2748,6 +3660,7 @@ mod tests {
             max_confidence_bps: 0,
             min_samples: 1,
             challenge_period_secs: 0,
+            bond_amount: 0,
             config_hash: [2; 32],
         };
         assert!(validate_oracle_config(&MarketCategory::Sports, &oracle, 2_000).is_ok());
@@ -2776,6 +3689,7 @@ mod tests {
             max_confidence_bps: 0,
             min_samples: 2,
             challenge_period_secs: 0,
+            bond_amount: 0,
             config_hash: [2; 32],
         };
         assert!(validate_oracle_config(&MarketCategory::Other, &oracle, 2_000).is_ok());
@@ -2788,6 +3702,220 @@ mod tests {
         oracle.source_queue = SWITCHBOARD_DEVNET_QUEUE;
         oracle.max_staleness_slots = 0;
         assert!(validate_oracle_config(&MarketCategory::Other, &oracle, 2_000).is_err());
+    }
+
+    #[test]
+    fn optimistic_template_is_bonded_and_restricted_to_long_tail_categories() {
+        let mut oracle = optimistic_oracle_args();
+        for category in [
+            MarketCategory::Politics,
+            MarketCategory::Technology,
+            MarketCategory::Culture,
+            MarketCategory::Other,
+        ] {
+            assert!(validate_oracle_config(&category, &oracle, 2_000).is_ok());
+        }
+        assert!(validate_oracle_config(&MarketCategory::Sports, &oracle, 2_000).is_err());
+        assert!(validate_oracle_config(&MarketCategory::Crypto, &oracle, 2_000).is_err());
+
+        oracle.bond_amount = MIN_OPTIMISTIC_BOND - 1;
+        assert!(validate_oracle_config(&MarketCategory::Politics, &oracle, 2_000).is_err());
+        oracle.bond_amount = MIN_OPTIMISTIC_BOND;
+        oracle.challenge_period_secs = 3_599;
+        assert!(validate_oracle_config(&MarketCategory::Politics, &oracle, 2_000).is_err());
+        oracle.challenge_period_secs = 3_600;
+        oracle.min_samples = 1;
+        assert!(validate_oracle_config(&MarketCategory::Politics, &oracle, 2_000).is_err());
+        oracle.min_samples = 0;
+        oracle.max_staleness_secs = 1;
+        assert!(validate_oracle_config(&MarketCategory::Politics, &oracle, 2_000).is_err());
+    }
+
+    #[test]
+    fn optimistic_dispute_fee_is_charged_only_to_the_losing_bond() {
+        assert_eq!(
+            optimistic_dispute_payout(MIN_OPTIMISTIC_BOND).unwrap(),
+            (19_500_000, 500_000)
+        );
+        assert!(optimistic_dispute_payout(u64::MAX).is_err());
+    }
+
+    #[test]
+    fn optimistic_security_cap_bounds_each_binary_liability() {
+        let at_cap = lmsr::MarketQuantities {
+            yes: MIN_OPTIMISTIC_BOND,
+            no: MIN_OPTIMISTIC_BOND - 1,
+        };
+        assert!(validate_resolver_security_cap(MIN_OPTIMISTIC_BOND, at_cap).is_ok());
+        let over_cap = lmsr::MarketQuantities {
+            yes: MIN_OPTIMISTIC_BOND + 1,
+            no: 0,
+        };
+        assert!(validate_resolver_security_cap(MIN_OPTIMISTIC_BOND, over_cap).is_err());
+    }
+
+    #[test]
+    fn optimistic_lifecycle_enforces_windows_and_opposing_assertions() {
+        let mut market = resolution_market();
+        market.category = MarketCategory::Politics;
+        market.phase = HybridPhase::Locked;
+        market.lock_ts = 1_900;
+        market.resolve_not_before_ts = 2_000;
+        market.resolution_deadline_ts = 6_000;
+        let mut oracle = resolution_oracle(Pubkey::new_unique());
+        oracle.resolver = OracleResolverV2::OptimisticV1;
+        oracle.observation_ts = 2_000;
+        oracle.observation_window_secs = 3_000;
+        oracle.challenge_period_secs = 3_600;
+        oracle.bond_amount = MIN_OPTIMISTIC_BOND;
+
+        assert_eq!(
+            validate_optimistic_proposal(
+                &market,
+                &oracle,
+                HybridMarket::OUTCOME_YES,
+                &[4; 32],
+                2_010,
+            )
+            .unwrap(),
+            5_610
+        );
+        assert!(validate_optimistic_proposal(
+            &market,
+            &oracle,
+            HybridMarket::OUTCOME_INVALID,
+            &[4; 32],
+            2_010,
+        )
+        .is_err());
+        assert!(validate_optimistic_proposal(
+            &market,
+            &oracle,
+            HybridMarket::OUTCOME_YES,
+            &[4; 32],
+            2_401,
+        )
+        .is_err());
+
+        let mut proposal = optimistic_proposal();
+        market.phase = HybridPhase::Resolving;
+        assert!(validate_optimistic_challenge(
+            &market,
+            &proposal,
+            Pubkey::new_unique(),
+            HybridMarket::OUTCOME_NO,
+            &[5; 32],
+            2_110,
+        )
+        .is_ok());
+        assert!(validate_optimistic_challenge(
+            &market,
+            &proposal,
+            Pubkey::new_unique(),
+            HybridMarket::OUTCOME_YES,
+            &[5; 32],
+            2_110,
+        )
+        .is_err());
+        assert!(validate_optimistic_challenge(
+            &market,
+            &proposal,
+            Pubkey::new_unique(),
+            HybridMarket::OUTCOME_NO,
+            &[5; 32],
+            2_111,
+        )
+        .is_err());
+
+        assert_eq!(
+            optimistic_finalize_outcome(&market, &proposal, 2_111).unwrap(),
+            (HybridMarket::OUTCOME_YES, false)
+        );
+        assert!(optimistic_finalize_outcome(&market, &proposal, 2_110).is_err());
+
+        proposal.challenger = Pubkey::new_unique();
+        proposal.challenged_outcome = HybridMarket::OUTCOME_NO;
+        proposal.challenge_hash = [5; 32];
+        market.phase = HybridPhase::Disputed;
+        assert!(validate_optimistic_arbitration(
+            &market,
+            &proposal,
+            HybridMarket::OUTCOME_NO,
+            &[6; 32],
+            5_999,
+        )
+        .is_ok());
+        assert!(validate_optimistic_arbitration(
+            &market,
+            &proposal,
+            HybridMarket::OUTCOME_INVALID,
+            &[6; 32],
+            5_999,
+        )
+        .is_err());
+        assert!(validate_optimistic_arbitration(
+            &market,
+            &proposal,
+            HybridMarket::OUTCOME_NO,
+            &[6; 32],
+            6_001,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn optimistic_finalize_invalidates_after_the_hard_deadline() {
+        let mut market = resolution_market();
+        market.phase = HybridPhase::Resolving;
+        market.resolution_deadline_ts = 2_200;
+        let proposal = optimistic_proposal();
+        assert_eq!(
+            optimistic_finalize_outcome(&market, &proposal, 2_201).unwrap(),
+            (HybridMarket::OUTCOME_INVALID, true)
+        );
+    }
+
+    #[test]
+    fn optimistic_bond_payouts_conserve_the_separate_vault() {
+        let mut proposal = optimistic_proposal();
+        record_optimistic_payouts(&mut proposal, MIN_OPTIMISTIC_BOND, 0, 0).unwrap();
+        assert_eq!(proposal.proposer_payout, MIN_OPTIMISTIC_BOND);
+        assert_eq!(proposal.challenger_payout, 0);
+        assert_eq!(proposal.treasury_payout, 0);
+
+        let mut disputed = optimistic_proposal();
+        disputed.challenger = Pubkey::new_unique();
+        let (winner_payout, treasury_fee) = optimistic_dispute_payout(MIN_OPTIMISTIC_BOND).unwrap();
+        record_optimistic_payouts(&mut disputed, 0, winner_payout, treasury_fee).unwrap();
+        assert_eq!(
+            disputed.challenger_payout + disputed.treasury_payout,
+            MIN_OPTIMISTIC_BOND * 2
+        );
+
+        let mut invalid = optimistic_proposal();
+        invalid.challenger = Pubkey::new_unique();
+        assert!(record_optimistic_payouts(&mut invalid, MIN_OPTIMISTIC_BOND, 0, 0).is_err());
+    }
+
+    #[test]
+    fn optimistic_bond_claim_is_replay_safe_and_destination_independent() {
+        let mut proposal = optimistic_proposal();
+        proposal.finalized = true;
+        proposal.proposer_payout = MIN_OPTIMISTIC_BOND;
+        let proposer = proposal.proposer;
+        assert_eq!(
+            prepare_optimistic_bond_claim(&mut proposal, Pubkey::new_unique(), proposer).unwrap(),
+            MIN_OPTIMISTIC_BOND
+        );
+        assert!(
+            prepare_optimistic_bond_claim(&mut proposal, Pubkey::new_unique(), proposer,).is_err()
+        );
+        assert!(prepare_optimistic_bond_claim(
+            &mut proposal,
+            Pubkey::new_unique(),
+            Pubkey::new_unique(),
+        )
+        .is_err());
     }
 
     #[test]
@@ -2837,5 +3965,11 @@ mod tests {
         let mut receipt_data = Vec::new();
         empty_receipt().try_serialize(&mut receipt_data).unwrap();
         assert!(receipt_data.len() <= ResolutionReceipt::SPACE);
+
+        let mut proposal_data = Vec::new();
+        optimistic_proposal()
+            .try_serialize(&mut proposal_data)
+            .unwrap();
+        assert!(proposal_data.len() <= OptimisticProposal::SPACE);
     }
 }

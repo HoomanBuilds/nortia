@@ -227,6 +227,7 @@ pub struct HybridMarket {
     pub initial_subsidy: u64,
     pub rounding_reserve: u64,
     pub max_trade_shares: u64,
+    pub resolver_security_cap: u64,
     pub yes_quantity: u64,
     pub no_quantity: u64,
     pub trade_fee_bps: u16,
@@ -275,7 +276,9 @@ pub struct OracleConfig {
     pub max_confidence_bps: u16,
     pub min_samples: u8,
     pub challenge_period_secs: u32,
+    pub bond_amount: u64,
     pub config_hash: [u8; 32],
+    pub optimistic_proposal: Pubkey,
     pub consumed: bool,
 }
 
@@ -326,6 +329,40 @@ pub struct ResolutionReceipt {
 impl ResolutionReceipt {
     pub const VERSION: u8 = 1;
     pub const SPACE: usize = 8 + 224;
+}
+
+#[account]
+pub struct OptimisticProposal {
+    pub bump: u8,
+    pub bond_vault_bump: u8,
+    pub version: u8,
+    pub market: Pubkey,
+    pub proposer: Pubkey,
+    pub proposer_token: Pubkey,
+    pub proposed_outcome: u8,
+    pub assertion_hash: [u8; 32],
+    pub proposed_at: i64,
+    pub challenge_deadline: i64,
+    pub challenger: Pubkey,
+    pub challenger_token: Pubkey,
+    pub challenged_outcome: u8,
+    pub challenge_hash: [u8; 32],
+    pub challenged_at: i64,
+    pub bond_amount: u64,
+    pub proposer_payout: u64,
+    pub challenger_payout: u64,
+    pub treasury_payout: u64,
+    pub proposer_claimed: bool,
+    pub challenger_claimed: bool,
+    pub treasury_claimed: bool,
+    pub finalized: bool,
+    pub winner: Pubkey,
+    pub decision_hash: [u8; 32],
+}
+
+impl OptimisticProposal {
+    pub const VERSION: u8 = 1;
+    pub const SPACE: usize = 8 + 384;
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -397,6 +434,7 @@ pub struct OracleConfigArgs {
     pub max_confidence_bps: u16,
     pub min_samples: u8,
     pub challenge_period_secs: u32,
+    pub bond_amount: u64,
     pub config_hash: [u8; 32],
 }
 
@@ -424,6 +462,24 @@ pub struct TradeSharesArgs {
     pub shares: u64,
     pub amount_guard: u64,
     pub deadline_ts: i64,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct ProposeOptimisticArgs {
+    pub outcome: u8,
+    pub assertion_hash: [u8; 32],
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct ChallengeOptimisticArgs {
+    pub outcome: u8,
+    pub challenge_hash: [u8; 32],
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct ArbitrateOptimisticArgs {
+    pub outcome: u8,
+    pub decision_hash: [u8; 32],
 }
 
 #[event]
@@ -551,6 +607,7 @@ pub struct HybridMarketCreated {
     pub liquidity_parameter: u64,
     pub initial_subsidy: u64,
     pub trade_fee_bps: u16,
+    pub resolver_security_cap: u64,
     pub lock_ts: i64,
 }
 
@@ -609,4 +666,46 @@ pub struct HybridLiquidityWithdrawn {
     pub liquidity_owner: Pubkey,
     pub amount: u64,
     pub outstanding_liability: u64,
+}
+
+#[event]
+pub struct OptimisticResolutionProposed {
+    pub market: Pubkey,
+    pub proposal: Pubkey,
+    pub proposer: Pubkey,
+    pub outcome: u8,
+    pub assertion_hash: [u8; 32],
+    pub bond_amount: u64,
+    pub challenge_deadline: i64,
+}
+
+#[event]
+pub struct OptimisticResolutionChallenged {
+    pub market: Pubkey,
+    pub proposal: Pubkey,
+    pub challenger: Pubkey,
+    pub outcome: u8,
+    pub challenge_hash: [u8; 32],
+    pub bond_amount: u64,
+}
+
+#[event]
+pub struct OptimisticResolutionFinalized {
+    pub market: Pubkey,
+    pub proposal: Pubkey,
+    pub outcome: u8,
+    pub winner: Pubkey,
+    pub winner_payout: u64,
+    pub treasury_fee: u64,
+    pub decision_hash: [u8; 32],
+    pub invalid_refund: bool,
+}
+
+#[event]
+pub struct OptimisticBondClaimed {
+    pub market: Pubkey,
+    pub proposal: Pubkey,
+    pub claimant: Pubkey,
+    pub destination: Pubkey,
+    pub amount: u64,
 }

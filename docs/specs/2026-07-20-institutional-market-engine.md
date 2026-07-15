@@ -264,10 +264,9 @@ Configuration limits:
 Default fee distribution:
 
 - 70 percent to the Nortia treasury.
-- 20 percent to the liquidity provider or subsidy owner.
-- 10 percent to maker, batch solver, and resolution keeper incentives.
+- 30 percent to the liquidity provider or subsidy owner.
 
-Continuous LMSR trades route the incentive share to the liquidity provider until signed maker flow exists. Private batches allocate the solver share only for a valid accepted batch. No reward is paid for failed, stale, or duplicated work.
+This is the implemented continuous LMSR split. A later private-batch release may define a separate solver incentive from its own fee schedule, but it cannot silently change the immutable split of an existing market. No reward is paid for failed, stale, or duplicated work.
 
 The legacy V1 pool retains its existing 1 percent successful-settlement fee.
 
@@ -377,6 +376,8 @@ Verification:
 
 Timestamped markets should use an ephemeral historical price update for the specified observation time, not an arbitrary current push-feed account. A narrow time window and permissionless keepers reduce selection risk. Rules must state the exact timestamp and comparison semantics.
 
+Push-feed accounts remain useful for low-latency charts and indicative prices. Nortia does not use the continuously updated push account as the settlement primitive for a point-in-time market. The resolver accepts a permissionlessly posted `PriceUpdateV2` for the pinned feed and verifies the unique publish interval around the market timestamp onchain.
+
 Status: implemented in V2 with normalized receipts and invalid-market timeout handling.
 
 ### Resolver tier A or B: Switchboard canonical quote
@@ -416,10 +417,12 @@ Flow:
 
 1. Any proposer posts the outcome and a configured USDC bond after the resolve-not-before time.
 2. The assertion enters a fixed challenge window.
-3. A challenger posts an equal or larger bond and an alternate result.
+3. A challenger posts an equal bond and the opposite binary result.
 4. Unchallenged assertions finalize after liveness.
-5. Challenged assertions escalate to the configured arbitration adapter.
-6. The losing bond pays the successful disputer, arbitration costs, and protocol fee.
+5. Challenged assertions require the existing 2-of-3 Nortia committee to attest a decision before the hard deadline.
+6. Resolution records claimable balances without requiring any recipient token account, so a closed or replaced account cannot block market finalization.
+7. The winner can claim both bonds minus 5 percent of the losing bond, which the protocol treasury can claim separately.
+8. If arbitration misses the hard deadline, the market resolves invalid and both parties can reclaim their bonds.
 
 Security requirements:
 
@@ -427,8 +430,12 @@ Security requirements:
 - Market open interest may not grow above the security budget implied by its resolver bond.
 - Rules identify primary sources, cutoff, cancellation semantics, and invalid-market conditions.
 - Proposer and challenger cannot be the market creator's privileged admin path.
+- Proposal bonds are held in a separate market-authorized SPL Token vault and never mixed with trader collateral.
+- Bond claims are replay-safe and may be withdrawn only by the entitled wallet to a USDC token account that wallet owns.
+- A proposal cannot be opened unless its complete challenge window ends before the market's hard deadline.
+- Sports and crypto templates cannot select this resolver in the current deployment policy.
 
-Status: implement as a native V2 resolver state machine. It is not described as UMA unless an actual UMA assertion and verified bridge receipt are used.
+Status: implemented as a native V2 resolver with replay-safe receipts, permissionless unchallenged finalization, committee arbitration, and invalid-market timeout recovery. The 2-of-3 committee is an explicit trust assumption and remains the arbitration layer until a verified external adapter replaces it. It is not described as UMA unless an actual UMA assertion and verified bridge receipt are used.
 
 ### Resolver tier B: UMA over verified cross-chain messaging
 
@@ -464,15 +471,15 @@ Status: research and partner integration path. No generic API-based Chainlink cl
 
 | Category | Primary resolver | Optional fallback | Rejected when |
 | --- | --- | --- | --- |
-| World Cup sports | TxLINE stat V2 | Bonded optimistic only for documented feed failure | Fixture or predicate is unsupported |
-| Other sports | Switchboard official-source feed | Bonded optimistic | No canonical final source is named |
-| Crypto price | Pyth verified price | Switchboard or Chainlink report | Feed ID, timestamp, or confidence policy is missing |
-| Equities, FX, metals | Pyth verified price | Chainlink report | Market-hours and corporate-action rules are missing |
-| Macroeconomic data | Pyth economic feed or Chainlink report | Bonded optimistic | Release vintage and revision policy are missing |
+| World Cup sports | TxLINE stat V2 | None in current V2 | Fixture or predicate is unsupported |
+| Other sports | Disabled until a reviewed sports adapter exists | None | No canonical final source is named |
+| Crypto price | Pyth verified price | None in current V2 | Feed ID, timestamp, or confidence policy is missing |
+| Equities, FX, metals | Pyth verified price | Switchboard stable quote | Market-hours and corporate-action rules are missing |
+| Macroeconomic data | Pyth supported feed or Switchboard stable quote | Bonded optimistic | Release vintage and revision policy are missing |
 | Weather | Switchboard multi-source official station feed | Bonded optimistic | Station, unit, observation window, or missing-data rule is absent |
-| Elections and politics | Bonded optimistic or UMA bridge | Named arbitration fallback | Certification source and recount rules are ambiguous |
-| Governance | Native onchain account or proposal state | Bonded optimistic | Target program and proposal ID are not pinned |
-| Technology and culture | Bonded optimistic or UMA bridge | None | The question depends on subjective interpretation |
+| Elections and politics | Bonded optimistic | UMA bridge is planned | Certification source and recount rules are ambiguous |
+| Governance | Bonded optimistic | Native onchain adapter is planned | Target program and proposal ID are not pinned |
+| Technology and culture | Bonded optimistic | UMA bridge is planned | The question depends on subjective interpretation |
 
 ## 12. Oracle safety invariants
 
@@ -582,6 +589,7 @@ The web may let a creator fill template parameters, but it cannot create an acti
 - Polymarket prices and order book: https://docs.polymarket.com/concepts/prices-orderbook
 - Polymarket fees: https://docs.polymarket.com/trading/fees
 - Pyth Solana integration: https://docs.pyth.network/price-feeds/core/use-real-time-data/pull-integration/solana
+- Pyth Solana push feeds: https://docs.pyth.network/price-feeds/core/push-feeds/solana
 - Pyth integration safety: https://docs.pyth.network/price-feeds/core/best-practices
 - Switchboard Solana integration: https://docs.switchboard.xyz/docs-by-chain/solana-svm
 - Switchboard custom feeds: https://docs.switchboard.xyz/custom-feeds/build-and-deploy-feed/deploy-feed

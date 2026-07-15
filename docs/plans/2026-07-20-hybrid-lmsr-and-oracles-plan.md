@@ -42,11 +42,13 @@ Commit: `feat: add collateralized LMSR markets`
 
 ## Phase 3: resolver framework
 
+Status: complete in the program, pending service and web integration.
+
 - Add immutable resolver configuration and normalized observation comparison.
 - Refactor the current TxLINE handler behind the V2 receipt format without changing V1 behavior.
 - Add Pyth `PriceUpdateV2` verification, feed binding, publish-time window, full verification, exponent normalization, and confidence policy.
-- Add Switchboard canonical quote verification, feed hash, queue, sample, age, and variance policy.
-- Add the native bonded optimistic proposal, challenge, finalization, and timeout state machine.
+- Add Switchboard canonical quote verification, feed hash, queue, sample, and slot-age policy.
+- Add the native bonded optimistic proposal, challenge, finalization, timeout, and pull-claim state machine.
 - Add disabled configuration variants for UMA-over-Wormhole and Chainlink until their verified source programs are deployed.
 
 Exit gate:
@@ -58,10 +60,11 @@ Exit gate:
 
 Commits:
 
-- `feat: add versioned oracle receipts`
 - `feat: add Pyth price resolution`
-- `feat: add Switchboard data resolution`
-- `feat: add optimistic event resolution`
+- `feat: add TxLINE hybrid resolution`
+- `refactor: widen oracle precision`
+- `feat: add Switchboard quote resolution`
+- `feat: add bonded optimistic resolution`
 
 ## Phase 4: service and client integration
 

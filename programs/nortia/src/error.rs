@@ -90,4 +90,14 @@ pub enum NortiaError {
     MarketNotReadyForResolution,
     #[msg("The Switchboard quote account or payload is invalid")]
     InvalidSwitchboardQuote,
+    #[msg("The optimistic assertion or challenge is invalid")]
+    InvalidAssertion,
+    #[msg("The optimistic challenge window is closed")]
+    ChallengeWindowClosed,
+    #[msg("The optimistic dispute decision is invalid")]
+    InvalidDisputeDecision,
+    #[msg("The trade would exceed the resolver security cap")]
+    ResolverSecurityCapExceeded,
+    #[msg("No optimistic bond payout is available for this claimant")]
+    NoOptimisticBondPayout,
 }

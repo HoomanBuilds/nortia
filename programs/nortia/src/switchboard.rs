@@ -173,7 +173,9 @@ mod tests {
             max_confidence_bps: 0,
             min_samples: 2,
             challenge_period_secs: 0,
+            bond_amount: 0,
             config_hash: [8; 32],
+            optimistic_proposal: Pubkey::default(),
             consumed: false,
         }
     }
