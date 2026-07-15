@@ -8,6 +8,7 @@
     "./commitments": "./src/commitments.ts",
     "./economics": "./src/economics.ts",
     "./lmsr": "./src/lmsr.ts",
+    "./oracles": "./src/oracles.ts",
     "./v2": "./src/v2.ts"
   },
   "scripts": {
