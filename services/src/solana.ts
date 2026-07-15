@@ -3,6 +3,7 @@ import { AnchorProvider, Program, Wallet } from "@anchor-lang/core";
 import { Connection, Keypair } from "@solana/web3.js";
 import idl from "./idl/nortia.json" with { type: "json" };
 import type { Nortia } from "./idl/nortia.js";
+import type { HybridPhase, HybridResolver } from "./hybrid-lifecycle.js";
 
 export async function readKeypair(filePath: string) {
   const raw = JSON.parse(await readFile(filePath, "utf8")) as number[];
@@ -24,4 +25,30 @@ export function phaseName(phase: Record<string, unknown>) {
     throw new Error("Unknown Nortia market phase");
   }
   return name as "open" | "batched" | "resolved" | "refunding" | "closed";
+}
+
+export function hybridPhaseName(phase: Record<string, unknown>): HybridPhase {
+  const name = Object.keys(phase)[0];
+  if (
+    !name
+    || !["open", "locked", "resolving", "disputed", "resolved", "closed"].includes(name)
+  ) {
+    throw new Error("Unknown Nortia hybrid phase");
+  }
+  return name as HybridPhase;
+}
+
+export function oracleResolverName(resolver: Record<string, unknown>): HybridResolver {
+  const name = Object.keys(resolver)[0];
+  const names: Record<string, HybridResolver> = {
+    txlineStatV2: "txline-stat-v2",
+    pythPriceV2: "pyth-price-v2",
+    switchboardQuoteV1: "switchboard-quote-v1",
+    optimisticV1: "optimistic-v1",
+    umaWormholeV1: "uma-wormhole-v1",
+    chainlinkReportV1: "chainlink-report-v1",
+  };
+  const mapped = name ? names[name] : undefined;
+  if (!mapped) throw new Error("Unknown Nortia oracle resolver");
+  return mapped;
 }

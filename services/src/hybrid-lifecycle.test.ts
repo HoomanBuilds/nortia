@@ -5,6 +5,7 @@ import {
   type HybridKeeperInput,
   type HybridResolver,
 } from "./hybrid-lifecycle.js";
+import { hybridPhaseName, oracleResolverName } from "./solana.js";
 
 const base: HybridKeeperInput = {
   phase: "open",
@@ -81,4 +82,15 @@ test("disabled resolver variants never produce a settlement action", () => {
     assert.equal(planHybridKeeperAction({ ...base, resolver }, 120), "none");
     assert.equal(planHybridKeeperAction({ ...base, resolver }, 201), "resolve-timeout");
   }
+});
+
+test("Anchor enum objects map to the keeper's stable names", () => {
+  assert.equal(hybridPhaseName({ open: {} }), "open");
+  assert.equal(hybridPhaseName({ resolving: {} }), "resolving");
+  assert.equal(oracleResolverName({ txlineStatV2: {} }), "txline-stat-v2");
+  assert.equal(oracleResolverName({ pythPriceV2: {} }), "pyth-price-v2");
+  assert.equal(oracleResolverName({ switchboardQuoteV1: {} }), "switchboard-quote-v1");
+  assert.equal(oracleResolverName({ optimisticV1: {} }), "optimistic-v1");
+  assert.throws(() => hybridPhaseName({ broken: {} }), /hybrid phase/);
+  assert.throws(() => oracleResolverName({ broken: {} }), /oracle resolver/);
 });

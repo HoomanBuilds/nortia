@@ -1,9 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { PriceUpdate } from "@pythnetwork/hermes-client";
+import receiverSdk from "@pythnetwork/pyth-solana-receiver";
 import { PythClient, type HermesPriceApi } from "./client.js";
 
 const FEED = "e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43";
+
+test("Pyth receiver SDK is importable and pinned to the onchain program", () => {
+  assert.equal(
+    receiverSdk.DEFAULT_RECEIVER_PROGRAM_ID.toBase58(),
+    "rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ",
+  );
+  assert.equal(typeof receiverSdk.PythSolanaReceiver, "function");
+});
 
 function response(overrides: Partial<PriceUpdate> = {}): PriceUpdate {
   return {
