@@ -16,6 +16,7 @@ import {
 import {
   enginePda,
   hybridMarketPda,
+  hybridMetadataPda,
   hybridVaultPda,
   oracleConfigPda,
 } from "nortia-client/v2";
@@ -53,7 +54,7 @@ const TRADE_FEE_BPS = 100;
 const OPTIMISTIC_BOND = 25_000_000n;
 
 type ResolverChoice = "pyth" | "optimistic" | "txline-replay";
-type SubmissionStage = "idle" | "validating" | "signing" | "confirming" | "confirmed";
+type SubmissionStage = "idle" | "validating" | "market-signing" | "market-confirming" | "metadata-signing" | "metadata-confirming" | "confirmed";
 
 async function sha256(value: string) {
   return Array.from(new Uint8Array(
@@ -133,17 +134,21 @@ export function CreateMarketForm() {
       : hybridMarketPda(publicKey, marketId);
   }, [marketId, publicKey, resolver]);
 
-  const sendAndConfirm = async (transaction: Transaction) => {
+  const sendAndConfirm = async (
+    transaction: Transaction,
+    signingStage: SubmissionStage,
+    confirmingStage: SubmissionStage,
+  ) => {
     if (!publicKey) throw new Error("Connect a wallet before creating a market");
     const latest = await connection.getLatestBlockhash("confirmed");
     transaction.feePayer = publicKey;
     transaction.recentBlockhash = latest.blockhash;
-    setStage("signing");
+    setStage(signingStage);
     const nextSignature = await sendTransaction(transaction, connection, {
       preflightCommitment: "confirmed",
       skipPreflight: false,
     });
-    setStage("confirming");
+    setStage(confirmingStage);
     const confirmation = await connection.confirmTransaction(
       { signature: nextSignature, ...latest },
       "confirmed",
@@ -179,17 +184,14 @@ export function CreateMarketForm() {
       tokenProgram: TOKEN_PROGRAM_ID,
       systemProgram: SystemProgram.programId,
     }).transaction();
-    return sendAndConfirm(transaction);
+    return sendAndConfirm(transaction, "market-signing", "market-confirming");
   };
 
   const createHybridMarket = async () => {
     if (!program || !publicKey || marketId === null || !marketAddress) return;
-    const engineAddress = enginePda();
-    const engine = await program.account.engineConfig.fetch(engineAddress);
-    const creatorToken = getAssociatedTokenAddressSync(engine.collateralMint, publicKey);
-    const tokenBalance = await connection.getTokenAccountBalance(creatorToken, "confirmed").catch(() => null);
-    if (!tokenBalance || BigInt(tokenBalance.value.amount) < INITIAL_SUBSIDY) {
-      throw new Error(`The creator wallet needs at least ${formatUsdc(INITIAL_SUBSIDY)} devnet USDC`);
+    const existingMarket = await connection.getAccountInfo(marketAddress, "confirmed");
+    if (existingMarket && !existingMarket.owner.equals(program.programId)) {
+      throw new Error("A different program owns the derived market address");
     }
     const observationTs = timestamp(resolutionAt);
     const now = Math.floor(Date.now() / 1_000);
@@ -234,33 +236,73 @@ export function CreateMarketForm() {
       bondAmount: new BN(isPyth ? 0 : OPTIMISTIC_BOND.toString()),
       configHash,
     };
-    const transaction = await program.methods.initializeHybridMarket({
-      marketId: new BN(marketId.toString()),
-      category: isPyth ? { crypto: {} } : { [category]: {} },
-      tradingMode: { continuous: {} },
-      questionHash,
-      rulesHash,
-      outcomeLabelsHash,
-      liquidityParameter: new BN(LIQUIDITY_PARAMETER.toString()),
-      roundingReserve: new BN(ROUNDING_RESERVE.toString()),
-      maxTradeShares: new BN(MAX_TRADE_SHARES.toString()),
-      tradeFeeBps: TRADE_FEE_BPS,
-      lockTs: new BN(lockTs),
-      resolveNotBeforeTs: new BN(observationTs),
-      resolutionDeadlineTs: new BN(observationTs + (isPyth ? 30 * 60 : 48 * 60 * 60)),
-      oracle,
+    let marketSignature: string | null = null;
+    if (!existingMarket) {
+      const engineAddress = enginePda();
+      const engine = await program.account.engineConfig.fetch(engineAddress);
+      const creatorToken = getAssociatedTokenAddressSync(engine.collateralMint, publicKey);
+      const tokenBalance = await connection.getTokenAccountBalance(creatorToken, "confirmed").catch(() => null);
+      if (!tokenBalance || BigInt(tokenBalance.value.amount) < INITIAL_SUBSIDY) {
+        throw new Error(`The creator wallet needs at least ${formatUsdc(INITIAL_SUBSIDY)} devnet USDC`);
+      }
+      const transaction = await program.methods.initializeHybridMarket({
+        marketId: new BN(marketId.toString()),
+        category: isPyth ? { crypto: {} } : { [category]: {} },
+        tradingMode: { continuous: {} },
+        questionHash,
+        rulesHash,
+        outcomeLabelsHash,
+        liquidityParameter: new BN(LIQUIDITY_PARAMETER.toString()),
+        roundingReserve: new BN(ROUNDING_RESERVE.toString()),
+        maxTradeShares: new BN(MAX_TRADE_SHARES.toString()),
+        tradeFeeBps: TRADE_FEE_BPS,
+        lockTs: new BN(lockTs),
+        resolveNotBeforeTs: new BN(observationTs),
+        resolutionDeadlineTs: new BN(observationTs + (isPyth ? 30 * 60 : 48 * 60 * 60)),
+        oracle,
+      }).accountsPartial({
+        creator: publicKey,
+        engine: engineAddress,
+        collateralMint: engine.collateralMint,
+        creatorToken,
+        market: marketAddress,
+        oracleConfig: oracleConfigPda(marketAddress),
+        vault: hybridVaultPda(marketAddress),
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      }).transaction();
+      marketSignature = await sendAndConfirm(
+        transaction,
+        "market-signing",
+        "market-confirming",
+      );
+      setSignature(marketSignature);
+    }
+    const metadataAddress = hybridMetadataPda(marketAddress);
+    const existingMetadata = await connection.getAccountInfo(metadataAddress, "confirmed");
+    if (existingMetadata) {
+      if (!existingMetadata.owner.equals(program.programId)) {
+        throw new Error("A different program owns the derived metadata address");
+      }
+      return marketSignature;
+    }
+    const metadataTransaction = await program.methods.publishHybridMetadata({
+      question,
+      rules,
+      yesLabel: "YES",
+      noLabel: "NO",
+      referenceUrl: "",
     }).accountsPartial({
       creator: publicKey,
-      engine: engineAddress,
-      collateralMint: engine.collateralMint,
-      creatorToken,
       market: marketAddress,
-      oracleConfig: oracleConfigPda(marketAddress),
-      vault: hybridVaultPda(marketAddress),
-      tokenProgram: TOKEN_PROGRAM_ID,
+      metadata: metadataAddress,
       systemProgram: SystemProgram.programId,
     }).transaction();
-    return sendAndConfirm(transaction);
+    return sendAndConfirm(
+      metadataTransaction,
+      "metadata-signing",
+      "metadata-confirming",
+    );
   };
 
   const submit = async () => {
@@ -272,8 +314,7 @@ export function CreateMarketForm() {
       const nextSignature = resolver === "txline-replay"
         ? await createReplayMarket()
         : await createHybridMarket();
-      if (!nextSignature) throw new Error("Market transaction was not prepared");
-      setSignature(nextSignature);
+      if (nextSignature) setSignature(nextSignature);
       setStage("confirmed");
       router.push(`/markets/${marketAddress.toBase58()}?q=${encodeURIComponent(question)}`);
     } catch (cause) {
@@ -291,10 +332,14 @@ export function CreateMarketForm() {
   const busy = stage !== "idle" && stage !== "confirmed";
   const submitLabel = stage === "validating"
     ? "Checking market configuration"
-    : stage === "signing"
-      ? "Confirm in wallet"
-      : stage === "confirming"
-        ? "Confirming on devnet"
+    : stage === "market-signing"
+      ? "Confirm market in wallet"
+      : stage === "market-confirming"
+        ? "Confirming market on devnet"
+        : stage === "metadata-signing"
+          ? "Confirm metadata in wallet"
+          : stage === "metadata-confirming"
+            ? "Publishing verified metadata"
         : stage === "confirmed"
           ? "Market confirmed"
           : v2

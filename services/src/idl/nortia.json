@@ -1875,6 +1875,113 @@
       ]
     },
     {
+      "name": "publish_hybrid_metadata",
+      "discriminator": [
+        72,
+        93,
+        6,
+        139,
+        229,
+        58,
+        196,
+        206
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  121,
+                  98,
+                  114,
+                  105,
+                  100,
+                  45,
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.creator",
+                "account": "HybridMarket"
+              },
+              {
+                "kind": "account",
+                "path": "market.market_id",
+                "account": "HybridMarket"
+              }
+            ]
+          }
+        },
+        {
+          "name": "metadata",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  121,
+                  98,
+                  114,
+                  105,
+                  100,
+                  45,
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "PublishHybridMetadataArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "redeem",
       "discriminator": [
         184,
@@ -3571,6 +3678,19 @@
       ]
     },
     {
+      "name": "HybridMarketMetadata",
+      "discriminator": [
+        149,
+        46,
+        134,
+        223,
+        216,
+        221,
+        165,
+        172
+      ]
+    },
+    {
       "name": "Market",
       "discriminator": [
         219,
@@ -3739,6 +3859,19 @@
         217,
         232,
         59
+      ]
+    },
+    {
+      "name": "HybridMetadataPublished",
+      "discriminator": [
+        77,
+        209,
+        165,
+        205,
+        141,
+        177,
+        17,
+        213
       ]
     },
     {
@@ -4195,6 +4328,11 @@
       "code": 6048,
       "name": "NoOptimisticBondPayout",
       "msg": "No optimistic bond payout is available for this claimant"
+    },
+    {
+      "code": 6049,
+      "name": "InvalidMarketMetadata",
+      "msg": "The published market metadata does not match its immutable hashes"
     }
   ],
   "types": [
@@ -4691,6 +4829,54 @@
       }
     },
     {
+      "name": "HybridMarketMetadata",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "question",
+            "type": "string"
+          },
+          {
+            "name": "rules",
+            "type": "string"
+          },
+          {
+            "name": "yes_label",
+            "type": "string"
+          },
+          {
+            "name": "no_label",
+            "type": "string"
+          },
+          {
+            "name": "reference_url",
+            "type": "string"
+          },
+          {
+            "name": "published_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "HybridMarketResolved",
       "type": {
         "kind": "struct",
@@ -4726,6 +4912,30 @@
           },
           {
             "name": "settled_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HybridMetadataPublished",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "metadata",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "published_at",
             "type": "i64"
           }
         ]
@@ -6562,6 +6772,34 @@
           {
             "name": "redeem_verifier",
             "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PublishHybridMetadataArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "question",
+            "type": "string"
+          },
+          {
+            "name": "rules",
+            "type": "string"
+          },
+          {
+            "name": "yes_label",
+            "type": "string"
+          },
+          {
+            "name": "no_label",
+            "type": "string"
+          },
+          {
+            "name": "reference_url",
+            "type": "string"
           }
         ]
       }

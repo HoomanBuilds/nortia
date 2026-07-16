@@ -5,6 +5,7 @@ import {
   NORTIA_PROGRAM_ID,
   enginePda,
   hybridMarketPda,
+  hybridMetadataPda,
   hybridVaultPda,
   normalizeFeedId,
   optimisticBondVaultPda,
@@ -36,6 +37,10 @@ test("V2 PDA derivation is stable for the canonical program", () => {
   assert.equal(
     optimisticBondVaultPda(market).toBase58(),
     "2AGKmb74DnvPBZWS3e4DJaDYPpV4zh4Z3Rk3Y6qfgkMe",
+  );
+  assert.equal(
+    hybridMetadataPda(market).toBase58(),
+    "5AWAuNVsMbYHvWxaguatYUCbz1cq5YZE9pjmgo1qvVhq",
   );
   assert.equal(NORTIA_PROGRAM_ID.toBase58(), "4S2EvdGrbKJ9zazvB4gtR83crTrVJWqqwoVVvEQy8VE9");
 });

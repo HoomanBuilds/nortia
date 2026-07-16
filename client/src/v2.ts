@@ -66,6 +66,13 @@ export function optimisticBondVaultPda(
   return pda([Buffer.from("optimistic-bond-vault-v2"), market.toBuffer()], programId);
 }
 
+export function hybridMetadataPda(
+  market: PublicKey,
+  programId = NORTIA_PROGRAM_ID,
+): PublicKey {
+  return pda([Buffer.from("hybrid-metadata-v2"), market.toBuffer()], programId);
+}
+
 export function normalizeFeedId(feedId: string): string {
   const normalized = feedId.toLowerCase().replace(/^0x/, "");
   if (!/^[0-9a-f]{64}$/.test(normalized)) {

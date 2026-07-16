@@ -379,6 +379,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .trade-amount input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--text); font-family: var(--mono); font-size: 18px; }
 .order-panel > .order-error { display: flex; margin-top: 10px; align-items: center; justify-content: center; gap: 5px; color: var(--red); font-size: 8px; text-align: center; }.order-panel > .order-signature { display: flex; align-items: center; justify-content: center; gap: 5px; }
 .generic-disclosure code { display: block; margin-top: 7px; color: var(--muted-2); font-family: var(--mono); font-size: 8px; }
+.generic-disclosure .disclosure-rules { margin-top: 10px; color: var(--text); }
 @keyframes nortia-spin { to { transform: rotate(360deg); } }
 .spin { animation: nortia-spin .8s linear infinite; }
 

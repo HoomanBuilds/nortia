@@ -1881,6 +1881,113 @@ export type Nortia = {
       ]
     },
     {
+      "name": "publishHybridMetadata",
+      "discriminator": [
+        72,
+        93,
+        6,
+        139,
+        229,
+        58,
+        196,
+        206
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "market",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  121,
+                  98,
+                  114,
+                  105,
+                  100,
+                  45,
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.creator",
+                "account": "hybridMarket"
+              },
+              {
+                "kind": "account",
+                "path": "market.market_id",
+                "account": "hybridMarket"
+              }
+            ]
+          }
+        },
+        {
+          "name": "metadata",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  121,
+                  98,
+                  114,
+                  105,
+                  100,
+                  45,
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97,
+                  45,
+                  118,
+                  50
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "args",
+          "type": {
+            "defined": {
+              "name": "publishHybridMetadataArgs"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "redeem",
       "discriminator": [
         184,
@@ -3577,6 +3684,19 @@ export type Nortia = {
       ]
     },
     {
+      "name": "hybridMarketMetadata",
+      "discriminator": [
+        149,
+        46,
+        134,
+        223,
+        216,
+        221,
+        165,
+        172
+      ]
+    },
+    {
       "name": "market",
       "discriminator": [
         219,
@@ -3745,6 +3865,19 @@ export type Nortia = {
         217,
         232,
         59
+      ]
+    },
+    {
+      "name": "hybridMetadataPublished",
+      "discriminator": [
+        77,
+        209,
+        165,
+        205,
+        141,
+        177,
+        17,
+        213
       ]
     },
     {
@@ -4201,6 +4334,11 @@ export type Nortia = {
       "code": 6048,
       "name": "noOptimisticBondPayout",
       "msg": "No optimistic bond payout is available for this claimant"
+    },
+    {
+      "code": 6049,
+      "name": "invalidMarketMetadata",
+      "msg": "The published market metadata does not match its immutable hashes"
     }
   ],
   "types": [
@@ -4697,6 +4835,54 @@ export type Nortia = {
       }
     },
     {
+      "name": "hybridMarketMetadata",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "question",
+            "type": "string"
+          },
+          {
+            "name": "rules",
+            "type": "string"
+          },
+          {
+            "name": "yesLabel",
+            "type": "string"
+          },
+          {
+            "name": "noLabel",
+            "type": "string"
+          },
+          {
+            "name": "referenceUrl",
+            "type": "string"
+          },
+          {
+            "name": "publishedAt",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
       "name": "hybridMarketResolved",
       "type": {
         "kind": "struct",
@@ -4732,6 +4918,30 @@ export type Nortia = {
           },
           {
             "name": "settledAt",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "hybridMetadataPublished",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "metadata",
+            "type": "pubkey"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "publishedAt",
             "type": "i64"
           }
         ]
@@ -6568,6 +6778,34 @@ export type Nortia = {
           {
             "name": "redeemVerifier",
             "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "publishHybridMetadataArgs",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "question",
+            "type": "string"
+          },
+          {
+            "name": "rules",
+            "type": "string"
+          },
+          {
+            "name": "yesLabel",
+            "type": "string"
+          },
+          {
+            "name": "noLabel",
+            "type": "string"
+          },
+          {
+            "name": "referenceUrl",
+            "type": "string"
           }
         ]
       }

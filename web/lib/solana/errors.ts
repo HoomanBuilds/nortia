@@ -2,6 +2,7 @@ const FRIENDLY_ERRORS: Readonly<Record<string, string>> = {
   InvalidEngineConfiguration: "The V2 market engine is not ready on this deployment.",
   InvalidMarketConfiguration: "Review the market dates, liquidity, and trade limits.",
   InvalidOracleConfiguration: "The selected resolver configuration is not supported.",
+  InvalidMarketMetadata: "The question or rules no longer match this market's immutable hashes.",
   InvalidCollateralMint: "This market only accepts the configured devnet USDC mint.",
   InvalidTokenAccount: "The connected wallet needs a valid devnet USDC token account.",
   InvalidLmsrState: "The liquidity or market inventory is outside safe LMSR bounds.",

@@ -32,11 +32,12 @@ async function main() {
   const connection = new Connection(config.rpcUrl, "confirmed");
   const program = createProgram(connection, Keypair.generate());
   const writeSnapshot = async () => {
-    const [legacyRows, hybridRows, oracleRows, receiptRows, positionRows] = await Promise.all([
+    const [legacyRows, hybridRows, oracleRows, receiptRows, metadataRows, positionRows] = await Promise.all([
       program.account.market.all(),
       program.account.hybridMarket.all(),
       program.account.oracleConfig.all(),
       program.account.resolutionReceipt.all(),
+      program.account.hybridMarketMetadata.all(),
       program.account.position.all(),
     ]);
     const oracles = new Map(
@@ -44,6 +45,9 @@ async function main() {
     );
     const receipts = new Map(
       receiptRows.map(({ account }) => [account.market.toBase58(), account]),
+    );
+    const metadata = new Map(
+      metadataRows.map(({ account }) => [account.market.toBase58(), account]),
     );
     const traderCounts = new Map<string, number>();
     for (const { account } of positionRows) {
@@ -65,6 +69,7 @@ async function main() {
         market: account,
         oracle,
         receipt: receipts.get(publicKey.toBase58()) ?? null,
+        metadata: metadata.get(publicKey.toBase58()) ?? null,
         traderCount: traderCounts.get(publicKey.toBase58()) ?? 0,
         now,
       });

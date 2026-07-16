@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { PublicKey } from "@solana/web3.js";
 import { lmsrYesProbability } from "nortia-client/lmsr";
 import { hybridPhaseName, oracleResolverName } from "../solana.js";
@@ -86,6 +87,18 @@ type ResolutionReceiptAccount = {
   finalizedAt: IntegerLike;
 };
 
+type HybridMetadataAccount = {
+  version: number;
+  market: PublicKey;
+  creator: PublicKey;
+  question: string;
+  rules: string;
+  yesLabel: string;
+  noLabel: string;
+  referenceUrl: string;
+  publishedAt: IntegerLike;
+};
+
 function integerString(value: IntegerLike, label: string): string {
   const encoded = value.toString();
   if (!/^-?\d+$/.test(encoded)) throw new Error(`${label} is not an integer`);
@@ -136,6 +149,39 @@ function comparatorName(value: EnumLike) {
   );
 }
 
+function buildMetadataSnapshot(
+  metadata: HybridMetadataAccount,
+  market: HybridMarketAccount,
+  address: PublicKey,
+) {
+  if (!metadata.market.equals(address) || !metadata.creator.equals(market.creator)) {
+    throw new Error("Hybrid metadata belongs to a different market or creator");
+  }
+  const questionHash = createHash("sha256").update(metadata.question, "utf8").digest("hex");
+  const rulesHash = createHash("sha256").update(metadata.rules, "utf8").digest("hex");
+  const labelsHash = createHash("sha256")
+    .update(`${metadata.yesLabel}\n${metadata.noLabel}`, "utf8")
+    .digest("hex");
+  if (
+    questionHash !== bytes32(market.questionHash, "question hash")
+    || rulesHash !== bytes32(market.rulesHash, "rules hash")
+    || labelsHash !== bytes32(market.outcomeLabelsHash, "outcome labels hash")
+  ) {
+    throw new Error("Hybrid metadata hashes do not match immutable market state");
+  }
+  return {
+    version: metadata.version,
+    market: metadata.market.toBase58(),
+    creator: metadata.creator.toBase58(),
+    question: metadata.question,
+    rules: metadata.rules,
+    yesLabel: metadata.yesLabel,
+    noLabel: metadata.noLabel,
+    referenceUrl: metadata.referenceUrl || null,
+    publishedAt: integerString(metadata.publishedAt, "metadata publication timestamp"),
+  };
+}
+
 export function buildResolutionReceiptSnapshot(receipt: ResolutionReceiptAccount) {
   return {
     version: receipt.version,
@@ -163,6 +209,7 @@ export function buildHybridMarketSnapshot(input: {
   market: HybridMarketAccount;
   oracle: OracleAccount;
   receipt: ResolutionReceiptAccount | null;
+  metadata: HybridMetadataAccount | null;
   traderCount: number;
   now: number;
 }) {
@@ -264,6 +311,9 @@ export function buildHybridMarketSnapshot(input: {
       consumed: input.oracle.consumed,
     },
     receipt: input.receipt ? buildResolutionReceiptSnapshot(input.receipt) : null,
+    metadata: input.metadata
+      ? buildMetadataSnapshot(input.metadata, input.market, input.address)
+      : null,
   };
 }
 

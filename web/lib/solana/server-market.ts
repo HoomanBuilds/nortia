@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { BorshAccountsCoder, type Idl } from "@anchor-lang/core";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { lmsrYesProbability } from "nortia-client/lmsr";
-import { hybridVaultPda } from "nortia-client/v2";
+import { hybridMetadataPda, hybridVaultPda } from "nortia-client/v2";
 import idl from "@/lib/solana/idl/nortia.json";
 import { NORTIA_PROGRAM_KEY } from "@/lib/solana/constants";
 import {
@@ -41,6 +41,7 @@ type HybridMarketAccount = {
   category: Record<string, unknown>;
   question_hash: number[];
   rules_hash: number[];
+  outcome_labels_hash: number[];
   collateral_mint: PublicKey;
   treasury_owner: PublicKey;
   oracle_config: PublicKey;
@@ -63,6 +64,16 @@ type HybridMarketAccount = {
 type OracleConfigAccount = {
   market: PublicKey;
   resolver: Record<string, unknown>;
+};
+
+type HybridMetadataAccount = {
+  market: PublicKey;
+  creator: PublicKey;
+  question: string;
+  rules: string;
+  yes_label: string;
+  no_label: string;
+  reference_url: string;
 };
 
 function enumKey(value: Record<string, unknown>): string {
@@ -107,6 +118,24 @@ function verifiedQuestion(candidate: string | undefined, hash: number[]): string
   if (!candidate) return null;
   const actual = createHash("sha256").update(candidate, "utf8").digest();
   return actual.equals(Buffer.from(hash)) ? candidate : null;
+}
+
+function verifiedMetadata(
+  account: HybridMetadataAccount,
+  market: HybridMarketAccount,
+  address: PublicKey,
+): HybridMetadataAccount | null {
+  if (!account.market.equals(address) || !account.creator.equals(market.creator)) return null;
+  const questionHash = createHash("sha256").update(account.question, "utf8").digest();
+  const rulesHash = createHash("sha256").update(account.rules, "utf8").digest();
+  const labelsHash = createHash("sha256")
+    .update(`${account.yes_label}\n${account.no_label}`, "utf8")
+    .digest();
+  return questionHash.equals(Buffer.from(market.question_hash))
+    && rulesHash.equals(Buffer.from(market.rules_hash))
+    && labelsHash.equals(Buffer.from(market.outcome_labels_hash))
+    ? account
+    : null;
 }
 
 function outcomeName(value: number): HybridMarketDetails["outcome"] | null {
@@ -175,7 +204,13 @@ async function buildHybridMarket(
   const category = categoryName(account.category);
   const outcome = outcomeName(account.outcome);
   if (!tradingState || !category || !outcome) return null;
-  const oracleInfo = await connection.getAccountInfo(account.oracle_config, "confirmed");
+  const vault = hybridVaultPda(address);
+  const metadataAddress = hybridMetadataPda(address);
+  const [oracleInfo, metadataInfo, vaultBalance] = await Promise.all([
+    connection.getAccountInfo(account.oracle_config, "confirmed"),
+    connection.getAccountInfo(metadataAddress, "confirmed"),
+    connection.getTokenAccountBalance(vault, "confirmed").catch(() => null),
+  ]);
   if (!oracleInfo || !oracleInfo.owner.equals(NORTIA_PROGRAM_KEY)) return null;
   let oracle: OracleConfigAccount;
   try {
@@ -186,6 +221,18 @@ async function buildHybridMarket(
   if (!oracle.market.equals(address)) return null;
   const resolver = resolverName(oracle.resolver);
   if (!resolver) return null;
+  let metadata: HybridMetadataAccount | null = null;
+  if (metadataInfo?.owner.equals(NORTIA_PROGRAM_KEY)) {
+    try {
+      metadata = verifiedMetadata(
+        coder.decode("HybridMarketMetadata", metadataInfo.data) as HybridMetadataAccount,
+        account,
+        address,
+      );
+    } catch {
+      metadata = null;
+    }
+  }
   const yesQuantity = BigInt(account.yes_quantity.toString());
   const noQuantity = BigInt(account.no_quantity.toString());
   const liquidityParameter = BigInt(account.liquidity_parameter.toString());
@@ -193,10 +240,9 @@ async function buildHybridMarket(
     { yes: yesQuantity, no: noQuantity },
     liquidityParameter,
   );
-  const vault = hybridVaultPda(address);
-  const vaultBalance = await connection.getTokenAccountBalance(vault, "confirmed").catch(() => null);
   const questionHash = Buffer.from(account.question_hash).toString("hex");
-  const question = verifiedQuestion(questionCandidate, account.question_hash)
+  const question = metadata?.question
+    ?? verifiedQuestion(questionCandidate, account.question_hash)
     ?? `Verified market ${questionHash.slice(0, 8)}`;
   const yes = Math.round(Number(probability) / 10_000);
   const lockAt = new Date(account.lock_ts.toNumber() * 1_000).toISOString();
@@ -208,6 +254,11 @@ async function buildHybridMarket(
     collateralMint: account.collateral_mint.toBase58(),
     oracleConfig: account.oracle_config.toBase58(),
     resolverId: resolver.resolverId,
+    metadataPublished: metadata !== null,
+    rules: metadata?.rules ?? null,
+    yesLabel: metadata?.yes_label ?? "YES",
+    noLabel: metadata?.no_label ?? "NO",
+    referenceUrl: metadata?.reference_url || null,
     questionHash,
     rulesHash: Buffer.from(account.rules_hash).toString("hex"),
     liquidityParameter: liquidityParameter.toString(),

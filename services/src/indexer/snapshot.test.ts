@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
 import { PublicKey } from "@solana/web3.js";
 import {
@@ -83,6 +84,7 @@ test("V2 snapshot preserves exact amounts and deterministic LMSR probability", (
     market,
     oracle,
     receipt: null,
+    metadata: null,
     traderCount: 4,
     now: 1_000,
   });
@@ -108,11 +110,74 @@ test("snapshot closes trading at the exact lock boundary", () => {
     market,
     oracle,
     receipt: null,
+    metadata: null,
     traderCount: 0,
     now: 1_100,
   });
   assert.equal(snapshot.tradingOpen, false);
   assert.equal(snapshot.vaultBalance, null);
+});
+
+test("published metadata must match every immutable market hash", () => {
+  const question = "Will BTC be above 120000 USD?";
+  const rules = "Use the timestamped Pyth BTC/USD update.";
+  const labels = "YES\nNO";
+  const digest = (value: string) => Array.from(createHash("sha256").update(value).digest());
+  const snapshot = buildHybridMarketSnapshot({
+    address: key(10),
+    vault: key(14),
+    vaultBalance: 75_000_000n,
+    market: {
+      ...market,
+      questionHash: digest(question),
+      rulesHash: digest(rules),
+      outcomeLabelsHash: digest(labels),
+    },
+    oracle,
+    receipt: null,
+    metadata: {
+      version: 1,
+      market: key(10),
+      creator: key(1),
+      question,
+      rules,
+      yesLabel: "YES",
+      noLabel: "NO",
+      referenceUrl: "https://pyth.network",
+      publishedAt: integer(1_010),
+    },
+    traderCount: 4,
+    now: 1_000,
+  });
+  assert.equal(snapshot.metadata?.question, question);
+  assert.equal(snapshot.metadata?.rules, rules);
+
+  assert.throws(() => buildHybridMarketSnapshot({
+    address: key(10),
+    vault: key(14),
+    vaultBalance: 75_000_000n,
+    market: {
+      ...market,
+      questionHash: digest(question),
+      rulesHash: digest(rules),
+      outcomeLabelsHash: digest(labels),
+    },
+    oracle,
+    receipt: null,
+    metadata: {
+      version: 1,
+      market: key(10),
+      creator: key(1),
+      question: `${question}!`,
+      rules,
+      yesLabel: "YES",
+      noLabel: "NO",
+      referenceUrl: "",
+      publishedAt: integer(1_010),
+    },
+    traderCount: 4,
+    now: 1_000,
+  }), /metadata hashes/);
 });
 
 test("resolution receipts expose immutable oracle evidence", () => {

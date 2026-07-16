@@ -100,4 +100,6 @@ pub enum NortiaError {
     ResolverSecurityCapExceeded,
     #[msg("No optimistic bond payout is available for this claimant")]
     NoOptimisticBondPayout,
+    #[msg("The published market metadata does not match its immutable hashes")]
+    InvalidMarketMetadata,
 }

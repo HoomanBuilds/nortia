@@ -9,6 +9,11 @@ export type HybridMarketDetails = {
   collateralMint: string;
   oracleConfig: string;
   resolverId: "txline-stat-v2" | "pyth-price-v2" | "switchboard-quote-v1" | "optimistic-v1" | "uma-wormhole-v1" | "chainlink-report-v1";
+  metadataPublished: boolean;
+  rules: string | null;
+  yesLabel: string;
+  noLabel: string;
+  referenceUrl: string | null;
   questionHash: string;
   rulesHash: string;
   liquidityParameter: string;

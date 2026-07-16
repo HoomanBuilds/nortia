@@ -365,6 +365,40 @@ impl OptimisticProposal {
     pub const SPACE: usize = 8 + 384;
 }
 
+#[account]
+pub struct HybridMarketMetadata {
+    pub bump: u8,
+    pub version: u8,
+    pub market: Pubkey,
+    pub creator: Pubkey,
+    pub question: String,
+    pub rules: String,
+    pub yes_label: String,
+    pub no_label: String,
+    pub reference_url: String,
+    pub published_at: i64,
+}
+
+impl HybridMarketMetadata {
+    pub const VERSION: u8 = 1;
+    pub const SPACE: usize = 8
+        + 1
+        + 1
+        + 32
+        + 32
+        + 4
+        + crate::constants::MAX_QUESTION_BYTES
+        + 4
+        + crate::constants::MAX_RULES_BYTES
+        + 4
+        + crate::constants::MAX_OUTCOME_LABEL_BYTES
+        + 4
+        + crate::constants::MAX_OUTCOME_LABEL_BYTES
+        + 4
+        + crate::constants::MAX_REFERENCE_URL_BYTES
+        + 8;
+}
+
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct InitializeProtocolArgs {
     pub treasury_owner: Pubkey,
@@ -462,6 +496,15 @@ pub struct TradeSharesArgs {
     pub shares: u64,
     pub amount_guard: u64,
     pub deadline_ts: i64,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct PublishHybridMetadataArgs {
+    pub question: String,
+    pub rules: String,
+    pub yes_label: String,
+    pub no_label: String,
+    pub reference_url: String,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -609,6 +652,14 @@ pub struct HybridMarketCreated {
     pub trade_fee_bps: u16,
     pub resolver_security_cap: u64,
     pub lock_ts: i64,
+}
+
+#[event]
+pub struct HybridMetadataPublished {
+    pub market: Pubkey,
+    pub metadata: Pubkey,
+    pub creator: Pubkey,
+    pub published_at: i64,
 }
 
 #[event]

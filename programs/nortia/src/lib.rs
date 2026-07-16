@@ -691,6 +691,32 @@ pub mod nortia {
         Ok(())
     }
 
+    pub fn publish_hybrid_metadata(
+        ctx: Context<PublishHybridMetadata>,
+        args: PublishHybridMetadataArgs,
+    ) -> Result<()> {
+        validate_hybrid_metadata(&ctx.accounts.market, &args)?;
+        let now = Clock::get()?.unix_timestamp;
+        let metadata = &mut ctx.accounts.metadata;
+        metadata.bump = ctx.bumps.metadata;
+        metadata.version = HybridMarketMetadata::VERSION;
+        metadata.market = ctx.accounts.market.key();
+        metadata.creator = ctx.accounts.creator.key();
+        metadata.question = args.question;
+        metadata.rules = args.rules;
+        metadata.yes_label = args.yes_label;
+        metadata.no_label = args.no_label;
+        metadata.reference_url = args.reference_url;
+        metadata.published_at = now;
+        emit!(HybridMetadataPublished {
+            market: metadata.market,
+            metadata: metadata.key(),
+            creator: metadata.creator,
+            published_at: now,
+        });
+        Ok(())
+    }
+
     pub fn buy_hybrid_shares(ctx: Context<TradeHybridShares>, args: TradeSharesArgs) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
         validate_hybrid_trade(&ctx.accounts.market, &args, now)?;
@@ -1800,6 +1826,29 @@ pub struct InitializePosition<'info> {
 }
 
 #[derive(Accounts)]
+pub struct PublishHybridMetadata<'info> {
+    #[account(
+        mut,
+        address = market.creator @ NortiaError::InvalidMarketMetadata
+    )]
+    pub creator: Signer<'info>,
+    #[account(
+        seeds = [HYBRID_MARKET_SEED, market.creator.as_ref(), &market.market_id.to_le_bytes()],
+        bump = market.bump
+    )]
+    pub market: Box<Account<'info, HybridMarket>>,
+    #[account(
+        init,
+        payer = creator,
+        space = HybridMarketMetadata::SPACE,
+        seeds = [HYBRID_METADATA_SEED, market.key().as_ref()],
+        bump
+    )]
+    pub metadata: Box<Account<'info, HybridMarketMetadata>>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
 pub struct TradeHybridShares<'info> {
     #[account(mut)]
     pub owner: Signer<'info>,
@@ -2806,6 +2855,46 @@ fn validate_oracle_config(
             return err!(NortiaError::ResolverNotEnabled)
         }
     }
+    Ok(())
+}
+
+fn validate_hybrid_metadata(market: &HybridMarket, args: &PublishHybridMetadataArgs) -> Result<()> {
+    let valid_text = |value: &str, maximum: usize, allow_newlines: bool| {
+        !value.is_empty()
+            && value.len() <= maximum
+            && value.trim() == value
+            && value
+                .chars()
+                .all(|character| !character.is_control() || (allow_newlines && character == '\n'))
+    };
+    let reference_valid = args.reference_url.is_empty()
+        || (args.reference_url.len() <= MAX_REFERENCE_URL_BYTES
+            && args.reference_url.trim() == args.reference_url
+            && !args.reference_url.chars().any(char::is_control)
+            && (args.reference_url.starts_with("https://")
+                || args.reference_url.starts_with("ipfs://")
+                || args.reference_url.starts_with("ar://")));
+    let mut outcome_labels = Vec::with_capacity(
+        args.yes_label
+            .len()
+            .saturating_add(args.no_label.len())
+            .saturating_add(1),
+    );
+    outcome_labels.extend_from_slice(args.yes_label.as_bytes());
+    outcome_labels.push(b'\n');
+    outcome_labels.extend_from_slice(args.no_label.as_bytes());
+    require!(
+        valid_text(&args.question, MAX_QUESTION_BYTES, false)
+            && valid_text(&args.rules, MAX_RULES_BYTES, true)
+            && valid_text(&args.yes_label, MAX_OUTCOME_LABEL_BYTES, false)
+            && valid_text(&args.no_label, MAX_OUTCOME_LABEL_BYTES, false)
+            && args.yes_label != args.no_label
+            && reference_valid
+            && hashv(&[args.question.as_bytes()]).to_bytes() == market.question_hash
+            && hashv(&[args.rules.as_bytes()]).to_bytes() == market.rules_hash
+            && hashv(&[outcome_labels.as_slice()]).to_bytes() == market.outcome_labels_hash,
+        NortiaError::InvalidMarketMetadata
+    );
     Ok(())
 }
 
@@ -3918,6 +4007,43 @@ mod tests {
         .is_err());
     }
 
+    fn metadata_fixture() -> (HybridMarket, PublishHybridMetadataArgs) {
+        let args = PublishHybridMetadataArgs {
+            question: "Will BTC be above 120000 USD?".to_string(),
+            rules: "Use the fully verified timestamped Pyth BTC/USD update.".to_string(),
+            yes_label: "YES".to_string(),
+            no_label: "NO".to_string(),
+            reference_url: "https://pyth.network/price-feeds/crypto-btc-usd".to_string(),
+        };
+        let mut market = resolution_market();
+        market.question_hash = hashv(&[args.question.as_bytes()]).to_bytes();
+        market.rules_hash = hashv(&[args.rules.as_bytes()]).to_bytes();
+        market.outcome_labels_hash = hashv(&[b"YES\nNO"]).to_bytes();
+        (market, args)
+    }
+
+    #[test]
+    fn hybrid_metadata_requires_exact_hashes_and_safe_text() {
+        let (market, args) = metadata_fixture();
+        validate_hybrid_metadata(&market, &args).unwrap();
+
+        let mut wrong_question = args.clone();
+        wrong_question.question.push('!');
+        assert!(validate_hybrid_metadata(&market, &wrong_question).is_err());
+
+        let mut untrimmed = args.clone();
+        untrimmed.rules.push(' ');
+        assert!(validate_hybrid_metadata(&market, &untrimmed).is_err());
+
+        let mut bad_url = args.clone();
+        bad_url.reference_url = "javascript:alert(1)".to_string();
+        assert!(validate_hybrid_metadata(&market, &bad_url).is_err());
+
+        let mut oversized = args.clone();
+        oversized.question = "q".repeat(MAX_QUESTION_BYTES + 1);
+        assert!(validate_hybrid_metadata(&market, &oversized).is_err());
+    }
+
     #[test]
     fn v2_account_allocations_cover_serialized_state() {
         let engine = EngineConfig {
@@ -3971,5 +4097,21 @@ mod tests {
             .try_serialize(&mut proposal_data)
             .unwrap();
         assert!(proposal_data.len() <= OptimisticProposal::SPACE);
+
+        let metadata = HybridMarketMetadata {
+            bump: 1,
+            version: HybridMarketMetadata::VERSION,
+            market: Pubkey::new_unique(),
+            creator: Pubkey::new_unique(),
+            question: "q".repeat(MAX_QUESTION_BYTES),
+            rules: "r".repeat(MAX_RULES_BYTES),
+            yes_label: "y".repeat(MAX_OUTCOME_LABEL_BYTES),
+            no_label: "n".repeat(MAX_OUTCOME_LABEL_BYTES),
+            reference_url: "u".repeat(MAX_REFERENCE_URL_BYTES),
+            published_at: 1,
+        };
+        let mut metadata_data = Vec::new();
+        metadata.try_serialize(&mut metadata_data).unwrap();
+        assert!(metadata_data.len() <= HybridMarketMetadata::SPACE);
     }
 }
