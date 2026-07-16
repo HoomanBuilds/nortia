@@ -4413,6 +4413,10 @@ export type Nortia = {
                 32
               ]
             }
+          },
+          {
+            "name": "evidenceUri",
+            "type": "string"
           }
         ]
       }
@@ -5862,6 +5866,10 @@ export type Nortia = {
             }
           },
           {
+            "name": "assertionEvidenceUri",
+            "type": "string"
+          },
+          {
             "name": "proposedAt",
             "type": "i64"
           },
@@ -5889,6 +5897,10 @@ export type Nortia = {
                 32
               ]
             }
+          },
+          {
+            "name": "challengeEvidenceUri",
+            "type": "string"
           },
           {
             "name": "challengedAt",
@@ -5973,6 +5985,10 @@ export type Nortia = {
             }
           },
           {
+            "name": "evidenceUri",
+            "type": "string"
+          },
+          {
             "name": "bondAmount",
             "type": "u64"
           }
@@ -6053,6 +6069,10 @@ export type Nortia = {
                 32
               ]
             }
+          },
+          {
+            "name": "evidenceUri",
+            "type": "string"
           },
           {
             "name": "bondAmount",
@@ -6632,6 +6652,10 @@ export type Nortia = {
                 32
               ]
             }
+          },
+          {
+            "name": "evidenceUri",
+            "type": "string"
           }
         ]
       }

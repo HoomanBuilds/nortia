@@ -6,6 +6,9 @@ const FRIENDLY_ERRORS: Readonly<Record<string, string>> = {
   InvalidPhase: "This action is not available in the market's current phase.",
   InvalidPosition: "This position does not belong to the connected wallet and market.",
   PositionAlreadySettled: "This position has already been settled.",
+  InvalidAssertion: "The optimistic evidence, outcome, or participant is invalid.",
+  ChallengeWindowClosed: "The optimistic challenge window is not currently open.",
+  NoOptimisticBondPayout: "This wallet has no unclaimed bond payout.",
   InvalidCollateralMint: "This market only accepts the configured devnet USDC mint.",
   InvalidTokenAccount: "The connected wallet needs a valid devnet USDC token account.",
   InvalidLmsrState: "The liquidity or market inventory is outside safe LMSR bounds.",
@@ -45,6 +48,7 @@ export function translateNortiaError(cause: unknown): string {
     if (text === "Resolution must be at least 20 minutes in the future") return `${text}.`;
     if (text === "Question and resolution rules are required") return `${text}.`;
     if (text === "Choose a valid resolution date and time") return `${text}.`;
+    if (/^Evidence URI /.test(text)) return `${text}.`;
     for (const [name, message] of Object.entries(FRIENDLY_ERRORS)) {
       if (text.includes(name)) return message;
     }

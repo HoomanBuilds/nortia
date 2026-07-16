@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, CheckCircle2, Clock3, Radio, ShieldCheck, Users } from "lucide-react";
 import { HybridTradingPanel } from "@/components/hybrid-trading-panel";
+import { OptimisticResolutionPanel } from "@/components/optimistic-resolution-panel";
 import { MarketDetails } from "@/components/market-details";
 import { PrivateOrderPanel } from "@/components/private-order-panel";
 import { ReplayChart } from "@/components/replay-chart";
@@ -41,6 +42,7 @@ export default async function MarketPage({ params, searchParams }: { params: Pro
           </section>
           {isHybrid ? <HybridTradingPanel market={market} /> : <PrivateOrderPanel market={market} />}
         </div>
+        {isHybrid && market.hybrid?.resolverId === "optimistic-v1" && <OptimisticResolutionPanel market={market} />}
         {isReplay ? <MarketDetails /> : isHybrid && market.hybrid ? <section className="market-details generic-disclosure" id="proof"><div><span className="eyebrow">Resolver disclosure</span><h3>{market.resolver} settlement with immutable rules.</h3><p>{market.hybrid.metadataPublished ? "The question, rules, and outcome labels were published to an immutable metadata PDA after their hashes were verified by the contract." : "The question in this URL was verified against the onchain hash. Permanent metadata publication is still pending for this market."} Resolution uses {market.hybrid.resolverId}, and the receipt commits the exact source account and evidence hash before winners redeem.</p>{market.hybrid.rules && <p className="disclosure-rules"><strong>Rules:</strong> {market.hybrid.rules}</p>}<code>Question {market.hybrid.questionHash.slice(0, 12)}...{market.hybrid.questionHash.slice(-12)}</code><code>Rules {market.hybrid.rulesHash.slice(0, 12)}...{market.hybrid.rulesHash.slice(-12)}</code></div><a href={`https://explorer.solana.com/address/${market.address}?cluster=devnet`} target="_blank" rel="noreferrer">Inspect market account</a></section> : <section className="market-details generic-disclosure" id="proof"><div><span className="eyebrow">Source disclosure</span><h3>{market.replay ? "Covered fixture replay" : "TxLINE-covered market"}</h3><p>{market.replay ? "The final score comes from TxLINE's published World Cup coverage schedule. Open the flagship replay for the complete deterministic event and settlement demonstration." : "This covered fixture is ready for a TxLINE-backed Nortia market. Pool figures remain zero until the Nortia program and market account are deployed."}</p></div><Link href="/markets/demo-txline-replay">Open flagship replay</Link></section>}
       </div>
     </main>

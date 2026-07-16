@@ -341,12 +341,14 @@ pub struct OptimisticProposal {
     pub proposer_token: Pubkey,
     pub proposed_outcome: u8,
     pub assertion_hash: [u8; 32],
+    pub assertion_evidence_uri: String,
     pub proposed_at: i64,
     pub challenge_deadline: i64,
     pub challenger: Pubkey,
     pub challenger_token: Pubkey,
     pub challenged_outcome: u8,
     pub challenge_hash: [u8; 32],
+    pub challenge_evidence_uri: String,
     pub challenged_at: i64,
     pub bond_amount: u64,
     pub proposer_payout: u64,
@@ -362,7 +364,7 @@ pub struct OptimisticProposal {
 
 impl OptimisticProposal {
     pub const VERSION: u8 = 1;
-    pub const SPACE: usize = 8 + 384;
+    pub const SPACE: usize = 8 + 768;
 }
 
 #[account]
@@ -511,12 +513,14 @@ pub struct PublishHybridMetadataArgs {
 pub struct ProposeOptimisticArgs {
     pub outcome: u8,
     pub assertion_hash: [u8; 32],
+    pub evidence_uri: String,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct ChallengeOptimisticArgs {
     pub outcome: u8,
     pub challenge_hash: [u8; 32],
+    pub evidence_uri: String,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -726,6 +730,7 @@ pub struct OptimisticResolutionProposed {
     pub proposer: Pubkey,
     pub outcome: u8,
     pub assertion_hash: [u8; 32],
+    pub evidence_uri: String,
     pub bond_amount: u64,
     pub challenge_deadline: i64,
 }
@@ -737,6 +742,7 @@ pub struct OptimisticResolutionChallenged {
     pub challenger: Pubkey,
     pub outcome: u8,
     pub challenge_hash: [u8; 32],
+    pub evidence_uri: String,
     pub bond_amount: u64,
 }
 

@@ -1043,11 +1043,16 @@ pub mod nortia {
         args: ProposeOptimisticArgs,
     ) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
+        let evidence = OptimisticEvidence {
+            outcome: args.outcome,
+            hash: &args.assertion_hash,
+            uri: &args.evidence_uri,
+        };
         let challenge_deadline = validate_optimistic_proposal(
+            ctx.accounts.market.key(),
             &ctx.accounts.market,
             &ctx.accounts.oracle_config,
-            args.outcome,
-            &args.assertion_hash,
+            evidence,
             now,
         )?;
 
@@ -1060,12 +1065,14 @@ pub mod nortia {
         proposal.proposer_token = ctx.accounts.proposer_token.key();
         proposal.proposed_outcome = args.outcome;
         proposal.assertion_hash = args.assertion_hash;
+        proposal.assertion_evidence_uri = args.evidence_uri;
         proposal.proposed_at = now;
         proposal.challenge_deadline = challenge_deadline;
         proposal.challenger = Pubkey::default();
         proposal.challenger_token = Pubkey::default();
         proposal.challenged_outcome = HybridMarket::OUTCOME_UNSET;
         proposal.challenge_hash = [0; 32];
+        proposal.challenge_evidence_uri = String::new();
         proposal.challenged_at = 0;
         proposal.bond_amount = ctx.accounts.oracle_config.bond_amount;
         proposal.proposer_payout = 0;
@@ -1094,6 +1101,7 @@ pub mod nortia {
             proposer: proposal.proposer,
             outcome: proposal.proposed_outcome,
             assertion_hash: proposal.assertion_hash,
+            evidence_uri: proposal.assertion_evidence_uri.clone(),
             bond_amount: proposal.bond_amount,
             challenge_deadline,
         });
@@ -1105,12 +1113,17 @@ pub mod nortia {
         args: ChallengeOptimisticArgs,
     ) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
+        let evidence = OptimisticEvidence {
+            outcome: args.outcome,
+            hash: &args.challenge_hash,
+            uri: &args.evidence_uri,
+        };
         validate_optimistic_challenge(
+            ctx.accounts.market.key(),
             &ctx.accounts.market,
             &ctx.accounts.proposal,
             ctx.accounts.challenger.key(),
-            args.outcome,
-            &args.challenge_hash,
+            evidence,
             now,
         )?;
         let proposal = &mut ctx.accounts.proposal;
@@ -1126,6 +1139,7 @@ pub mod nortia {
         proposal.challenger_token = ctx.accounts.challenger_token.key();
         proposal.challenged_outcome = args.outcome;
         proposal.challenge_hash = args.challenge_hash;
+        proposal.challenge_evidence_uri = args.evidence_uri;
         proposal.challenged_at = now;
         ctx.accounts.market.phase = HybridPhase::Disputed;
         emit!(OptimisticResolutionChallenged {
@@ -1134,6 +1148,7 @@ pub mod nortia {
             challenger: proposal.challenger,
             outcome: proposal.challenged_outcome,
             challenge_hash: proposal.challenge_hash,
+            evidence_uri: proposal.challenge_evidence_uri.clone(),
             bond_amount: proposal.bond_amount,
         });
         Ok(())
@@ -2573,11 +2588,17 @@ fn hybrid_market_liability(yes_quantity: u64, no_quantity: u64, outcome: u8) -> 
     }
 }
 
+struct OptimisticEvidence<'a> {
+    outcome: u8,
+    hash: &'a [u8; 32],
+    uri: &'a str,
+}
+
 fn validate_optimistic_proposal(
+    market_key: Pubkey,
     market: &HybridMarket,
     oracle: &OracleConfig,
-    outcome: u8,
-    assertion_hash: &[u8; 32],
+    evidence: OptimisticEvidence,
     now: i64,
 ) -> Result<i64> {
     require!(
@@ -2600,8 +2621,16 @@ fn validate_optimistic_proposal(
         NortiaError::InvalidObservationTime
     );
     require!(
-        *assertion_hash != [0; 32]
-            && (outcome == HybridMarket::OUTCOME_YES || outcome == HybridMarket::OUTCOME_NO)
+        valid_optimistic_evidence_uri(evidence.uri)
+            && *evidence.hash
+                == optimistic_evidence_hash(
+                    b"nortia-optimistic-assertion-v1",
+                    market_key,
+                    evidence.outcome,
+                    evidence.uri,
+                )
+            && (evidence.outcome == HybridMarket::OUTCOME_YES
+                || evidence.outcome == HybridMarket::OUTCOME_NO)
             && oracle.optimistic_proposal == Pubkey::default()
             && !oracle.consumed,
         NortiaError::InvalidAssertion
@@ -2617,11 +2646,11 @@ fn validate_optimistic_proposal(
 }
 
 fn validate_optimistic_challenge(
+    market_key: Pubkey,
     market: &HybridMarket,
     proposal: &OptimisticProposal,
     challenger: Pubkey,
-    outcome: u8,
-    challenge_hash: &[u8; 32],
+    evidence: OptimisticEvidence,
     now: i64,
 ) -> Result<()> {
     require!(
@@ -2635,12 +2664,46 @@ fn validate_optimistic_challenge(
     require!(
         proposal.challenger == Pubkey::default()
             && challenger != proposal.proposer
-            && outcome != proposal.proposed_outcome
-            && (outcome == HybridMarket::OUTCOME_YES || outcome == HybridMarket::OUTCOME_NO)
-            && *challenge_hash != [0; 32],
+            && evidence.outcome != proposal.proposed_outcome
+            && (evidence.outcome == HybridMarket::OUTCOME_YES
+                || evidence.outcome == HybridMarket::OUTCOME_NO)
+            && valid_optimistic_evidence_uri(evidence.uri)
+            && *evidence.hash
+                == optimistic_evidence_hash(
+                    b"nortia-optimistic-challenge-v1",
+                    market_key,
+                    evidence.outcome,
+                    evidence.uri,
+                ),
         NortiaError::InvalidAssertion
     );
     Ok(())
+}
+
+fn valid_optimistic_evidence_uri(value: &str) -> bool {
+    let prefix_length = if value.starts_with("https://") {
+        8
+    } else if value.starts_with("ipfs://") || value.starts_with("ar://") {
+        value.find("://").map_or(0, |index| index + 3)
+    } else {
+        0
+    };
+    prefix_length > 0
+        && value.len() <= MAX_OPTIMISTIC_EVIDENCE_URI_BYTES
+        && value.trim() == value
+        && value.len() > prefix_length
+        && value.is_ascii()
+        && !value.chars().any(char::is_whitespace)
+        && !value.chars().any(char::is_control)
+}
+
+fn optimistic_evidence_hash(
+    domain: &[u8],
+    market: Pubkey,
+    outcome: u8,
+    evidence_uri: &str,
+) -> [u8; 32] {
+    hashv(&[domain, market.as_ref(), &[outcome], evidence_uri.as_bytes()]).to_bytes()
 }
 
 fn optimistic_finalize_outcome(
@@ -3451,12 +3514,14 @@ mod tests {
             proposer_token: Pubkey::new_unique(),
             proposed_outcome: HybridMarket::OUTCOME_YES,
             assertion_hash: [3; 32],
+            assertion_evidence_uri: "https://example.com/assertion".to_string(),
             proposed_at: 2_010,
             challenge_deadline: 2_110,
             challenger: Pubkey::default(),
             challenger_token: Pubkey::default(),
             challenged_outcome: HybridMarket::OUTCOME_UNSET,
             challenge_hash: [0; 32],
+            challenge_evidence_uri: String::new(),
             challenged_at: 0,
             bond_amount: MIN_OPTIMISTIC_BOND,
             proposer_payout: 0,
@@ -3844,6 +3909,35 @@ mod tests {
     }
 
     #[test]
+    fn optimistic_evidence_matches_the_client_hash_vector() {
+        let hash = optimistic_evidence_hash(
+            b"nortia-optimistic-assertion-v1",
+            Pubkey::default(),
+            HybridMarket::OUTCOME_YES,
+            "https://example.com/final-result",
+        );
+        assert_eq!(
+            hash,
+            [
+                0x07, 0xf9, 0xae, 0xd9, 0x2b, 0x70, 0x67, 0x66, 0x80, 0xb5, 0x3e, 0x40, 0x26, 0x34,
+                0x15, 0xa1, 0x9b, 0xdc, 0x2f, 0x64, 0x04, 0xb3, 0xf1, 0xb3, 0x87, 0x8e, 0x0c, 0xe9,
+                0x1f, 0x2e, 0x41, 0xef,
+            ]
+        );
+        assert!(!valid_optimistic_evidence_uri(
+            " https://example.com/result"
+        ));
+        assert!(!valid_optimistic_evidence_uri("javascript:alert(1)"));
+        assert!(!valid_optimistic_evidence_uri(
+            "https://example.com/résultat"
+        ));
+        assert!(!valid_optimistic_evidence_uri(&format!(
+            "https://example.com/{}",
+            "x".repeat(MAX_OPTIMISTIC_EVIDENCE_URI_BYTES)
+        )));
+    }
+
+    #[test]
     fn optimistic_lifecycle_enforces_windows_and_opposing_assertions() {
         let mut market = resolution_market();
         market.category = MarketCategory::Politics;
@@ -3857,61 +3951,113 @@ mod tests {
         oracle.observation_window_secs = 3_000;
         oracle.challenge_period_secs = 3_600;
         oracle.bond_amount = MIN_OPTIMISTIC_BOND;
+        let market_key = Pubkey::new_unique();
+        let assertion_uri = "https://example.com/final-result";
+        let assertion_hash = optimistic_evidence_hash(
+            b"nortia-optimistic-assertion-v1",
+            market_key,
+            HybridMarket::OUTCOME_YES,
+            assertion_uri,
+        );
 
         assert_eq!(
             validate_optimistic_proposal(
+                market_key,
                 &market,
                 &oracle,
-                HybridMarket::OUTCOME_YES,
-                &[4; 32],
+                OptimisticEvidence {
+                    outcome: HybridMarket::OUTCOME_YES,
+                    hash: &assertion_hash,
+                    uri: assertion_uri,
+                },
                 2_010,
             )
             .unwrap(),
             5_610
         );
+        let invalid_hash = optimistic_evidence_hash(
+            b"nortia-optimistic-assertion-v1",
+            market_key,
+            HybridMarket::OUTCOME_INVALID,
+            assertion_uri,
+        );
         assert!(validate_optimistic_proposal(
+            market_key,
             &market,
             &oracle,
-            HybridMarket::OUTCOME_INVALID,
-            &[4; 32],
+            OptimisticEvidence {
+                outcome: HybridMarket::OUTCOME_INVALID,
+                hash: &invalid_hash,
+                uri: assertion_uri,
+            },
             2_010,
         )
         .is_err());
         assert!(validate_optimistic_proposal(
+            market_key,
             &market,
             &oracle,
-            HybridMarket::OUTCOME_YES,
-            &[4; 32],
+            OptimisticEvidence {
+                outcome: HybridMarket::OUTCOME_YES,
+                hash: &assertion_hash,
+                uri: assertion_uri,
+            },
             2_401,
         )
         .is_err());
 
         let mut proposal = optimistic_proposal();
+        proposal.market = market_key;
         market.phase = HybridPhase::Resolving;
+        let challenge_uri = "ipfs://bafy-opposing-evidence";
+        let challenge_hash = optimistic_evidence_hash(
+            b"nortia-optimistic-challenge-v1",
+            market_key,
+            HybridMarket::OUTCOME_NO,
+            challenge_uri,
+        );
         assert!(validate_optimistic_challenge(
+            market_key,
             &market,
             &proposal,
             Pubkey::new_unique(),
-            HybridMarket::OUTCOME_NO,
-            &[5; 32],
+            OptimisticEvidence {
+                outcome: HybridMarket::OUTCOME_NO,
+                hash: &challenge_hash,
+                uri: challenge_uri,
+            },
             2_110,
         )
         .is_ok());
+        let same_outcome_hash = optimistic_evidence_hash(
+            b"nortia-optimistic-challenge-v1",
+            market_key,
+            HybridMarket::OUTCOME_YES,
+            challenge_uri,
+        );
         assert!(validate_optimistic_challenge(
+            market_key,
             &market,
             &proposal,
             Pubkey::new_unique(),
-            HybridMarket::OUTCOME_YES,
-            &[5; 32],
+            OptimisticEvidence {
+                outcome: HybridMarket::OUTCOME_YES,
+                hash: &same_outcome_hash,
+                uri: challenge_uri,
+            },
             2_110,
         )
         .is_err());
         assert!(validate_optimistic_challenge(
+            market_key,
             &market,
             &proposal,
             Pubkey::new_unique(),
-            HybridMarket::OUTCOME_NO,
-            &[5; 32],
+            OptimisticEvidence {
+                outcome: HybridMarket::OUTCOME_NO,
+                hash: &challenge_hash,
+                uri: challenge_uri,
+            },
             2_111,
         )
         .is_err());
@@ -3924,7 +4070,8 @@ mod tests {
 
         proposal.challenger = Pubkey::new_unique();
         proposal.challenged_outcome = HybridMarket::OUTCOME_NO;
-        proposal.challenge_hash = [5; 32];
+        proposal.challenge_hash = challenge_hash;
+        proposal.challenge_evidence_uri = challenge_uri.to_string();
         market.phase = HybridPhase::Disputed;
         assert!(validate_optimistic_arbitration(
             &market,
@@ -4092,10 +4239,11 @@ mod tests {
         empty_receipt().try_serialize(&mut receipt_data).unwrap();
         assert!(receipt_data.len() <= ResolutionReceipt::SPACE);
 
+        let mut proposal = optimistic_proposal();
+        proposal.assertion_evidence_uri = "a".repeat(MAX_OPTIMISTIC_EVIDENCE_URI_BYTES);
+        proposal.challenge_evidence_uri = "c".repeat(MAX_OPTIMISTIC_EVIDENCE_URI_BYTES);
         let mut proposal_data = Vec::new();
-        optimistic_proposal()
-            .try_serialize(&mut proposal_data)
-            .unwrap();
+        proposal.try_serialize(&mut proposal_data).unwrap();
         assert!(proposal_data.len() <= OptimisticProposal::SPACE);
 
         let metadata = HybridMarketMetadata {

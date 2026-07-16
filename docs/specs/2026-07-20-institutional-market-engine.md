@@ -415,7 +415,7 @@ Use for:
 
 Flow:
 
-1. Any proposer posts the outcome and a configured USDC bond after the resolve-not-before time.
+1. Any proposer posts the outcome, a canonical public evidence URI, and a configured USDC bond after the resolve-not-before time.
 2. The assertion enters a fixed challenge window.
 3. A challenger posts an equal bond and the opposite binary result.
 4. Unchallenged assertions finalize after liveness.
@@ -431,6 +431,7 @@ Security requirements:
 - Rules identify primary sources, cutoff, cancellation semantics, and invalid-market conditions.
 - Proposer and challenger cannot be the market creator's privileged admin path.
 - Proposal bonds are held in a separate market-authorized SPL Token vault and never mixed with trader collateral.
+- Proposal and challenge accounts store HTTPS, IPFS, or Arweave evidence URIs. The program recomputes a domain-separated SHA-256 commitment over the role, market, outcome, and URI so an evidence item cannot be relabeled or replayed.
 - Bond claims are replay-safe and may be withdrawn only by the entitled wallet to a USDC token account that wallet owns.
 - A proposal cannot be opened unless its complete challenge window ends before the market's hard deadline.
 - Sports and crypto templates cannot select this resolver in the current deployment policy.

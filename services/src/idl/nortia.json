@@ -4407,6 +4407,10 @@
                 32
               ]
             }
+          },
+          {
+            "name": "evidence_uri",
+            "type": "string"
           }
         ]
       }
@@ -5856,6 +5860,10 @@
             }
           },
           {
+            "name": "assertion_evidence_uri",
+            "type": "string"
+          },
+          {
             "name": "proposed_at",
             "type": "i64"
           },
@@ -5883,6 +5891,10 @@
                 32
               ]
             }
+          },
+          {
+            "name": "challenge_evidence_uri",
+            "type": "string"
           },
           {
             "name": "challenged_at",
@@ -5967,6 +5979,10 @@
             }
           },
           {
+            "name": "evidence_uri",
+            "type": "string"
+          },
+          {
             "name": "bond_amount",
             "type": "u64"
           }
@@ -6047,6 +6063,10 @@
                 32
               ]
             }
+          },
+          {
+            "name": "evidence_uri",
+            "type": "string"
           },
           {
             "name": "bond_amount",
@@ -6626,6 +6646,10 @@
                 32
               ]
             }
+          },
+          {
+            "name": "evidence_uri",
+            "type": "string"
           }
         ]
       }

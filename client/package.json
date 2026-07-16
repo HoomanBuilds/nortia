@@ -8,6 +8,7 @@
     "./commitments": "./src/commitments.ts",
     "./economics": "./src/economics.ts",
     "./lmsr": "./src/lmsr.ts",
+    "./optimistic": "./src/optimistic.ts",
     "./oracles": "./src/oracles.ts",
     "./portfolio": "./src/portfolio.ts",
     "./v2": "./src/v2.ts"

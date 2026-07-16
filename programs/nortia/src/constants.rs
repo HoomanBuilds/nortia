@@ -34,6 +34,7 @@ pub const MAX_QUESTION_BYTES: usize = 160;
 pub const MAX_RULES_BYTES: usize = 420;
 pub const MAX_OUTCOME_LABEL_BYTES: usize = 24;
 pub const MAX_REFERENCE_URL_BYTES: usize = 160;
+pub const MAX_OPTIMISTIC_EVIDENCE_URI_BYTES: usize = 160;
 pub const FINAL_PERIOD: i32 = 100;
 pub const MILLIS_PER_DAY: i64 = 86_400_000;
 pub const TXLINE_VALIDATE_STAT_V2_DISCRIMINATOR: [u8; 8] = [208, 215, 194, 214, 241, 71, 246, 178];
