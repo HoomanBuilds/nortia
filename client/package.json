@@ -9,6 +9,7 @@
     "./economics": "./src/economics.ts",
     "./lmsr": "./src/lmsr.ts",
     "./oracles": "./src/oracles.ts",
+    "./portfolio": "./src/portfolio.ts",
     "./v2": "./src/v2.ts"
   },
   "scripts": {

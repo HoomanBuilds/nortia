@@ -10,8 +10,10 @@ import {
   getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
 import { PublicKey, SystemProgram } from "@solana/web3.js";
+import { formatUsdc } from "nortia-client/economics";
 import { AlertTriangle, ArrowUpRight, CircleDollarSign, Clock3, EyeOff, ReceiptText, Wallet } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { HybridPortfolio, type HybridPortfolioSummary } from "@/components/hybrid-portfolio";
 import { RecoveryPanel } from "@/components/recovery-panel";
 import { commitmentPath, fieldBigInt, fieldHex } from "@/lib/crypto";
 import { loadPrivatePositions, savePrivatePosition, type PrivatePosition } from "@/lib/positions";
@@ -38,6 +40,7 @@ export function PortfolioDashboard() {
   const [positions, setPositions] = useState<PrivatePosition[]>([]);
   const [pending, setPending] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [hybridSummary, setHybridSummary] = useState<HybridPortfolioSummary>({ loading: false, active: 0, claimable: 0n });
 
   const replacePosition = useCallback((position: PrivatePosition) => {
     savePrivatePosition(position);
@@ -67,8 +70,6 @@ export function PortfolioDashboard() {
     });
   }, [program]);
 
-  const claimable = useMemo(() => positions.filter((position) => position.status === "claimable").length, [positions]);
-  const open = useMemo(() => positions.filter((position) => position.status === "open" || position.status === "prepared").length, [positions]);
   const onRecovered = (position: PrivatePosition) => setPositions((current) => [position, ...current.filter((item) => item.commitment !== position.commitment)]);
 
   const refund = async (position: PrivatePosition) => {
@@ -175,8 +176,8 @@ export function PortfolioDashboard() {
     <>
       <div className="portfolio-stats">
         <div><span>Connected balance</span><strong>{connected && balances ? balances.usdc.toFixed(2) : "--"} <small>USDC</small></strong></div>
-        <div><span>Open positions</span><strong>{open}</strong></div>
-        <div><span>Claimable</span><strong>{claimable} <small>tickets</small></strong></div>
+        <div><span>Active positions</span><strong>{hybridSummary.loading ? "--" : hybridSummary.active}</strong></div>
+        <div><span>Claimable</span><strong>{hybridSummary.loading ? "--" : formatUsdc(hybridSummary.claimable)} <small>USDC</small></strong></div>
         <div><span>Wallet</span><strong className="network-value"><i />{publicKey ? `${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}` : "Not connected"}</strong></div>
       </div>
       {!connected && (
@@ -186,7 +187,8 @@ export function PortfolioDashboard() {
           <button type="button" onClick={() => setVisible(true)}>Connect wallet</button>
         </section>
       )}
-      <div className="portfolio-grid"><RecoveryPanel onRecovered={onRecovered} /><aside className="portfolio-side"><div className="portfolio-info-card"><span><CircleDollarSign size={17} /></span><div><strong>Fee model</strong><p>A 1% success fee is split 90% to Nortia treasury and 10% to the resolver keeper. Every refund remains fee-free.</p></div></div><div className="portfolio-info-card"><span><ReceiptText size={17} /></span><div><strong>Redeem privately</strong><p>A winning commitment can be redeemed with a fresh address, without linking the payout to the order wallet.</p></div></div><div className="portfolio-info-card"><span><Clock3 size={17} /></span><div><strong>Permissionless fallback</strong><p>Any caller can open refunds after a missed deadline. A keeper is useful, but it is never the only recovery path.</p></div></div></aside></div>
+      <HybridPortfolio onSummary={setHybridSummary} />
+      <div className="portfolio-grid"><RecoveryPanel onRecovered={onRecovered} /><aside className="portfolio-side"><div className="portfolio-info-card"><span><CircleDollarSign size={17} /></span><div><strong>Fee model</strong><p>Each LMSR fill charges a 1% curve fee, split 70% to Nortia and 30% to market liquidity.</p></div></div><div className="portfolio-info-card"><span><ReceiptText size={17} /></span><div><strong>Redeem privately</strong><p>A winning commitment can be redeemed with a fresh address, without linking the payout to the order wallet.</p></div></div><div className="portfolio-info-card"><span><Clock3 size={17} /></span><div><strong>Permissionless fallback</strong><p>Any caller can open refunds after a missed deadline. A keeper is useful, but it is never the only recovery path.</p></div></div></aside></div>
       <section className="empty-positions">
         <div><span>Position</span><span>Market</span><span>Stake</span><span>Status</span></div>
         {positions.length === 0 ? <div className="empty-position-state"><EyeOff size={22} /><h3>No recovered positions</h3><p>Create or open a market, then save the private recovery record before signing.</p><Link href="/markets">Browse markets <ArrowUpRight size={14} /></Link></div> : <div className="position-list">{positions.map((position) => <article key={position.commitment}><strong>{position.side.toUpperCase()}</strong><span>{position.question}</span><b>{position.ticketUsdc.toFixed(2)} USDC</b><em>{position.status}{position.status === "claimable" && <button type="button" disabled={!connected || pending === position.commitment} onClick={() => void redeem(position)}>Claim</button>}{position.status === "refundable" && <button type="button" disabled={!connected || pending === position.commitment} onClick={() => void refund(position)}>Refund</button>}</em></article>)}</div>}
