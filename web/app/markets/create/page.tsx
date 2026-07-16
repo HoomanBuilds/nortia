@@ -10,7 +10,7 @@ export default function CreateMarketPage() {
           eyebrow={<><PlusCircle size={12} />Permissionless creation</>}
           title="CREATE A MARKET."
           accent="KEEP THE RULES FIXED."
-          description="Launch a private binary USDC pool against a connected resolver. Nortia's first production adapter turns TxLINE-covered sports fixtures into deterministic markets."
+          description="Launch a collateralized binary USDC market against a resolver the contract can verify. Use continuous LMSR pricing for general markets or the private TxLINE pool for the sports replay."
         />
         <CreateMarketForm />
       </div>

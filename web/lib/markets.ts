@@ -1,6 +1,25 @@
 export type MarketStatus = "live" | "upcoming" | "settled";
-export type TradingState = "open" | "locked" | "batched" | "resolved" | "refunding" | "closed";
-export type MarketCategory = "Sports" | "Crypto" | "Politics" | "Technology" | "Culture";
+export type TradingState = "open" | "locked" | "batched" | "resolving" | "disputed" | "resolved" | "refunding" | "closed";
+export type MarketCategory = "Sports" | "Crypto" | "Politics" | "Technology" | "Culture" | "Other";
+
+export type HybridMarketDetails = {
+  creator: string;
+  liquidityOwner: string;
+  treasuryOwner: string;
+  collateralMint: string;
+  oracleConfig: string;
+  resolverId: "txline-stat-v2" | "pyth-price-v2" | "switchboard-quote-v1" | "optimistic-v1" | "uma-wormhole-v1" | "chainlink-report-v1";
+  questionHash: string;
+  rulesHash: string;
+  liquidityParameter: string;
+  yesQuantity: string;
+  noQuantity: string;
+  maxTradeShares: string;
+  tradeFeeBps: number;
+  treasuryFeeShareBps: number;
+  resolutionDeadline: string;
+  outcome: "no" | "yes" | "invalid" | "unset";
+};
 
 export type Market = {
   id: string;
@@ -8,7 +27,7 @@ export type Market = {
   marketId?: string;
   fixtureId: number;
   category: MarketCategory;
-  resolver: "TxLINE";
+  resolver: string;
   competition: string;
   question: string;
   shortQuestion: string;
@@ -29,6 +48,7 @@ export type Market = {
   featured?: boolean;
   replay: boolean;
   points: number[];
+  hybrid?: HybridMarketDetails;
 };
 
 export type ReplayEvent = {
