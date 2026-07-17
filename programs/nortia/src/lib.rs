@@ -1412,6 +1412,12 @@ pub mod nortia {
             ctx.accounts.market.outstanding_liability >= amount,
             NortiaError::InsolventMarket
         );
+        let projected_vault = ctx
+            .accounts
+            .vault
+            .amount
+            .checked_sub(amount)
+            .ok_or_else(|| error!(NortiaError::InsufficientVaultBalance))?;
         ctx.accounts.position.settled = true;
         ctx.accounts.position.settled_amount = amount;
         ctx.accounts.market.outstanding_liability -= amount;
@@ -1421,6 +1427,7 @@ pub mod nortia {
             .redeemed_liability
             .checked_add(amount)
             .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
+        let closed = close_hybrid_market_if_drained(&mut ctx.accounts.market, projected_vault)?;
         if amount > 0 {
             transfer_from_hybrid_vault(
                 &ctx.accounts.market,
@@ -1438,6 +1445,12 @@ pub mod nortia {
             outcome: ctx.accounts.market.outcome,
             amount,
         });
+        if closed {
+            emit!(HybridMarketClosed {
+                market: ctx.accounts.market.key(),
+                closed_at: Clock::get()?.unix_timestamp,
+            });
+        }
         Ok(())
     }
 
@@ -1453,6 +1466,13 @@ pub mod nortia {
             .checked_sub(ctx.accounts.market.outstanding_liability)
             .ok_or_else(|| error!(NortiaError::InsolventMarket))?;
         require!(amount > 0, NortiaError::ZeroCommitment);
+        let projected_vault = ctx
+            .accounts
+            .vault
+            .amount
+            .checked_sub(amount)
+            .ok_or_else(|| error!(NortiaError::InsufficientVaultBalance))?;
+        let closed = close_hybrid_market_if_drained(&mut ctx.accounts.market, projected_vault)?;
         transfer_from_hybrid_vault(
             &ctx.accounts.market,
             &ctx.accounts.vault,
@@ -1467,6 +1487,12 @@ pub mod nortia {
             amount,
             outstanding_liability: ctx.accounts.market.outstanding_liability,
         });
+        if closed {
+            emit!(HybridMarketClosed {
+                market: ctx.accounts.market.key(),
+                closed_at: Clock::get()?.unix_timestamp,
+            });
+        }
         Ok(())
     }
 }
@@ -3146,6 +3172,19 @@ fn hybrid_position_payout(position: &Position, outcome: u8) -> Result<u64> {
     }
 }
 
+fn close_hybrid_market_if_drained(market: &mut HybridMarket, projected_vault: u64) -> Result<bool> {
+    require!(
+        market.phase == HybridPhase::Resolved && projected_vault >= market.outstanding_liability,
+        NortiaError::InsolventMarket
+    );
+    if market.outstanding_liability == 0 && projected_vault == 0 {
+        market.phase = HybridPhase::Closed;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
 fn transfer_to_vault<'info>(
     owner: &Signer<'info>,
     source: &Account<'info, TokenAccount>,
@@ -3670,6 +3709,20 @@ mod tests {
             4_000_000
         );
         assert!(hybrid_position_payout(&position, HybridMarket::OUTCOME_UNSET).is_err());
+    }
+
+    #[test]
+    fn hybrid_market_closes_only_after_liability_and_vault_are_drained() {
+        let mut market = resolution_market();
+        market.phase = HybridPhase::Resolved;
+        market.outstanding_liability = 5_000_000;
+        assert!(!close_hybrid_market_if_drained(&mut market, 5_000_000).unwrap());
+        assert_eq!(market.phase, HybridPhase::Resolved);
+
+        market.outstanding_liability = 0;
+        assert!(!close_hybrid_market_if_drained(&mut market, 1).unwrap());
+        assert!(close_hybrid_market_if_drained(&mut market, 0).unwrap());
+        assert_eq!(market.phase, HybridPhase::Closed);
     }
 
     #[test]

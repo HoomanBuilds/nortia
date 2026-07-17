@@ -724,6 +724,12 @@ pub struct HybridLiquidityWithdrawn {
 }
 
 #[event]
+pub struct HybridMarketClosed {
+    pub market: Pubkey,
+    pub closed_at: i64,
+}
+
+#[event]
 pub struct OptimisticResolutionProposed {
     pub market: Pubkey,
     pub proposal: Pubkey,

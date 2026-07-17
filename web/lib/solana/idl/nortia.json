@@ -3823,6 +3823,19 @@
       ]
     },
     {
+      "name": "HybridMarketClosed",
+      "discriminator": [
+        83,
+        220,
+        38,
+        75,
+        234,
+        190,
+        108,
+        168
+      ]
+    },
+    {
       "name": "HybridMarketCreated",
       "discriminator": [
         174,
@@ -4756,6 +4769,22 @@
                 32
               ]
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "HybridMarketClosed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "closed_at",
+            "type": "i64"
           }
         ]
       }

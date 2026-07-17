@@ -3829,6 +3829,19 @@ export type Nortia = {
       ]
     },
     {
+      "name": "hybridMarketClosed",
+      "discriminator": [
+        83,
+        220,
+        38,
+        75,
+        234,
+        190,
+        108,
+        168
+      ]
+    },
+    {
       "name": "hybridMarketCreated",
       "discriminator": [
         174,
@@ -4762,6 +4775,22 @@ export type Nortia = {
                 32
               ]
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "hybridMarketClosed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "closedAt",
+            "type": "i64"
           }
         ]
       }
