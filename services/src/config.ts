@@ -9,6 +9,12 @@ function integer(name: string, fallback: number) {
   return value;
 }
 
+function basisPoints(name: string, fallback: number) {
+  const value = integer(name, fallback);
+  if (value >= 10_000) throw new Error(`${name} must be below 10000`);
+  return value;
+}
+
 function memberIndex(): 1 | 2 | 3 {
   const value = integer("COMMITTEE_MEMBER_INDEX", 1);
   if (value !== 1 && value !== 2 && value !== 3) throw new Error("COMMITTEE_MEMBER_INDEX must be 1, 2, or 3");
@@ -42,6 +48,7 @@ export const config = {
   pythApiKey: oracleAccess.pythApiKey,
   pythMinimumRequestIntervalMs: oracleAccess.pythMinimumRequestIntervalMs,
   switchboardCrossbarOrigin: oracleAccess.switchboardOrigin,
+  treasuryFeeShareBps: basisPoints("NORTIA_TREASURY_FEE_SHARE_BPS", 7_000),
   pythComputeUnitPriceMicroLamports: integer("PYTH_COMPUTE_UNIT_PRICE_MICROLAMPORTS", 50_000),
   keeperDryRun: process.env.KEEPER_DRY_RUN !== "false",
   keeperIntervalMs: integer("KEEPER_INTERVAL_MS", 15_000),
