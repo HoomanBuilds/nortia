@@ -31,7 +31,7 @@
     "next": "^16.2.10",
     "nortia-client": "file:../client",
     "poseidon-lite": "^0.3.0",
-    "postcss": "^8.5.6",
+    "postcss": "^8.5.10",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "tailwind-merge": "^3.3.1",
@@ -43,5 +43,13 @@
     "@types/react-dom": "^19.2.3",
     "tsx": "4.23.1",
     "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "jayson": {
+      "uuid": "11.1.1"
+    },
+    "next": {
+      "postcss": "8.5.10"
+    }
   }
 }
