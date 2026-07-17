@@ -380,6 +380,8 @@ Push-feed accounts remain useful for low-latency charts and indicative prices. N
 
 Status: implemented in V2 with normalized receipts and invalid-market timeout handling.
 
+Devnet provider policy: `ORACLE_PROVIDER_PROFILE=free` uses the public legacy-compatible Hermes endpoint without forwarding credentials and paces calls below its public rate limit. `managed` retains API-key and custom-origin support behind an explicit switch. Endpoint changes do not relax onchain receiver, feed, timestamp, confidence, or full-verification checks.
+
 ### Resolver tier A or B: Switchboard canonical quote
 
 Use for:

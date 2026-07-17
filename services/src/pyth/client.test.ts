@@ -95,3 +95,21 @@ test("invalid timestamp and staleness bounds fail before a Hermes request", asyn
   await assert.rejects(() => client.settlementUpdate(FEED, 1_000, 0), /staleness/);
   assert.equal(calls.length, 0);
 });
+
+test("free-profile pacing serializes public Hermes requests", async () => {
+  const { mock, calls } = api(response());
+  let now = 100;
+  const waits: number[] = [];
+  const client = new PythClient(mock, {
+    minimumRequestIntervalMs: 1_100,
+    now: () => now,
+    wait: async (milliseconds) => {
+      waits.push(milliseconds);
+      now += milliseconds;
+    },
+  });
+  await client.latestUpdate(FEED);
+  await client.latestUpdate(FEED);
+  assert.equal(calls.length, 2);
+  assert.deepEqual(waits, [1_100]);
+});

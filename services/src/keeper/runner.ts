@@ -37,10 +37,22 @@ async function main() {
   const keypair = await readKeypair(config.keypairPath);
   const connection = new Connection(config.rpcUrl, "confirmed");
   const program = createProgram(connection, keypair);
-  const pyth = createPythClient(config.pythHermesOrigin, config.pythApiKey);
+  const pyth = createPythClient(
+    config.pythHermesOrigin,
+    config.pythApiKey,
+    config.pythMinimumRequestIntervalMs,
+  );
   const txline = config.txlineJwt && config.txlineApiToken
     ? new TxlineClient({ origin: config.txlineOrigin, jwt: config.txlineJwt, apiToken: config.txlineApiToken })
     : null;
+  log({
+    event: "keeper-started",
+    oracleProviderProfile: config.oracleProviderProfile,
+    pythOrigin: config.pythHermesOrigin,
+    pythAuthenticated: config.pythApiKey !== null,
+    switchboardOrigin: config.switchboardCrossbarOrigin,
+    dryRun: config.keeperDryRun,
+  });
 
   for (;;) {
     const now = Math.floor(Date.now() / 1_000);

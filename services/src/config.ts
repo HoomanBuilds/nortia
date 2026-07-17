@@ -1,4 +1,5 @@
 import path from "node:path";
+import { resolveOracleAccess } from "./oracle-access.js";
 
 function integer(name: string, fallback: number) {
   const raw = process.env[name];
@@ -18,6 +19,13 @@ function list(name: string) {
   return (process.env[name] ?? "").split(",").map((value) => value.trim()).filter(Boolean);
 }
 
+const oracleAccess = resolveOracleAccess({
+  profile: process.env.ORACLE_PROVIDER_PROFILE,
+  pythOrigin: process.env.PYTH_HERMES_ORIGIN,
+  pythApiKey: process.env.PYTH_API_KEY,
+  switchboardOrigin: process.env.SWITCHBOARD_CROSSBAR_ORIGIN,
+});
+
 export const config = {
   rpcUrl: process.env.SOLANA_RPC_URL ?? "https://api.devnet.solana.com",
   keypairPath: process.env.NORTIA_KEYPAIR_PATH ? path.resolve(process.env.NORTIA_KEYPAIR_PATH) : null,
@@ -29,8 +37,11 @@ export const config = {
   txlineOrigin: (process.env.TXLINE_API_ORIGIN ?? "https://txline-dev.txodds.com").replace(/\/$/, ""),
   txlineJwt: process.env.TXLINE_JWT ?? null,
   txlineApiToken: process.env.TXLINE_API_TOKEN ?? null,
-  pythHermesOrigin: (process.env.PYTH_HERMES_ORIGIN ?? "https://pyth.dourolabs.app/hermes").replace(/\/$/, ""),
-  pythApiKey: process.env.PYTH_API_KEY ?? null,
+  oracleProviderProfile: oracleAccess.profile,
+  pythHermesOrigin: oracleAccess.pythOrigin,
+  pythApiKey: oracleAccess.pythApiKey,
+  pythMinimumRequestIntervalMs: oracleAccess.pythMinimumRequestIntervalMs,
+  switchboardCrossbarOrigin: oracleAccess.switchboardOrigin,
   pythComputeUnitPriceMicroLamports: integer("PYTH_COMPUTE_UNIT_PRICE_MICROLAMPORTS", 50_000),
   keeperDryRun: process.env.KEEPER_DRY_RUN !== "false",
   keeperIntervalMs: integer("KEEPER_INTERVAL_MS", 15_000),

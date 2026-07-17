@@ -1,4 +1,5 @@
 import { HermesClient, type PriceUpdate } from "@pythnetwork/hermes-client";
+import { setTimeout as delay } from "node:timers/promises";
 import { normalizeFeedId } from "nortia-client/v2";
 
 export type HermesPriceApi = Pick<
@@ -53,9 +54,28 @@ function verifiedUpdate(response: PriceUpdate, feedId: string): VerifiedHermesUp
 
 export class PythClient {
   readonly #api: HermesPriceApi;
+  readonly #minimumRequestIntervalMs: number;
+  readonly #now: () => number;
+  readonly #wait: (milliseconds: number) => Promise<unknown>;
+  #nextRequestAt = 0;
 
-  constructor(api: HermesPriceApi) {
+  constructor(api: HermesPriceApi, options: {
+    minimumRequestIntervalMs?: number;
+    now?: () => number;
+    wait?: (milliseconds: number) => Promise<unknown>;
+  } = {}) {
     this.#api = api;
+    this.#minimumRequestIntervalMs = options.minimumRequestIntervalMs ?? 0;
+    this.#now = options.now ?? Date.now;
+    this.#wait = options.wait ?? delay;
+  }
+
+  async #paceRequest(): Promise<void> {
+    if (this.#minimumRequestIntervalMs === 0) return;
+    const now = this.#now();
+    const scheduledAt = Math.max(now, this.#nextRequestAt);
+    this.#nextRequestAt = scheduledAt + this.#minimumRequestIntervalMs;
+    if (scheduledAt > now) await this.#wait(scheduledAt - now);
   }
 
   async settlementUpdate(
@@ -66,6 +86,7 @@ export class PythClient {
     const feedId = normalizeFeedId(requestedFeedId);
     positiveSafeInteger(targetTimestamp, "target timestamp");
     positiveSafeInteger(maxStalenessSeconds, "maximum staleness");
+    await this.#paceRequest();
     const response = await this.#api.getPriceUpdatesAtTimestamp(
       targetTimestamp,
       [`0x${feedId}`],
@@ -87,6 +108,7 @@ export class PythClient {
 
   async latestUpdate(requestedFeedId: string): Promise<VerifiedHermesUpdate> {
     const feedId = normalizeFeedId(requestedFeedId);
+    await this.#paceRequest();
     const response = await this.#api.getLatestPriceUpdates([`0x${feedId}`], {
       encoding: "base64",
       parsed: true,
@@ -95,7 +117,11 @@ export class PythClient {
   }
 }
 
-export function createPythClient(endpoint: string, apiKey: string | null): PythClient {
+export function createPythClient(
+  endpoint: string,
+  apiKey: string | null,
+  minimumRequestIntervalMs = 0,
+): PythClient {
   const headers = apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined;
-  return new PythClient(new HermesClient(endpoint, { headers }));
+  return new PythClient(new HermesClient(endpoint, { headers }), { minimumRequestIntervalMs });
 }
