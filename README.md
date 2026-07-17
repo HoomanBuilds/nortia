@@ -250,7 +250,7 @@ Current verified results:
 
 - 61 Rust tests pass.
 - 38 client tests pass.
-- 30 service tests pass.
+- 34 service tests pass.
 - Clippy passes with warnings denied.
 - Anchor produces a valid SBF artifact.
 - Next.js typecheck and optimized production build pass.
@@ -276,6 +276,14 @@ scripts/deploy-devnet.sh
 ```
 
 After a successful upgrade, the same command initializes the additive V2 engine with a 70/30 fee split. Existing V1 PDAs and account layouts remain unchanged.
+
+Create the canonical timestamped Pyth market after funding the creator with Circle devnet USDC:
+
+```bash
+NORTIA_KEYPAIR_PATH=/path/to/authority.json \
+NORTIA_V2_OBSERVATION_AT=2026-07-21T12:00:00Z \
+npm --prefix services run deploy:v2-pyth-market
+```
 
 Create or verify the canonical private replay:
 
