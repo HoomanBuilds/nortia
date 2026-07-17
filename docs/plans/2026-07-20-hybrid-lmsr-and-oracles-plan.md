@@ -6,6 +6,8 @@
 
 ## Phase 1: deterministic market math
 
+Status: complete.
+
 - Add a pinned integer-only fixed-point math dependency for the Rust program.
 - Implement stable binary LMSR cost, marginal probability, exact-share buy, exact-share sell, and probability-sensitive fee calculations.
 - Port the same quote contract to the TypeScript client with integer arithmetic.
@@ -22,6 +24,8 @@ Exit gate:
 Commit: `feat: add deterministic LMSR pricing`
 
 ## Phase 2: additive V2 protocol state
+
+Status: complete.
 
 - Add separate `EngineConfig`, `HybridMarket`, `OracleConfig`, `Position`, and `ResolutionReceipt` accounts.
 - Add V2 PDA namespaces so no V1 account address changes.
@@ -68,10 +72,12 @@ Commits:
 
 ## Phase 4: service and client integration
 
+Status: complete for TxLINE, Pyth, optimistic resolution, canonical Switchboard consumption, indexing, and free or managed provider profiles. Switchboard feed provisioning remains an external curated operation.
+
 - Extend the client with V2 PDA derivation, account decoding, exact quotes, transaction builders, and receipt decoding.
 - Add oracle registry and market-template configuration to services.
 - Add Pyth Hermes update retrieval and price-account transaction composition.
-- Add Switchboard managed update retrieval for configured devnet feeds.
+- Consume only a provisioned canonical Switchboard quote and retain the public or managed Crossbar origin switch for the external official update bundle.
 - Add permissionless keeper jobs for lock, evidence submission, optimistic finalization, and timeout refunds.
 - Extend the indexer with trades, positions, fees, liquidity, price points, oracle proposals, disputes, and receipts.
 
@@ -85,6 +91,8 @@ Exit gate:
 Commit: `feat: integrate LMSR market services`
 
 ## Phase 5: institutional web experience
+
+Status: complete for the deployable V2 feature set.
 
 - Replace fixed-ticket controls on V2 markets with size input and buy or sell mode.
 - Show executable current and post-trade probability, average fill, price impact, fee, total, price guard, and quote slot.
@@ -105,6 +113,8 @@ Commit: `feat: build institutional market trading UI`
 
 ## Phase 6: private frequent batches
 
+Status: deferred from the V2 devnet upgrade. The existing V1 private fixed-ticket pool remains deployed and isolated from public LMSR positions.
+
 - Extend private order circuits with side, quantity, limit price, batch ID, nonce, and refund owner.
 - Escrow maximum collateral with committed orders.
 - Implement deterministic complementary crossing and uniform clearing.
@@ -123,6 +133,8 @@ Exit gate:
 Commit: `feat: add private LMSR batch execution`
 
 ## Phase 7: deploy and verify
+
+Status: in progress. Local release gates pass; the devnet upgrade is waiting on sufficient transient faucet SOL.
 
 - Run formatting, Clippy correctness gates, Rust tests, TypeScript tests, service tests, web typecheck, production build, Anchor build, and local validator lifecycle.
 - Check dependency advisories and program binary size.
