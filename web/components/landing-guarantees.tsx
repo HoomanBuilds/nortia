@@ -8,10 +8,10 @@ import { HighlightText } from "@/components/highlight-text";
 gsap.registerPlugin(ScrollTrigger);
 
 const guarantees = [
-  { number: "01", lead: "VERIFY ", highlight: "THE RESULT", description: "TxLINE signatures and Merkle proofs make settlement a checkable instruction, not an operator promise.", align: "left" },
-  { number: "02", lead: "HIDE ", highlight: "THE POSITION", description: "Noir commitments keep each user's side private while a threshold committee produces only the pool aggregate.", align: "right" },
-  { number: "03", lead: "CHARGE ON ", highlight: "SUCCESS", description: "The 1% protocol fee is taken from the gross pool only after a valid outcome settles on-chain.", align: "left" },
-  { number: "04", lead: "REFUND ", highlight: "WITHOUT FRICTION", description: "One-sided, cancelled, or unresolved pools return the original ticket amount with no protocol fee.", align: "right" },
+  { number: "01", lead: "VERIFY ", highlight: "THE RESULT", description: "Each category uses a resolver with pinned source programs, identifiers, timing bounds, and evidence receipts.", align: "left" },
+  { number: "02", lead: "PRICE ", highlight: "DETERMINISTICALLY", description: "Integer-only LMSR quotes enforce exact shares, deadline and slippage guards, conservative rounding, and bounded loss.", align: "right" },
+  { number: "03", lead: "LOCK ", highlight: "THE RULES", description: "Question, rules, labels, fee split, liquidity, resolver, and observation policy cannot change after creation.", align: "left" },
+  { number: "04", lead: "RECOVER ", highlight: "PERMISSIONLESSLY", description: "Anyone can lock an expired market, submit valid evidence, finalize an unchallenged result, or trigger the invalid fallback after timeout.", align: "right" },
 ];
 
 export function LandingGuarantees() {

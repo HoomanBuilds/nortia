@@ -34,7 +34,7 @@ export function LandingHero() {
         <span className="block origin-left -rotate-90 whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground">NORTIA / SOLANA</span>
       </div>
       <div className="absolute right-6 top-6 z-20 flex items-center gap-3 md:right-12 md:top-10">
-        <span className="hidden font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground sm:block"><i className="landing-live-dot" />TxLINE replay ready</span>
+        <span className="hidden font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground sm:block"><i className="landing-live-dot" />Devnet oracles ready</span>
         <Link href="/markets" className="landing-top-cta">Open markets <BitmapChevron /></Link>
       </div>
       <div ref={contentRef} className="w-full flex-1">
@@ -45,10 +45,10 @@ export function LandingHero() {
           </div>
         </SplitFlapAudioProvider>
         <h2 className="mt-4 font-[var(--font-bebas)] text-[clamp(1rem,3vw,2.25rem)] tracking-[0.05em] text-muted-foreground/70">
-          PRIVATE MARKETS / VERIFIED RESULTS
+          PREDICTION MARKETS / VERIFIED SETTLEMENT
         </h2>
         <p className="mt-12 max-w-lg font-mono text-sm leading-relaxed text-muted-foreground">
-          Predict real-world outcomes with USDC without publishing your position. Resolver adapters make settlement verifiable, starting with cryptographically proven TxLINE sports data on Solana.
+          Trade real-world outcomes through a collateralized LMSR. TxLINE, Pyth, Switchboard, and bonded evidence routes turn sports, prices, and long-tail facts into inspectable Solana settlement.
         </p>
         <div className="mt-14 flex flex-wrap items-center gap-7">
           <Link href="/markets" className="group inline-flex items-center gap-3 border border-foreground/20 px-6 py-3 font-mono text-xs uppercase tracking-widest text-foreground transition-all duration-200 hover:border-accent hover:text-accent">
@@ -59,10 +59,10 @@ export function LandingHero() {
         </div>
       </div>
       <div className="absolute bottom-8 right-8 md:bottom-12 md:right-12">
-        <div className="border border-border px-4 py-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">TXLINE 01 / DEVNET BUILD</div>
+        <div className="border border-border px-4 py-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">NORTIA / DEVNET BUILD</div>
       </div>
       <div className="hero-readout absolute bottom-8 left-6 hidden gap-8 md:left-28 md:flex">
-        <span><b>1.00</b> USDC ticket</span><span><b>1%</b> settled pool fee</span><span><b>2 / 3</b> committee threshold</span>
+        <span><b>USDC</b> collateral</span><span><b>LMSR</b> live pricing</span><span><b>4</b> resolver paths</span>
       </div>
     </section>
   );

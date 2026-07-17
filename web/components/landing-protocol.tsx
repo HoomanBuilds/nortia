@@ -9,12 +9,12 @@ import { cn } from "@/lib/utils";
 gsap.registerPlugin(ScrollTrigger);
 
 const layers = [
-  { title: "General Markets", medium: "Prediction interface", description: "One private binary market core for sports, prices, governance, culture, and every future verified resolver.", span: "col-span-2 row-span-2", metric: "BINARY / USDC" },
-  { title: "TxLINE Oracle", medium: "Signed data", description: "Scores and match events resolve through a verifiable Solana CPI.", span: "col-span-1 row-span-1", metric: "SSE + MERKLE" },
-  { title: "Private Orders", medium: "Noir proofs", description: "Commit to a valid side and fixed ticket without publishing the individual choice.", span: "col-span-1 row-span-2", metric: "ZERO LEAK" },
-  { title: "USDC Vault", medium: "Solana escrow", description: "Program-owned token accounts hold every pool until settlement or refund.", span: "col-span-1 row-span-1", metric: "6 DECIMALS" },
-  { title: "Settlement Engine", medium: "Permissionless CPI", description: "A keeper validates the final score, earns a bounded share of the success fee, and opens redemption in one deterministic path.", span: "col-span-2 row-span-1", metric: "1% ON SUCCESS" },
-  { title: "Public Receipt", medium: "Proof surface", description: "Every resolution exposes its source sequence, pool math, fee, and payout rate.", span: "col-span-1 row-span-1", metric: "AUDITABLE" },
+  { title: "Market Engine", medium: "Continuous prediction", description: "One collateralized binary LMSR prices sports, crypto, politics, technology, culture, and future verified categories.", span: "col-span-2 row-span-2", metric: "LMSR / USDC" },
+  { title: "TxLINE Sports", medium: "Signed match data", description: "World Cup scores and match events resolve through a verifiable Solana CPI.", span: "col-span-1 row-span-1", metric: "SSE + MERKLE" },
+  { title: "Pyth Prices", medium: "Pull oracle", description: "A fully verified update must uniquely bracket the market's immutable observation timestamp.", span: "col-span-1 row-span-2", metric: "PRICE + TIME" },
+  { title: "Bonded Facts", medium: "Optimistic evidence", description: "Long-tail facts use public evidence, opposing bonds, a challenge window, and dispute fallback.", span: "col-span-1 row-span-1", metric: "PROPOSE + CHALLENGE" },
+  { title: "USDC Vault", medium: "Solana escrow", description: "Creator subsidy bounds LMSR loss while exact liability remains reserved for unsettled positions.", span: "col-span-2 row-span-1", metric: "6 DECIMALS" },
+  { title: "Public Receipt", medium: "Proof surface", description: "Every resolution exposes the source account, observation, evidence hash, outcome, and final timestamp.", span: "col-span-1 row-span-1", metric: "AUDITABLE" },
 ];
 
 export function LandingProtocol() {
