@@ -1,6 +1,6 @@
 # Deployments
 
-`devnet.json` is the canonical machine-readable record for the live Solana devnet deployment. It contains only public addresses, protocol configuration, account metadata, and confirmed transaction signatures.
+`devnet.json` is the canonical machine-readable record for the Solana devnet deployment. It contains only public addresses, protocol configuration, account metadata, confirmed transaction signatures, and the latest V2 upgrade preflight.
 
 The deployment includes:
 
