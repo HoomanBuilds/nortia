@@ -71,10 +71,7 @@ export type Nortia = {
                   114,
                   107,
                   101,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -110,10 +107,7 @@ export type Nortia = {
                   110,
                   102,
                   105,
-                  103,
-                  45,
-                  118,
-                  50
+                  103
                 ]
               },
               {
@@ -149,10 +143,7 @@ export type Nortia = {
                   111,
                   115,
                   97,
-                  108,
-                  45,
-                  118,
-                  50
+                  108
                 ]
               },
               {
@@ -187,10 +178,7 @@ export type Nortia = {
                   101,
                   105,
                   112,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -218,10 +206,7 @@ export type Nortia = {
                   97,
                   117,
                   108,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -330,10 +315,7 @@ export type Nortia = {
                   114,
                   107,
                   101,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -364,10 +346,7 @@ export type Nortia = {
                   116,
                   105,
                   111,
-                  110,
-                  45,
-                  118,
-                  50
+                  110
                 ]
               },
               {
@@ -407,10 +386,7 @@ export type Nortia = {
                   97,
                   117,
                   108,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -482,10 +458,7 @@ export type Nortia = {
                   114,
                   107,
                   101,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -520,10 +493,7 @@ export type Nortia = {
                   110,
                   102,
                   105,
-                  103,
-                  45,
-                  118,
-                  50
+                  103
                 ]
               },
               {
@@ -559,10 +529,7 @@ export type Nortia = {
                   111,
                   115,
                   97,
-                  108,
-                  45,
-                  118,
-                  50
+                  108
                 ]
               },
               {
@@ -600,10 +567,7 @@ export type Nortia = {
                   97,
                   117,
                   108,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -672,10 +636,7 @@ export type Nortia = {
                   114,
                   107,
                   101,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -717,10 +678,7 @@ export type Nortia = {
                   111,
                   115,
                   97,
-                  108,
-                  45,
-                  118,
-                  50
+                  108
                 ]
               },
               {
@@ -758,10 +716,7 @@ export type Nortia = {
                   97,
                   117,
                   108,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -823,10 +778,7 @@ export type Nortia = {
                   114,
                   107,
                   101,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -862,10 +814,7 @@ export type Nortia = {
                   110,
                   102,
                   105,
-                  103,
-                  45,
-                  118,
-                  50
+                  103
                 ]
               },
               {
@@ -901,10 +850,7 @@ export type Nortia = {
                   111,
                   115,
                   97,
-                  108,
-                  45,
-                  118,
-                  50
+                  108
                 ]
               },
               {
@@ -939,10 +885,7 @@ export type Nortia = {
                   101,
                   105,
                   112,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -970,10 +913,7 @@ export type Nortia = {
                   97,
                   117,
                   108,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -1041,10 +981,7 @@ export type Nortia = {
                   103,
                   105,
                   110,
-                  101,
-                  45,
-                  118,
-                  50
+                  101
                 ]
               }
             ]
@@ -1096,10 +1033,7 @@ export type Nortia = {
                   103,
                   105,
                   110,
-                  101,
-                  45,
-                  118,
-                  50
+                  101
                 ]
               }
             ]
@@ -1132,10 +1066,7 @@ export type Nortia = {
                   114,
                   107,
                   101,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -1169,10 +1100,7 @@ export type Nortia = {
                   110,
                   102,
                   105,
-                  103,
-                  45,
-                  118,
-                  50
+                  103
                 ]
               },
               {
@@ -1201,10 +1129,7 @@ export type Nortia = {
                   97,
                   117,
                   108,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -1381,10 +1306,7 @@ export type Nortia = {
                   114,
                   107,
                   101,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -1415,10 +1337,7 @@ export type Nortia = {
                   116,
                   105,
                   111,
-                  110,
-                  45,
-                  118,
-                  50
+                  110
                 ]
               },
               {
@@ -1536,10 +1455,7 @@ export type Nortia = {
                   114,
                   107,
                   101,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -1721,10 +1637,7 @@ export type Nortia = {
                   114,
                   107,
                   101,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -1760,10 +1673,7 @@ export type Nortia = {
                   110,
                   102,
                   105,
-                  103,
-                  45,
-                  118,
-                  50
+                  103
                 ]
               },
               {
@@ -1799,10 +1709,7 @@ export type Nortia = {
                   111,
                   115,
                   97,
-                  108,
-                  45,
-                  118,
-                  50
+                  108
                 ]
               },
               {
@@ -1840,10 +1747,7 @@ export type Nortia = {
                   97,
                   117,
                   108,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -1917,10 +1821,7 @@ export type Nortia = {
                   114,
                   107,
                   101,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -1958,10 +1859,7 @@ export type Nortia = {
                   100,
                   97,
                   116,
-                  97,
-                  45,
-                  118,
-                  50
+                  97
                 ]
               },
               {
@@ -2240,10 +2138,7 @@ export type Nortia = {
                   114,
                   107,
                   101,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -2279,10 +2174,7 @@ export type Nortia = {
                   110,
                   102,
                   105,
-                  103,
-                  45,
-                  118,
-                  50
+                  103
                 ]
               },
               {
@@ -2317,10 +2209,7 @@ export type Nortia = {
                   101,
                   105,
                   112,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -2348,10 +2237,7 @@ export type Nortia = {
                   97,
                   117,
                   108,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -2406,10 +2292,7 @@ export type Nortia = {
                   114,
                   107,
                   101,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -2445,10 +2328,7 @@ export type Nortia = {
                   110,
                   102,
                   105,
-                  103,
-                  45,
-                  118,
-                  50
+                  103
                 ]
               },
               {
@@ -2483,10 +2363,7 @@ export type Nortia = {
                   101,
                   105,
                   112,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -2517,10 +2394,7 @@ export type Nortia = {
                   97,
                   117,
                   108,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -2575,10 +2449,7 @@ export type Nortia = {
                   114,
                   107,
                   101,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -2614,10 +2485,7 @@ export type Nortia = {
                   110,
                   102,
                   105,
-                  103,
-                  45,
-                  118,
-                  50
+                  103
                 ]
               },
               {
@@ -2652,10 +2520,7 @@ export type Nortia = {
                   101,
                   105,
                   112,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -2683,10 +2548,7 @@ export type Nortia = {
                   97,
                   117,
                   108,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -2744,10 +2606,7 @@ export type Nortia = {
                   114,
                   107,
                   101,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -2783,10 +2642,7 @@ export type Nortia = {
                   110,
                   102,
                   105,
-                  103,
-                  45,
-                  118,
-                  50
+                  103
                 ]
               },
               {
@@ -2821,10 +2677,7 @@ export type Nortia = {
                   101,
                   105,
                   112,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -2852,10 +2705,7 @@ export type Nortia = {
                   97,
                   117,
                   108,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -2913,10 +2763,7 @@ export type Nortia = {
                   114,
                   107,
                   101,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -2952,10 +2799,7 @@ export type Nortia = {
                   110,
                   102,
                   105,
-                  103,
-                  45,
-                  118,
-                  50
+                  103
                 ]
               },
               {
@@ -2990,10 +2834,7 @@ export type Nortia = {
                   101,
                   105,
                   112,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -3021,10 +2862,7 @@ export type Nortia = {
                   97,
                   117,
                   108,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -3200,10 +3038,7 @@ export type Nortia = {
                   114,
                   107,
                   101,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -3234,10 +3069,7 @@ export type Nortia = {
                   116,
                   105,
                   111,
-                  110,
-                  45,
-                  118,
-                  50
+                  110
                 ]
               },
               {
@@ -3277,10 +3109,7 @@ export type Nortia = {
                   97,
                   117,
                   108,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -3352,10 +3181,7 @@ export type Nortia = {
                   114,
                   107,
                   101,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -3386,10 +3212,7 @@ export type Nortia = {
                   116,
                   105,
                   111,
-                  110,
-                  45,
-                  118,
-                  50
+                  110
                 ]
               },
               {
@@ -3425,10 +3248,7 @@ export type Nortia = {
                   97,
                   117,
                   108,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -3541,10 +3361,7 @@ export type Nortia = {
                   114,
                   107,
                   101,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -3580,10 +3397,7 @@ export type Nortia = {
                   110,
                   102,
                   105,
-                  103,
-                  45,
-                  118,
-                  50
+                  103
                 ]
               },
               {
@@ -3619,10 +3433,7 @@ export type Nortia = {
                   111,
                   115,
                   97,
-                  108,
-                  45,
-                  118,
-                  50
+                  108
                 ]
               },
               {
@@ -3657,10 +3468,7 @@ export type Nortia = {
                   101,
                   105,
                   112,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -3688,10 +3496,7 @@ export type Nortia = {
                   97,
                   117,
                   108,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -3746,10 +3551,7 @@ export type Nortia = {
                   114,
                   107,
                   101,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -3787,10 +3589,7 @@ export type Nortia = {
                   97,
                   117,
                   108,
-                  116,
-                  45,
-                  118,
-                  50
+                  116
                 ]
               },
               {
@@ -4420,7 +4219,7 @@ export type Nortia = {
     {
       "code": 6029,
       "name": "invalidEngineConfiguration",
-      "msg": "The V2 engine configuration is invalid"
+      "msg": "The market engine configuration is invalid"
     },
     {
       "code": 6030,
@@ -4998,7 +4797,7 @@ export type Nortia = {
             "name": "resolver",
             "type": {
               "defined": {
-                "name": "oracleResolverV2"
+                "name": "oracleResolver"
               }
             }
           },
@@ -5106,7 +4905,7 @@ export type Nortia = {
             "name": "resolver",
             "type": {
               "defined": {
-                "name": "oracleResolverV2"
+                "name": "oracleResolver"
               }
             }
           },
@@ -6315,7 +6114,7 @@ export type Nortia = {
             "name": "resolver",
             "type": {
               "defined": {
-                "name": "oracleResolverV2"
+                "name": "oracleResolver"
               }
             }
           },
@@ -6413,7 +6212,7 @@ export type Nortia = {
             "name": "resolver",
             "type": {
               "defined": {
-                "name": "oracleResolverV2"
+                "name": "oracleResolver"
               }
             }
           },
@@ -6495,30 +6294,30 @@ export type Nortia = {
       }
     },
     {
-      "name": "oracleResolverV2",
+      "name": "oracleResolver",
       "type": {
         "kind": "enum",
         "variants": [
           {
-            "name": "txlineStatV2"
+            "name": "txlineStat"
           },
           {
-            "name": "pythPriceV2"
+            "name": "pythPrice"
           },
           {
-            "name": "switchboardQuoteV1"
+            "name": "switchboardQuote"
           },
           {
-            "name": "optimisticV1"
+            "name": "optimistic"
           },
           {
-            "name": "umaWormholeV1"
+            "name": "umaWormhole"
           },
           {
-            "name": "chainlinkReportV1"
+            "name": "chainlinkReport"
           },
           {
-            "name": "storkPriceV1"
+            "name": "storkPrice"
           }
         ]
       }
@@ -6996,7 +6795,7 @@ export type Nortia = {
             "name": "resolver",
             "type": {
               "defined": {
-                "name": "oracleResolverV2"
+                "name": "oracleResolver"
               }
             }
           },
@@ -7067,7 +6866,7 @@ export type Nortia = {
         "kind": "enum",
         "variants": [
           {
-            "name": "txlineStatV2"
+            "name": "txlineStat"
           }
         ]
       }

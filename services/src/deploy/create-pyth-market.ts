@@ -16,10 +16,10 @@ import {
   hybridMetadataPda,
   hybridVaultPda,
   oracleConfigPda,
-} from "nortia-client/v2";
+} from "nortia-client/market-engine";
 import { config } from "../config.js";
 import { createProgram, readKeypair } from "../solana.js";
-import { resolveMarketId, resolveObservationTimestamp } from "./v2-pyth-market-config.js";
+import { resolveMarketId, resolveObservationTimestamp } from "./pyth-market-config.js";
 
 const PYTH_RECEIVER_PROGRAM = new PublicKey("rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ");
 const DEVNET_GENESIS_HASH = "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG";
@@ -40,17 +40,17 @@ async function main() {
   const connection = new Connection(config.rpcUrl, "confirmed");
   const genesisHash = await connection.getGenesisHash();
   if (genesisHash !== DEVNET_GENESIS_HASH) {
-    throw new Error("V2 demo market deployment is restricted to Solana devnet");
+    throw new Error("Pyth demo market deployment is restricted to Solana devnet");
   }
   const program = createProgram(connection, creator);
   const observationTs = resolveObservationTimestamp(
-    process.env.NORTIA_V2_OBSERVATION_AT,
+    process.env.NORTIA_PYTH_OBSERVATION_AT,
     Math.floor(Date.now() / 1_000),
   );
-  const id = resolveMarketId(process.env.NORTIA_V2_MARKET_ID, observationTs);
-  const thresholdInput = process.env.NORTIA_V2_BTC_THRESHOLD ?? "120000.00";
+  const id = resolveMarketId(process.env.NORTIA_PYTH_MARKET_ID, observationTs);
+  const thresholdInput = process.env.NORTIA_PYTH_BTC_THRESHOLD ?? "120000.00";
   const threshold = parseDecimalAtExponent(thresholdInput, -2);
-  if (threshold <= 0n) throw new Error("NORTIA_V2_BTC_THRESHOLD must be positive");
+  if (threshold <= 0n) throw new Error("NORTIA_PYTH_BTC_THRESHOLD must be positive");
 
   const question = `Will BTC/USD be at or above $${thresholdInput} at ${new Date(observationTs * 1_000).toISOString()}?`;
   const rules = `Resolve from the fully verified Pyth BTC/USD update that uniquely brackets ${new Date(observationTs * 1_000).toISOString()}. YES requires price greater than or equal to ${thresholdInput} USD with confidence width at or below 1%.`;
@@ -59,7 +59,7 @@ async function main() {
   const outcomeLabelsHash = hash("YES\nNO");
   const sourceId = oracleSourceIdBytes(BTC_USD_FEED);
   const oracleFingerprint = [
-    "pyth-price-v2",
+    "pyth-price",
     PYTH_RECEIVER_PROGRAM.toBase58(),
     Buffer.from(sourceId).toString("hex"),
     "greater-than-or-equal",
@@ -73,9 +73,9 @@ async function main() {
 
   const engine = enginePda();
   const engineAccount = await program.account.engineConfig.fetchNullable(engine);
-  if (!engineAccount) throw new Error("The Nortia V2 engine is not initialized on this cluster");
+  if (!engineAccount) throw new Error("The Nortia market engine is not initialized on this cluster");
   if (!engineAccount.collateralMint.equals(DEVNET_USDC_MINT)) {
-    throw new Error("The V2 engine is not configured with Circle devnet USDC");
+    throw new Error("The market engine is not configured with Circle devnet USDC");
   }
   const market = hybridMarketPda(creator.publicKey, id);
   const metadata = hybridMetadataPda(market);
@@ -105,7 +105,7 @@ async function main() {
       resolveNotBeforeTs: new BN(observationTs),
       resolutionDeadlineTs: new BN(observationTs + 30 * 60),
       oracle: {
-        resolver: { pythPriceV2: {} },
+        resolver: { pythPrice: {} },
         sourceProgram: PYTH_RECEIVER_PROGRAM,
         sourceQueue: PublicKey.default,
         sourceId,
@@ -161,7 +161,7 @@ async function main() {
   }
 
   process.stdout.write(`${JSON.stringify({
-    event: marketSignature || metadataSignature ? "v2-pyth-market-ready" : "v2-pyth-market-exists",
+    event: marketSignature || metadataSignature ? "pyth-market-ready" : "pyth-market-exists",
     market: market.toBase58(),
     marketId: id.toString(),
     vault: vault.toBase58(),

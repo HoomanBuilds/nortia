@@ -15,7 +15,7 @@ import {
   normalizeFeedId,
   oracleConfigPda,
   resolutionReceiptPda,
-} from "nortia-client/v2";
+} from "nortia-client/market-engine";
 import type { createProgram } from "../solana.js";
 import type { PythClient } from "./client.js";
 

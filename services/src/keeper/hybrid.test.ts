@@ -8,7 +8,7 @@ function sourceId(fixtureId: bigint): number[] {
   return Array.from(bytes);
 }
 
-test("TxLINE V2 source ID decodes one canonical positive fixture", () => {
+test("TxLINE source ID decodes one canonical positive fixture", () => {
   assert.equal(fixtureIdFromSource(sourceId(42n)), 42);
   assert.throws(() => fixtureIdFromSource(sourceId(0n)), /supported range/);
   assert.throws(() => fixtureIdFromSource(sourceId(-1n)), /supported range/);

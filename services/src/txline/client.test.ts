@@ -13,7 +13,7 @@ test("final score selection requires final action, status, period, and positive 
   ])?.seq, 9);
 });
 
-test("V2 validation mapper preserves stat order and exact 32-byte proofs", () => {
+test("stat validation mapper preserves stat order and exact 32-byte proofs", () => {
   const zero = Array<number>(32).fill(0);
   const one = [...zero.slice(0, 31), 1];
   const payload = validationPayload({

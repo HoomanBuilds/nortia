@@ -41,13 +41,13 @@ export function hybridPhaseName(phase: Record<string, unknown>): HybridPhase {
 export function oracleResolverName(resolver: Record<string, unknown>): HybridResolver {
   const name = Object.keys(resolver)[0];
   const names: Record<string, HybridResolver> = {
-    txlineStatV2: "txline-stat-v2",
-    pythPriceV2: "pyth-price-v2",
-    switchboardQuoteV1: "switchboard-quote-v1",
-    optimisticV1: "optimistic-v1",
-    umaWormholeV1: "uma-wormhole-v1",
-    chainlinkReportV1: "chainlink-report-v1",
-    storkPriceV1: "stork-price-v1",
+    txlineStat: "txline-stat",
+    pythPrice: "pyth-price",
+    switchboardQuote: "switchboard-quote",
+    optimistic: "optimistic",
+    umaWormhole: "uma-wormhole",
+    chainlinkReport: "chainlink-report",
+    storkPrice: "stork-price",
   };
   const mapped = name ? names[name] : undefined;
   if (!mapped) throw new Error("Unknown Nortia oracle resolver");

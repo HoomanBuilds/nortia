@@ -8,7 +8,7 @@ function protocolPda(programId: PublicKey) {
 }
 
 function enginePda(programId: PublicKey) {
-  return PublicKey.findProgramAddressSync([Buffer.from("engine-v2")], programId)[0];
+  return PublicKey.findProgramAddressSync([Buffer.from("engine")], programId)[0];
 }
 
 async function main() {

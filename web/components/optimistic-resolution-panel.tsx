@@ -16,7 +16,7 @@ import {
   optimisticBondVaultPda,
   optimisticProposalPda,
   resolutionReceiptPda,
-} from "nortia-client/v2";
+} from "nortia-client/market-engine";
 import {
   AlertTriangle,
   ArrowUpRight,

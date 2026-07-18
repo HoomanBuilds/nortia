@@ -15,4 +15,4 @@ Use these current documents:
 - `docs/specs/2026-07-19-web-and-services.md`
 - `docs/plans/2026-07-19-devnet-demo-submission-plan.md`
 
-The current architecture uses fixed Circle devnet USDC tickets, a one-percent successfully settled-pool protocol fee, a total-goals V2 predicate, a wallet-free TxLINE replay experience, and an explicit CPI feasibility gate.
+The current architecture uses fixed Circle devnet USDC tickets, a one-percent successfully settled-pool protocol fee, a total-goals predicate, a wallet-free TxLINE replay experience, and an explicit CPI feasibility gate.

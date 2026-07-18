@@ -12,7 +12,7 @@ import {
   hybridVaultPda,
   oracleConfigPda,
   resolutionReceiptPda,
-} from "nortia-client/v2";
+} from "nortia-client/market-engine";
 import type { createProgram } from "../solana.js";
 
 const SWITCHBOARD_QUOTE_PROGRAM = new PublicKey(SWITCHBOARD_QUOTE_PROGRAM_ADDRESS);

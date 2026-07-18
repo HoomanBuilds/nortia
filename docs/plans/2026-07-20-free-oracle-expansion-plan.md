@@ -40,5 +40,4 @@
 - Review the program binary size and exact devnet upgrade balance.
 - Commit each logical unit with a one-line conventional commit.
 - Transfer deployment SOL only after the user confirms the exact amount from the dedicated wallet.
-- Deploy V2, initialize the engine, create at least one price market, and record addresses and transaction signatures.
-
+- Deploy the current program, initialize the engine, create at least one price market, and record addresses and transaction signatures.

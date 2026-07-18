@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { BorshAccountsCoder, type Idl } from "@anchor-lang/core";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { lmsrYesProbability } from "nortia-client/lmsr";
-import { hybridMetadataPda, hybridVaultPda } from "nortia-client/v2";
+import { hybridMetadataPda, hybridVaultPda } from "nortia-client/market-engine";
 import idl from "@/lib/solana/idl/nortia.json";
 import { NORTIA_PROGRAM_KEY } from "@/lib/solana/constants";
 import {
@@ -80,7 +80,7 @@ function enumKey(value: Record<string, unknown>): string {
   return (Object.keys(value)[0] ?? "").replaceAll("_", "").toLowerCase();
 }
 
-function legacyPhase(value: Record<string, unknown>): TradingState | null {
+function privatePoolPhase(value: Record<string, unknown>): TradingState | null {
   const name = enumKey(value);
   return name === "open" || name === "batched" || name === "resolved" || name === "refunding" || name === "closed" ? name : null;
 }
@@ -106,13 +106,13 @@ function categoryName(value: Record<string, unknown>): MarketCategory | null {
 
 function resolverName(value: Record<string, unknown>): Pick<HybridMarketDetails, "resolverId"> & { label: string } | null {
   const names: Readonly<Record<string, Pick<HybridMarketDetails, "resolverId"> & { label: string }>> = {
-    txlinestatv2: { resolverId: "txline-stat-v2", label: "TxLINE" },
-    pythpricev2: { resolverId: "pyth-price-v2", label: "Pyth" },
-    switchboardquotev1: { resolverId: "switchboard-quote-v1", label: "Switchboard" },
-    storkpricev1: { resolverId: "stork-price-v1", label: "Stork" },
-    optimisticv1: { resolverId: "optimistic-v1", label: "Bonded" },
-    umawormholev1: { resolverId: "uma-wormhole-v1", label: "UMA" },
-    chainlinkreportv1: { resolverId: "chainlink-report-v1", label: "Chainlink" },
+    txlinestat: { resolverId: "txline-stat", label: "TxLINE" },
+    pythprice: { resolverId: "pyth-price", label: "Pyth" },
+    switchboardquote: { resolverId: "switchboard-quote", label: "Switchboard" },
+    storkprice: { resolverId: "stork-price", label: "Stork" },
+    optimistic: { resolverId: "optimistic", label: "Bonded" },
+    umawormhole: { resolverId: "uma-wormhole", label: "UMA" },
+    chainlinkreport: { resolverId: "chainlink-report", label: "Chainlink" },
   };
   return names[enumKey(value)] ?? null;
 }
@@ -159,8 +159,8 @@ function categoryCode(category: MarketCategory): string {
   return codes[category];
 }
 
-function buildLegacyMarket(value: string, account: MarketAccount): Market | null {
-  const tradingState = legacyPhase(account.phase);
+function buildPrivateMarket(value: string, account: MarketAccount): Market | null {
+  const tradingState = privatePoolPhase(account.phase);
   if (!tradingState) return null;
   const fixtureId = account.fixture_id.toNumber();
   const template = markets.find((market) => market.fixtureId === fixtureId);
@@ -318,7 +318,7 @@ export async function getOnchainMarket(value: string, questionCandidate?: string
   if (!info || !info.owner.equals(NORTIA_PROGRAM_KEY)) return null;
   const coder = new BorshAccountsCoder(idl as Idl);
   try {
-    return buildLegacyMarket(value, coder.decode("Market", info.data) as MarketAccount);
+    return buildPrivateMarket(value, coder.decode("Market", info.data) as MarketAccount);
   } catch {
     try {
       const account = coder.decode("HybridMarket", info.data) as HybridMarketAccount;

@@ -85,7 +85,7 @@ This market was selected because:
 - It is a binary soccer-native question.
 - It avoids ambiguous three-way winner settlement.
 - It does not depend on which participant is home.
-- TxLINE V2 can validate it using full-game goal keys `1` and `2`.
+- TxLINE stat validation can verify it using full-game goal keys `1` and `2`.
 - The result remains correct through regulation, extra time, and penalties when the chosen final record uses `action=game_finalised`, `statusId=100`, and `period=100`.
 - It is easy to explain in a short demo.
 

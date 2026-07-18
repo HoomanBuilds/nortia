@@ -22,7 +22,7 @@ import {
   hybridMetadataPda,
   hybridVaultPda,
   oracleConfigPda,
-} from "nortia-client/v2";
+} from "nortia-client/market-engine";
 import {
   AlertTriangle,
   Check,
@@ -332,7 +332,7 @@ export function CreateMarketForm() {
     const transaction = await program.methods.initializeMarket({
       marketId: marketIdBn,
       category: { sports: {} },
-      resolverKind: { txlineStatV2: {} },
+      resolverKind: { txlineStat: {} },
       questionHash: await sha256(question),
       rulesHash: await sha256(rules),
       fixtureId: new BN(fixture.id),
@@ -380,7 +380,7 @@ export function CreateMarketForm() {
     let sourceProgram = NORTIA_PROGRAM_KEY;
     let sourceQueue = PublicKey.default;
     let sourceId = questionHash;
-    let resolverArgument: Record<string, Record<string, never>> = { optimisticV1: {} };
+    let resolverArgument: Record<string, Record<string, never>> = { optimistic: {} };
     let comparator: Record<string, Record<string, never>> = { equal: {} };
     let threshold = 0n;
     let thresholdExponent = 0;
@@ -399,7 +399,7 @@ export function CreateMarketForm() {
         ? PYTH_PUSH_ORACLE_PROGRAM_KEY
         : PYTH_RECEIVER_PROGRAM_KEY;
       sourceId = oracleSourceIdBytes(selectedFeed.id);
-      resolverArgument = { pythPriceV2: {} };
+      resolverArgument = { pythPrice: {} };
       comparator = { greaterThanOrEqual: {} };
       threshold = parseDecimalAtExponent(priceThreshold, -8);
       thresholdExponent = -8;
@@ -415,7 +415,7 @@ export function CreateMarketForm() {
       sourceProgram = SWITCHBOARD_QUOTE_PROGRAM_KEY;
       sourceQueue = SWITCHBOARD_QUEUE;
       sourceId = oracleSourceIdBytes(switchboardFeedHash);
-      resolverArgument = { switchboardQuoteV1: {} };
+      resolverArgument = { switchboardQuote: {} };
       comparator = { greaterThanOrEqual: {} };
       threshold = parseDecimalAtExponent(priceThreshold, -18);
       thresholdExponent = -18;
@@ -428,7 +428,7 @@ export function CreateMarketForm() {
     } else if (resolver === "stork") {
       sourceProgram = STORK_ORACLE_PROGRAM_KEY;
       sourceId = oracleSourceIdBytes(storkAsset!.feedId);
-      resolverArgument = { storkPriceV1: {} };
+      resolverArgument = { storkPrice: {} };
       comparator = { greaterThanOrEqual: {} };
       threshold = parseDecimalAtExponent(priceThreshold, -18);
       thresholdExponent = -18;
@@ -549,7 +549,7 @@ export function CreateMarketForm() {
     }
   };
 
-  const v2 = resolver !== "txline-replay";
+  const usesMarketEngine = resolver !== "txline-replay";
   const pythProgramReady = selectedFeed
     ? selectedFeed.delivery === "sponsored-push" ? protocolStatus.pythPush : protocolStatus.pyth
     : false;
@@ -569,7 +569,7 @@ export function CreateMarketForm() {
           : true;
   const unavailable = !protocolStatus.program
     || !protocolStatus.protocol
-    || (v2 && !protocolStatus.engine)
+    || (usesMarketEngine && !protocolStatus.engine)
     || !resolverReady;
   const busy = stage !== "idle" && stage !== "confirmed";
   const submitLabel = stage === "validating"
@@ -584,7 +584,7 @@ export function CreateMarketForm() {
             ? "Publishing verified metadata"
             : stage === "confirmed"
               ? "Market confirmed"
-              : v2
+              : usesMarketEngine
                 ? "Create LMSR market"
                 : "Create private replay pool";
 
@@ -656,15 +656,15 @@ export function CreateMarketForm() {
         )}
         {resolver === "txline-replay" && <label className="create-field"><span>Covered fixture</span><select value={fixtureId} onChange={(event) => setFixtureId(Number(event.target.value))}>{fixtures.map((item) => <option value={item.id} key={item.id}>{item.label} - {item.group}</option>)}</select></label>}
         <label className="create-field"><span>Question preview</span><input value={question} readOnly /></label>
-        {v2 && <label className="create-field"><span>Resolution time in your local timezone</span><input type="datetime-local" value={resolutionAt} min={futureLocalDate(20)} onChange={(event) => setResolutionAt(event.target.value)} /></label>}
+        {usesMarketEngine && <label className="create-field"><span>Resolution time in your local timezone</span><input type="datetime-local" value={resolutionAt} min={futureLocalDate(20)} onChange={(event) => setResolutionAt(event.target.value)} /></label>}
 
-        <div className="form-section-heading"><span>04</span><div><strong>Economics and confirmation</strong><p>V2 creators fund the deterministic LMSR loss bound before trading opens.</p></div></div>
+        <div className="form-section-heading"><span>04</span><div><strong>Economics and confirmation</strong><p>Market creators fund the deterministic LMSR loss bound before trading opens.</p></div></div>
         <div className="create-review">
           <div><span>Collateral</span><b>Devnet USDC</b></div>
-          <div><span>Pricing</span><b>{v2 ? "LMSR" : "Private pool"}</b></div>
-          <div><span>Creator funding</span><b>{v2 ? `${formatUsdc(INITIAL_SUBSIDY)} USDC` : "Account rent"}</b></div>
-          <div><span>Trading fee</span><b>{v2 ? "Up to 1% curve fee" : "1% on settlement"}</b></div>
-          <div><span>Protocol share</span><b>{v2 ? "70% of trade fee" : "Treasury after keeper"}</b></div>
+          <div><span>Pricing</span><b>{usesMarketEngine ? "LMSR" : "Private pool"}</b></div>
+          <div><span>Creator funding</span><b>{usesMarketEngine ? `${formatUsdc(INITIAL_SUBSIDY)} USDC` : "Account rent"}</b></div>
+          <div><span>Trading fee</span><b>{usesMarketEngine ? "Up to 1% curve fee" : "1% on settlement"}</b></div>
+          <div><span>Protocol share</span><b>{usesMarketEngine ? "70% of trade fee" : "Treasury after keeper"}</b></div>
           <div><span>Market PDA</span><code>{marketAddress ? `${marketAddress.toBase58().slice(0, 8)}...${marketAddress.toBase58().slice(-8)}` : "Connect wallet to derive"}</code></div>
         </div>
         {!connected
@@ -679,10 +679,10 @@ export function CreateMarketForm() {
         <h2>Every dependency is explicit.</h2>
         <div className="readiness-list">
           <div className={protocolStatus.program ? "ready" : "blocked"}><ShieldCheck size={15} /><span>Nortia program</span><b>{protocolStatus.loading ? "Checking" : protocolStatus.program ? "Ready" : "Not deployed"}</b></div>
-          <div className={protocolStatus.engine ? "ready" : "blocked"}><CircleDollarSign size={15} /><span>V2 LMSR engine</span><b>{protocolStatus.loading ? "Checking" : protocolStatus.engine ? "Ready" : "Upgrade required"}</b></div>
+          <div className={protocolStatus.engine ? "ready" : "blocked"}><CircleDollarSign size={15} /><span>LMSR market engine</span><b>{protocolStatus.loading ? "Checking" : protocolStatus.engine ? "Ready" : "Deployment required"}</b></div>
           <div className={resolverReady ? "ready" : "blocked"}><Database size={15} /><span>{resolverLabel(resolver)}</span><b>{resolverReady ? "Verified" : "Unavailable"}</b></div>
         </div>
-        <div className="creation-rule"><Clock3 size={16} /><p>Trading closes five minutes before a V2 observation. Resolver evidence must land inside its immutable time window.</p></div>
+        <div className="creation-rule"><Clock3 size={16} /><p>Trading closes five minutes before the observation. Resolver evidence must land inside its immutable time window.</p></div>
         <div className="creation-rule"><CircleDollarSign size={16} /><p>The default 25 USDC liquidity parameter requires {formatUsdc(INITIAL_SUBSIDY)} USDC of creator subsidy and funds the LMSR worst-case loss bound.</p></div>
         <div className="creation-rule"><AlertTriangle size={16} /><p>If valid evidence does not arrive before the hard deadline, any keeper can invalidate the market and open the neutral refund path.</p></div>
         <div className="creation-rule"><KeyRound size={16} /><p>Pyth sponsored push and public Switchboard need no API key. Pyth pull requires a key from August 18, 2026. Stork requires `STORK_API_TOKEN` now.</p></div>

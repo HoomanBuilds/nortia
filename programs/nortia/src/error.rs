@@ -60,7 +60,7 @@ pub enum NortiaError {
     InvalidScorePayload,
     #[msg("TxLINE did not return a valid boolean")]
     InvalidTxlineReturn,
-    #[msg("The V2 engine configuration is invalid")]
+    #[msg("The market engine configuration is invalid")]
     InvalidEngineConfiguration,
     #[msg("The LMSR quote or market state is outside protocol bounds")]
     InvalidLmsrState,

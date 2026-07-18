@@ -9,13 +9,11 @@ use anchor_lang::{
 use crate::{
     constants::{
         DAILY_SCORES_ROOT_SEED, FINAL_PERIOD, MILLIS_PER_DAY, PARTICIPANT_ONE_GOALS_KEY,
-        PARTICIPANT_TWO_GOALS_KEY, TXLINE_PROGRAM_ID, TXLINE_VALIDATE_STAT_V2_DISCRIMINATOR,
+        PARTICIPANT_TWO_GOALS_KEY, TXLINE_PROGRAM_ID, TXLINE_VALIDATE_STAT_DISCRIMINATOR,
     },
     error::NortiaError,
     oracles::{compare_values, NormalizedObservation},
-    state::{
-        HybridMarket, Market, MarketCategory, OracleConfig, OracleResolverV2, ValueComparator,
-    },
+    state::{HybridMarket, Market, MarketCategory, OracleConfig, OracleResolver, ValueComparator},
 };
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -145,7 +143,7 @@ pub fn resolve_hybrid_total_goals<'info>(
 ) -> Result<NormalizedObservation> {
     require!(
         market.category == MarketCategory::Sports
-            && oracle.resolver == OracleResolverV2::TxlineStatV2
+            && oracle.resolver == OracleResolver::TxlineStat
             && oracle.source_program == TXLINE_PROGRAM_ID,
         NortiaError::InvalidOracleConfiguration
     );
@@ -197,7 +195,7 @@ fn invoke_stat_validation<'info>(
     daily_root: &AccountInfo<'info>,
     txline_program: &AccountInfo<'info>,
 ) -> Result<bool> {
-    let mut data = TXLINE_VALIDATE_STAT_V2_DISCRIMINATOR.to_vec();
+    let mut data = TXLINE_VALIDATE_STAT_DISCRIMINATOR.to_vec();
     payload
         .serialize(&mut data)
         .map_err(|_| error!(NortiaError::InvalidScorePayload))?;
@@ -422,7 +420,7 @@ mod tests {
             bump: 1,
             version: OracleConfig::VERSION,
             market: Pubkey::new_unique(),
-            resolver: OracleResolverV2::TxlineStatV2,
+            resolver: OracleResolver::TxlineStat,
             source_program: TXLINE_PROGRAM_ID,
             source_queue: Pubkey::default(),
             source_id: txline_source_id(FIXTURE_ID).unwrap(),

@@ -4,7 +4,7 @@ import {
   optimisticProposalPda,
   oracleConfigPda,
   resolutionReceiptPda,
-} from "nortia-client/v2";
+} from "nortia-client/market-engine";
 import { config } from "../config.js";
 import { planHybridKeeperAction } from "../hybrid-lifecycle.js";
 import { resolvePythHybridMarket } from "../pyth/settlement.js";
@@ -94,7 +94,7 @@ export async function runHybridKeeperPass(input: {
 }): Promise<void> {
   const markets = await input.program.account.hybridMarket.all();
   for (const { publicKey: marketAddress, account: market } of markets) {
-    const context = { market: marketAddress.toBase58(), version: "v2" };
+    const context = { market: marketAddress.toBase58(), marketKind: "lmsr" };
     try {
       const oracle = await input.program.account.oracleConfig.fetch(market.oracleConfig);
       const resolver = oracleResolverName(oracle.resolver);

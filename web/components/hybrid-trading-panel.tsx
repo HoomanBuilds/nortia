@@ -17,7 +17,7 @@ import {
   type OutcomeSide,
   type TradeQuote,
 } from "nortia-client/lmsr";
-import { hybridVaultPda, positionPda } from "nortia-client/v2";
+import { hybridVaultPda, positionPda } from "nortia-client/market-engine";
 import {
   AlertTriangle,
   Check,

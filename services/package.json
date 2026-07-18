@@ -8,7 +8,7 @@
     "committee:batch": "node --env-file-if-exists=.env --import tsx src/committee/coordinator.ts",
     "deploy:initialize": "node --env-file-if-exists=.env --import tsx src/deploy/initialize-protocol.ts",
     "deploy:replay-market": "node --env-file-if-exists=.env --import tsx src/deploy/create-replay-market.ts",
-    "deploy:v2-pyth-market": "node --env-file-if-exists=.env --import tsx src/deploy/create-v2-pyth-market.ts",
+    "deploy:pyth-market": "node --env-file-if-exists=.env --import tsx src/deploy/create-pyth-market.ts",
     "indexer": "node --env-file-if-exists=.env --import tsx src/indexer/runner.ts",
     "keeper": "node --env-file-if-exists=.env --import tsx src/keeper/runner.ts",
     "prover": "node --env-file-if-exists=.env --import tsx src/prover/server.ts",

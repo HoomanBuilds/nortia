@@ -155,7 +155,7 @@ async function main() {
         log({ event: "market-resolved", signature, fixtureId, seq, ...context });
       } catch (error) {
         log({
-          event: "legacy-keeper-error",
+          event: "private-keeper-error",
           market: marketAddress.toBase58(),
           reason: error instanceof Error ? error.message : String(error),
         });

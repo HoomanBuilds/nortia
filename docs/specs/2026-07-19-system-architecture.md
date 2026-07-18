@@ -20,7 +20,7 @@ Connected trader browser
 Web server and TxLINE adapter
   |-- owns TxLINE guest JWT and API token
   |-- proxies normalized fixture, odds, score, and replay data
-  `-- fetches final V2 Merkle proof for permissionless settlement
+  `-- fetches final TxLINE Merkle proof for permissionless settlement
 
 Three-member committee
   |-- verifies its private share against the public share commitment
@@ -59,7 +59,7 @@ Responsibilities:
 - Keep credentials server-side.
 - Normalize inconsistent uppercase and lowercase API field variants.
 - Proxy snapshots, historical replay, and SSE without logging secrets.
-- Select an observed final sequence and fetch the matching V2 proof.
+- Select an observed final sequence and fetch the matching stat proof.
 - Derive the daily-root PDA from the proof timestamp.
 - Produce the exact payload used by the client and on-chain resolver.
 
@@ -74,7 +74,7 @@ Responsibilities:
 - Verify the placement public witness before accepting the ticket.
 - Record order commitments without recording sides.
 - Accept a two-of-three committee batch after lock.
-- Invoke TxLINE V2 and consume the pinned bool return for settlement.
+- Invoke TxLINE stat validation and consume the pinned bool return for settlement.
 - Verify private winner claims and reject nullifier replay.
 - Return tickets through permissionless timeout refunds.
 - Collect the market's immutable one-percent protocol fee only after successful settlement.
@@ -169,7 +169,7 @@ If the transaction fails, no ticket is accepted and the committee ignores the un
 ### TxLINE settlement
 
 1. A browser or keeper selects an observed score record with `action=game_finalised` and `seq >= 1`.
-2. The adapter requests V2 validation for stat keys `1,2`.
+2. The adapter requests stat validation for keys `1,2`.
 3. The transaction adds an adequate compute budget and calls `resolveWithTxline`.
 4. The market validates payload bindings and CPIs into the pinned TxLINE program.
 5. A true return resolves YES. A false return resolves NO.

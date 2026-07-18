@@ -2,25 +2,25 @@
 
 - Date: 2026-07-20
 - Status: Accepted implementation specification
-- Scope: Additive V2 engine for general USDC prediction markets on Solana
+- Scope: Canonical market engine for general USDC prediction markets on Solana
 
 ## 1. Decision
 
-Nortia V2 will use a deterministic binary LMSR as its protocol-owned liquidity backstop and price curve. The deployed fixed-ticket private pari-mutuel pool remains available as the legacy sports demo. Existing `Market`, `Order`, and `Claim` account layouts will not change.
+Nortia uses a deterministic binary LMSR as its protocol-owned liquidity backstop and price curve. The deployed fixed-ticket private pari-mutuel pool remains available as the sports privacy demo. Existing private-pool `Market`, `Order`, and `Claim` account layouts will not change.
 
-The V2 architecture has three layers:
+The market architecture has three layers:
 
 1. A continuous, fully collateralized LMSR engine with exact onchain quotes, buy and sell support, bounded market-maker loss, explicit price protection, and trade-time fees.
 2. A resolver framework that selects the correct verification and dispute model for each market category.
 3. A private frequent-batch gateway that aggregates committed orders before applying net demand to the same LMSR curve. This preserves more order privacy than a sequential private transaction can provide.
 
-The first shippable V2 path is continuous LMSR. Private batches reuse its pricing library and reserve invariants rather than creating a second economic system.
+The first shippable market path is continuous LMSR. Private batches reuse its pricing library and reserve invariants rather than creating a second economic system.
 
-## 2. Why the legacy pool is not enough
+## 2. Why the private pool is not enough
 
 The current program accepts one fixed 1 USDC ticket per order. Price does not move during trading, users cannot choose size, positions cannot be sold, and payout is known only after the committee reveals aggregate counts. This is a valid private pari-mutuel pool, but it is not an exchange or an institutional market maker.
 
-V2 must provide:
+The market engine must provide:
 
 - Executable marginal and average prices.
 - Deterministic price movement after every state transition.
@@ -41,7 +41,7 @@ A CLOB gives professional traders limit orders, maker and taker roles, spread di
 
 It is the long-term execution layer for high-volume markets, but it does not guarantee a quote for a new or thin market. It also introduces matcher availability, cancellation races, stale quotes, replay protection, and a larger service surface.
 
-Decision: add signed limit orders and batch crossing after the deterministic AMM is live. Do not make the first V2 market dependent on a centralized matcher.
+Decision: add signed limit orders and batch crossing after the deterministic AMM is live. Do not make the first Nortia market dependent on a centralized matcher.
 
 ### Constant-product and fixed-product AMMs
 
@@ -70,7 +70,7 @@ subsidy = b * ln(2)
 
 Larger `b` creates deeper liquidity and lower price impact, but requires more locked subsidy. LMSR guarantees a continuous quote and makes creator risk explicit.
 
-Decision: use LMSR as the V2 pricing and liquidity backstop.
+Decision: use LMSR as the canonical pricing and liquidity backstop.
 
 ### Private batch LMSR
 
@@ -88,7 +88,7 @@ The privacy-compatible design is a frequent batch:
 
 The initial batch verifier uses the existing 2-of-3 committee trust model and signed batch root. A later proof circuit can prove deterministic clearing and allocations without trusting committee arithmetic.
 
-Decision: implement continuous V2 first, then the private batch gateway on the same market and math state.
+Decision: implement continuous LMSR first, then the private batch gateway on the same market and math state.
 
 ## 4. Numeric representation
 
@@ -102,7 +102,7 @@ No floating-point arithmetic is permitted in settlement-critical code.
 - One whole winning share pays exactly 1 USDC.
 - `1_000_000` share units pay `1_000_000` USDC base units.
 
-Outcome positions are program accounts, not freely transferable SPL tokens in V2. This avoids token mint authority and complete-set accounting complexity while preserving exact payout rights.
+Outcome positions are program accounts, not freely transferable SPL tokens. This avoids token mint authority and complete-set accounting complexity while preserving exact payout rights.
 
 ### Internal math units
 
@@ -218,7 +218,7 @@ Draft -> Open -> Locked -> Resolving -> Resolved -> Closed
 
 ## 7. Trade interface
 
-V2 supports four execution calls:
+The market engine supports four execution calls:
 
 - `buy_exact_shares(side, shares, max_total_cost, deadline)`
 - `buy_exact_collateral(side, collateral, min_shares, deadline)`
@@ -244,7 +244,7 @@ No UI value is called an executable price unless it is calculated from the lates
 
 Nortia earns from executed trading volume, not only from final pool settlement.
 
-### V2 fee model
+### LMSR fee model
 
 The default taker fee is probability-sensitive:
 
@@ -268,11 +268,11 @@ Default fee distribution:
 
 This is the implemented continuous LMSR split. A later private-batch release may define a separate solver incentive from its own fee schedule, but it cannot silently change the immutable split of an existing market. No reward is paid for failed, stale, or duplicated work.
 
-The legacy V1 pool retains its existing 1 percent successful-settlement fee.
+The private pool retains its existing 1 percent successful-settlement fee.
 
-## 9. Versioned account model
+## 9. Account model
 
-V2 is additive so deployed V1 accounts remain decodable.
+The market-engine accounts use isolated PDA namespaces so deployed private-pool accounts remain decodable.
 
 ### `EngineConfig`
 
@@ -352,7 +352,7 @@ Verification:
 - CPI into `validate_stat_v2` and validate return-data origin.
 - Derive the root PDA from the batch minimum timestamp and enforce final-stat freshness from the fixture summary maximum timestamp.
 
-Status: implemented in V1 and V2 with CPI validation and normalized resolution receipts.
+Status: implemented for private pools and LMSR markets with CPI validation and normalized resolution receipts.
 
 ### Resolver tier A: Pyth verified price
 
@@ -383,9 +383,9 @@ Sponsored push verification:
 
 Non-sponsored timestamped markets use an ephemeral historical update for the specified observation time. Sponsored feeds may use the canonical push account when the keeper resolves inside its narrow bracket. If that bracket is missed, the push path cannot select an older value and the market eventually becomes invalid. Rules must state the exact timestamp and comparison semantics.
 
-Status: implemented in V2 with normalized receipts and invalid-market timeout handling.
+Status: implemented with normalized receipts and invalid-market timeout handling.
 
-Devnet provider policy: `ORACLE_PROVIDER_PROFILE=free` uses sponsored push accounts or the public legacy-compatible Hermes endpoint without forwarding credentials and paces calls below its public rate limit. `managed` retains API-key and custom-origin support behind an explicit switch. Endpoint changes do not relax onchain owner, PDA, feed, timestamp, confidence, or full-verification checks.
+Devnet provider policy: `ORACLE_PROVIDER_PROFILE=free` uses sponsored push accounts or the public Hermes compatibility endpoint without forwarding credentials and paces calls below its public rate limit. `managed` retains API-key and custom-origin support behind an explicit switch. Endpoint changes do not relax onchain owner, PDA, feed, timestamp, confidence, or full-verification checks.
 
 ### Resolver tier A or B: Switchboard canonical quote
 
@@ -408,9 +408,9 @@ Verification:
 
 A custom feed is only as credible as its source jobs. One HTTP endpoint repeated across several nodes is still one data source.
 
-Switchboard V1 is restricted away from sports and volatile crypto price templates. Pyth handles timestamped crypto prices, while Switchboard is used for finalized custom numeric facts whose source value is stable during the observation window.
+The Switchboard quote adapter is restricted away from sports and volatile crypto price templates. Pyth handles timestamped crypto prices, while Switchboard is used for finalized custom numeric facts whose source value is stable during the observation window.
 
-Status: implemented in V2 using the official 0.13 quote parser through its Pinocchio-compatible feature set.
+Status: implemented using the official 0.13 quote parser through its Pinocchio-compatible feature set.
 
 ### Resolver tier A: Stork verified price
 
@@ -429,7 +429,7 @@ Verification:
 
 Stork stores the latest value, so an external Stork pusher and the Nortia keeper must update and resolve promptly. The REST API requires `STORK_API_TOKEN`; this resolver is supported but unavailable in the free profile until that credential is configured.
 
-Status: implemented in V2 with fail-closed readiness and timeout refunds.
+Status: implemented with fail-closed readiness and timeout refunds.
 
 ### Resolver tier B: native bonded optimistic assertion
 
@@ -462,7 +462,7 @@ Security requirements:
 - A proposal cannot be opened unless its complete challenge window ends before the market's hard deadline.
 - Sports and crypto templates cannot select this resolver in the current deployment policy.
 
-Status: implemented as a native V2 resolver with replay-safe receipts, permissionless unchallenged finalization, committee arbitration, and invalid-market timeout recovery. The 2-of-3 committee is an explicit trust assumption and remains the arbitration layer until a verified external adapter replaces it. It is not described as UMA unless an actual UMA assertion and verified bridge receipt are used.
+Status: implemented as a native resolver with replay-safe receipts, permissionless unchallenged finalization, committee arbitration, and invalid-market timeout recovery. The 2-of-3 committee is an explicit trust assumption and remains the arbitration layer until a verified external adapter replaces it. It is not described as UMA unless an actual UMA assertion and verified bridge receipt are used.
 
 ### Resolver tier B: UMA over verified cross-chain messaging
 
@@ -498,7 +498,7 @@ Status: research and partner integration path. No generic API-based Chainlink cl
 
 | Category | Primary resolver | Optional fallback | Rejected when |
 | --- | --- | --- | --- |
-| World Cup sports | TxLINE stat V2 | None in current V2 | Fixture or predicate is unsupported |
+| World Cup sports | TxLINE stat proof | None in the current protocol | Fixture or predicate is unsupported |
 | Other sports | Disabled until a reviewed sports adapter exists | None | No canonical final source is named |
 | Crypto price | Pyth sponsored push or verified pull | Stork when configured | Feed ID, timestamp, or confidence policy is missing |
 | Equities, FX, metals, commodities, rates | Pyth verified pull | Switchboard stable quote or Stork | Market-hours and corporate-action rules are missing |
@@ -525,7 +525,7 @@ Status: research and partner integration path. No generic API-based Chainlink cl
 
 ## 13. Market creation policy
 
-Open-ended text creation is unsafe. V2 creation uses reviewed templates.
+Open-ended text creation is unsafe. Market creation uses reviewed templates.
 
 A template defines:
 
@@ -601,10 +601,10 @@ The web may let a creator fill template parameters, but it cannot create an acti
 
 ## 16. Deployment policy
 
-- Preserve the current program ID and legacy accounts only if the upgrade remains additive and passes account compatibility tests.
+- Preserve the current program ID and private-pool accounts only if the upgrade passes account compatibility tests.
 - Publish exact program binary hash, upgrade authority, IDL hash, oracle program IDs, feed IDs, and market addresses.
-- Create a new canonical V2 market after upgrade.
-- Do not migrate legacy pool balances into V2.
+- Create a new canonical LMSR market after upgrade.
+- Do not migrate private-pool balances into LMSR markets.
 - Do not enable UMA, Chainlink, or Switchboard badges until the corresponding verified adapter and devnet receipt are demonstrable.
 - Mainnet remains out of scope until independent contract and economic review.
 

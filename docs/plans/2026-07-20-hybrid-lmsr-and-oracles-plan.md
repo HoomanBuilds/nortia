@@ -23,13 +23,13 @@ Exit gate:
 
 Commit: `feat: add deterministic LMSR pricing`
 
-## Phase 2: additive V2 protocol state
+## Phase 2: canonical market-engine state
 
 Status: complete.
 
 - Add separate `EngineConfig`, `HybridMarket`, `OracleConfig`, `Position`, and `ResolutionReceipt` accounts.
-- Add V2 PDA namespaces so no V1 account address changes.
-- Add V2 initialization with creator-funded `ceil(b * ln(2))` subsidy and rounding reserve.
+- Add isolated market-engine PDA namespaces so no private-pool account address changes.
+- Add market-engine initialization with creator-funded `ceil(b * ln(2))` subsidy and rounding reserve.
 - Add exact-share buy and sell instructions with deadline and price guards.
 - Add fee routing and immutable fee split snapshots.
 - Add market lock, generic resolved state, claim, close, and timeout refund transitions.
@@ -37,8 +37,8 @@ Status: complete.
 
 Exit gate:
 
-- Legacy IDL account layouts remain byte-for-byte compatible.
-- V2 unit tests and randomized trade invariants pass.
+- Private-pool IDL account layouts remain byte-for-byte compatible.
+- Market-engine unit tests and randomized trade invariants pass.
 - Vault solvency is asserted after every value-moving instruction.
 - Unauthorized, stale, replayed, and terminal-state calls fail.
 
@@ -49,7 +49,7 @@ Commit: `feat: add collateralized LMSR markets`
 Status: complete in the program, pending service and web integration.
 
 - Add immutable resolver configuration and normalized observation comparison.
-- Refactor the current TxLINE handler behind the V2 receipt format without changing V1 behavior.
+- Refactor the current TxLINE handler behind the normalized receipt format without changing private-pool behavior.
 - Add Pyth `PriceUpdateV2` verification, feed binding, publish-time window, full verification, exponent normalization, and confidence policy.
 - Add Switchboard canonical quote verification, feed hash, queue, sample, and slot-age policy.
 - Add the native bonded optimistic proposal, challenge, finalization, timeout, and pull-claim state machine.
@@ -74,7 +74,7 @@ Commits:
 
 Status: complete for TxLINE, Pyth, optimistic resolution, canonical Switchboard consumption, indexing, and free or managed provider profiles. Switchboard feed provisioning remains an external curated operation.
 
-- Extend the client with V2 PDA derivation, account decoding, exact quotes, transaction builders, and receipt decoding.
+- Extend the client with market-engine PDA derivation, account decoding, exact quotes, transaction builders, and receipt decoding.
 - Add oracle registry and market-template configuration to services.
 - Add Pyth Hermes update retrieval and price-account transaction composition.
 - Consume only a provisioned canonical Switchboard quote and retain the public or managed Crossbar origin switch for the external official update bundle.
@@ -92,14 +92,14 @@ Commit: `feat: integrate LMSR market services`
 
 ## Phase 5: institutional web experience
 
-Status: complete for the deployable V2 feature set.
+Status: complete for the deployable market-engine feature set.
 
-- Replace fixed-ticket controls on V2 markets with size input and buy or sell mode.
+- Replace fixed-ticket controls on LMSR markets with size input and buy or sell mode.
 - Show executable current and post-trade probability, average fill, price impact, fee, total, price guard, and quote slot.
 - Add depth curve, volume, trade tape, liquidity, and outcome position panels.
 - Add market creation from reviewed resolver templates.
 - Add resolver badges with evidence level, source, freshness, challenge state, and fallback.
-- Keep V1 private pool UI explicitly labeled as a legacy private pool.
+- Keep the private-pool UI explicitly labeled as a separate privacy mode.
 - Make sports, crypto, macro, politics, technology, culture, governance, and weather discovery first-class without enabling unsupported trades.
 
 Exit gate:
@@ -113,7 +113,7 @@ Commit: `feat: build institutional market trading UI`
 
 ## Phase 6: private frequent batches
 
-Status: deferred from the V2 devnet upgrade. The existing V1 private fixed-ticket pool remains deployed and isolated from public LMSR positions.
+Status: deferred from the market-engine devnet upgrade. The existing private fixed-ticket pool remains deployed and isolated from public LMSR positions.
 
 - Extend private order circuits with side, quantity, limit price, batch ID, nonce, and refund owner.
 - Escrow maximum collateral with committed orders.
@@ -138,9 +138,9 @@ Status: in progress. Local release gates pass; the devnet upgrade is waiting on 
 
 - Run formatting, Clippy correctness gates, Rust tests, TypeScript tests, service tests, web typecheck, production build, Anchor build, and local validator lifecycle.
 - Check dependency advisories and program binary size.
-- Verify V1 account decoding against the existing devnet accounts before upgrade.
-- Upgrade the existing devnet program only after all additive compatibility checks pass.
-- Deploy and fund one canonical V2 LMSR market.
+- Verify private-pool account decoding against the existing devnet accounts before upgrade.
+- Upgrade the existing devnet program only after all account-compatibility checks pass.
+- Deploy and fund one canonical LMSR market.
 - Resolve at least one Pyth devnet market and one TxLINE replay market.
 - Deploy a Switchboard example only when a canonical quote and credentials are available.
 - Update IDLs, deployment manifest, README, technical docs, and demo evidence.
@@ -154,4 +154,4 @@ Exit gate:
 Commits:
 
 - `test: harden LMSR and oracle lifecycle`
-- `chore: deploy Nortia V2 to devnet`
+- `chore: deploy Nortia market engine to devnet`

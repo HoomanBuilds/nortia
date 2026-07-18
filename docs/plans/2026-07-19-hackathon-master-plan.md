@@ -9,7 +9,7 @@
 
 ## 1. Outcome
 
-Ship a wallet-optional World Cup prediction terminal that visibly uses TxLINE for fixtures, odds, score replay, and result proofs. A connected trader can deposit one devnet USDC into a private binary pool only after a Noir Groth16 placement proof verifies on Solana. After lock, a two-of-three committee publishes only aggregate YES and NO counts. Anyone can settle the pool by submitting a final TxLINE V2 score proof to the market program. Winners claim USDC with a second proof without revealing which original commitment was theirs.
+Ship a wallet-optional World Cup prediction terminal that visibly uses TxLINE for fixtures, odds, score replay, and result proofs. A connected trader can deposit one devnet USDC into a private binary pool only after a Noir Groth16 placement proof verifies on Solana. After lock, a two-of-three committee publishes only aggregate YES and NO counts. Anyone can settle the pool by submitting a final TxLINE stat proof to the market program. Winners claim USDC with a second proof without revealing which original commitment was theirs.
 
 The hackathon lifecycle is an explicitly labeled compressed replay of a completed TxLINE fixture. This provides real signed proof data within the remaining deadline. It is not presented as a fair live market after the fact. The same program also models `Live` mode, where lock must occur before the configured fixture kickoff.
 
@@ -45,7 +45,7 @@ The following claims have already been spiked or verified:
 | Placement proof size | 324-byte proof plus 236-byte public witness | Feasible, but test full transaction size |
 | Solana Poseidon parity | TypeScript `poseidon(1,2)` matches Solana's vector | Reuse the same field encoding |
 | Anchor state logic | Draft program unit tests pass | Refactor collateral and settlement before treating it as current |
-| TxLINE V2 | Official devnet IDL commit `b6981f31e6f230cc1ef1729c34182414a1419682` exposes `validate_stat_v2` and a bool return | Pin IDL-derived types and program ID |
+| TxLINE stat validation | Official devnet IDL commit `b6981f31e6f230cc1ef1729c34182414a1419682` exposes `validate_stat_v2` and a bool return | Pin IDL-derived types and program ID |
 | Final soccer record | Current docs specify `action=game_finalised`, `statusId=100`, and `period=100` | Enforce final leaves and observed `seq >= 1` |
 | USDC | Circle devnet mint uses the original SPL Token Program with six decimals | Replace every SOL transfer with `transfer_checked` |
 
@@ -79,7 +79,7 @@ The current uncommitted implementation is a feasibility spike, not an approved p
 - One-percent pool-level protocol fee with a three-percent on-chain cap.
 - Noir placement and redeem proofs with Sunspot verifier CPIs.
 - Two-of-three aggregate committee script or service.
-- TxLINE V2 validation spike against the current devnet IDL.
+- TxLINE stat-validation spike against the current devnet IDL.
 - Atomic TxLINE settlement CPI if the transaction-size and compute gate passes.
 - Explicit receipt-based fallback settlement if the CPI gate fails.
 - Pull-based USDC claim, one-sided-pool cancellation, and timeout refund.
@@ -137,7 +137,7 @@ Gate:
 Tasks:
 
 - Activate devnet access with one dedicated service wallet.
-- Fetch a current eligible fixture, odds snapshot, historical scores, and V2 proof.
+- Fetch a current eligible fixture, odds snapshot, historical scores, and stat proof.
 - Simulate the official `validateStatV2` call.
 - Measure proof payload bytes, transaction bytes, and compute.
 - Attempt a minimal local CPI that reads and pins the bool return data.
@@ -230,7 +230,7 @@ Gate:
 
 | UTC window | Deliverable |
 | --- | --- |
-| 15:15-16:00 | Plan freeze and TxLINE V2 spike |
+| 15:15-16:00 | Plan freeze and TxLINE validation spike |
 | 16:00-17:30 | USDC Anchor refactor and local tests |
 | 17:30-18:30 | Proof and committee integration |
 | 18:30-20:30 | Read-only terminal plus transaction flow |
@@ -243,7 +243,7 @@ Gate:
 
 ## 9. Cutoff policy
 
-- If atomic TxLINE CPI has not passed by 16:15 UTC, ship official V2 view validation plus the explicitly labeled receipt-based resolver. Keep the CPI code on a non-demo branch or behind an off switch.
+- If atomic TxLINE CPI has not passed by 16:15 UTC, ship the official TxLINE validation view plus the explicitly labeled receipt-based resolver. Keep the CPI code on a non-demo branch or behind an off switch.
 - If browser proving is unstable by 19:00 UTC, use a deterministic pre-generated demo proof through the same on-chain verifier and label it accurately.
 - If the three-member HTTP committee is unstable by 19:00 UTC, use the audited local committee runner with three distinct keypairs and show the trust assumption.
 - If live SSE is unavailable, use TxLINE historical replay. If the licensed replay is unavailable, use an explicitly labeled synthetic schema-compatible fixture.

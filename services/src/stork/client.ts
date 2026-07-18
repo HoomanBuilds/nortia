@@ -1,4 +1,4 @@
-import { normalizeFeedId } from "nortia-client/v2";
+import { normalizeFeedId } from "nortia-client/market-engine";
 
 type Fetch = typeof fetch;
 

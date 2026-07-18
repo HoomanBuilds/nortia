@@ -14,33 +14,33 @@ import {
   positionPda,
   resolutionReceiptPda,
   u64Le,
-} from "./v2.js";
+} from "./market-engine.js";
 
 const creator = new PublicKey("9xQeWvG816bUx9EPjHmaT23yvVMiDq4AmgxJYuqz8rKP");
 const owner = new PublicKey("Vote111111111111111111111111111111111111111");
 
-test("V2 PDA derivation is stable for the canonical program", () => {
+test("market engine PDA derivation is stable for the canonical program", () => {
   const market = hybridMarketPda(creator, 42n);
-  assert.equal(enginePda().toBase58(), "8B9mT96Zryy4PpcQDFToKPjBa2BunjxfwASWDGPFCYid");
-  assert.equal(market.toBase58(), "6VymaMxxXEEcxhXKd5Snrqdw1T8w8Qb6mkC6Kqytwz2v");
-  assert.equal(hybridVaultPda(market).toBase58(), "DtQgaafLaV1SX5DCxcVfU3zArHxvYvusK2cmhRj4NVCX");
-  assert.equal(oracleConfigPda(market).toBase58(), "Hwcw8PwTuDkMbQMB1pA8HUfPA4wMpSNUDTphPYDAfnqJ");
-  assert.equal(positionPda(market, owner).toBase58(), "EZ7XNZazKeYq2diUwNrQAVjA6QaToH7KA6WjdtuXGqwg");
+  assert.equal(enginePda().toBase58(), "EWgvZgWZNc1m2yunKonZwavnPgY6n6T2BbwXFC6kdRpf");
+  assert.equal(market.toBase58(), "BxtdMB5c7EXPp798hvV4mCPX67he4oyGSL9nGCaK88cp");
+  assert.equal(hybridVaultPda(market).toBase58(), "FuixLDnoTKPESWJ3xyUk1hWTQFaLapxETScwVmh3FQSV");
+  assert.equal(oracleConfigPda(market).toBase58(), "3juvg7QqrzSR2yBV65SzGR86NNjKXKmvkCCzWp3iyGK3");
+  assert.equal(positionPda(market, owner).toBase58(), "zcZS7FFsreNinaFo3oyVrkRh3gja8qfcEc3Rdc6rK9u");
   assert.equal(
     resolutionReceiptPda(market).toBase58(),
-    "9Safr47wQ7g8meZjwcXSBqTVjhdjsZVqaEVJ9Z9eCBM1",
+    "8BA6eP5HVLw3hnwNtr5qmqrP6TZrLsLi78w4R3C5FHET",
   );
   assert.equal(
     optimisticProposalPda(market).toBase58(),
-    "2zRnhvf9UByoBNP5mAv7C96wBL4Kv3W49VDDaw582o1f",
+    "2YeQztxCPNLXnG3TYVQCZgL84hpHqv7yUXEq8QvHnqCE",
   );
   assert.equal(
     optimisticBondVaultPda(market).toBase58(),
-    "2AGKmb74DnvPBZWS3e4DJaDYPpV4zh4Z3Rk3Y6qfgkMe",
+    "4BccYofYDZEf6gdBf16WtYU1AsRphG9Toz1ZuvYXhrGx",
   );
   assert.equal(
     hybridMetadataPda(market).toBase58(),
-    "5AWAuNVsMbYHvWxaguatYUCbz1cq5YZE9pjmgo1qvVhq",
+    "3DnxWuALwpqquHa13dX3mXLNtSRs5681weXMcGyfMsd3",
   );
   assert.equal(NORTIA_PROGRAM_ID.toBase58(), "4S2EvdGrbKJ9zazvB4gtR83crTrVJWqqwoVVvEQy8VE9");
 });

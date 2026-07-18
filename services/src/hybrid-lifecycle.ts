@@ -1,13 +1,13 @@
 export type HybridPhase = "open" | "locked" | "resolving" | "disputed" | "resolved" | "closed";
 
 export type HybridResolver =
-  | "txline-stat-v2"
-  | "pyth-price-v2"
-  | "switchboard-quote-v1"
-  | "optimistic-v1"
-  | "uma-wormhole-v1"
-  | "chainlink-report-v1"
-  | "stork-price-v1";
+  | "txline-stat"
+  | "pyth-price"
+  | "switchboard-quote"
+  | "optimistic"
+  | "uma-wormhole"
+  | "chainlink-report"
+  | "stork-price";
 
 export type OptimisticProposalState = {
   challengeDeadline: number;
@@ -62,7 +62,7 @@ export function planHybridKeeperAction(
   if (market.phase === "resolved" || market.phase === "closed") return "none";
 
   if (now > market.resolutionDeadlineTs) {
-    if (market.resolver === "optimistic-v1" && market.proposal && !market.proposal.finalized) {
+    if (market.resolver === "optimistic" && market.proposal && !market.proposal.finalized) {
       return market.proposal.challenged
         ? "timeout-optimistic-dispute"
         : "finalize-optimistic";
@@ -76,13 +76,13 @@ export function planHybridKeeperAction(
   }
 
   const machineReady = market.phase === "open" || market.phase === "locked";
-  if (market.resolver === "pyth-price-v2") return machineReady ? "resolve-pyth" : "none";
-  if (market.resolver === "txline-stat-v2") return machineReady ? "resolve-txline" : "none";
-  if (market.resolver === "switchboard-quote-v1") {
+  if (market.resolver === "pyth-price") return machineReady ? "resolve-pyth" : "none";
+  if (market.resolver === "txline-stat") return machineReady ? "resolve-txline" : "none";
+  if (market.resolver === "switchboard-quote") {
     return machineReady ? "resolve-switchboard" : "none";
   }
-  if (market.resolver === "stork-price-v1") return machineReady ? "resolve-stork" : "none";
-  if (market.resolver !== "optimistic-v1" || !market.proposal || market.proposal.finalized) {
+  if (market.resolver === "stork-price") return machineReady ? "resolve-stork" : "none";
+  if (market.resolver !== "optimistic" || !market.proposal || market.proposal.finalized) {
     return "none";
   }
   if (

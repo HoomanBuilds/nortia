@@ -1,6 +1,6 @@
 import { HermesClient, type PriceUpdate } from "@pythnetwork/hermes-client";
 import { setTimeout as delay } from "node:timers/promises";
-import { normalizeFeedId } from "nortia-client/v2";
+import { normalizeFeedId } from "nortia-client/market-engine";
 
 export type HermesPriceApi = Pick<
   HermesClient,

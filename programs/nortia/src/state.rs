@@ -22,7 +22,7 @@ pub enum MarketCategory {
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ResolverKind {
-    TxlineStatV2,
+    TxlineStat,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq)]
@@ -170,14 +170,14 @@ pub enum HybridPricingModel {
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq)]
-pub enum OracleResolverV2 {
-    TxlineStatV2,
-    PythPriceV2,
-    SwitchboardQuoteV1,
-    OptimisticV1,
-    UmaWormholeV1,
-    ChainlinkReportV1,
-    StorkPriceV1,
+pub enum OracleResolver {
+    TxlineStat,
+    PythPrice,
+    SwitchboardQuote,
+    Optimistic,
+    UmaWormhole,
+    ChainlinkReport,
+    StorkPrice,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq)]
@@ -204,7 +204,7 @@ pub struct EngineConfig {
 }
 
 impl EngineConfig {
-    pub const VERSION: u8 = 2;
+    pub const VERSION: u8 = 1;
     pub const SPACE: usize = 8 + 197;
 }
 
@@ -252,7 +252,7 @@ pub struct HybridMarket {
 }
 
 impl HybridMarket {
-    pub const VERSION: u8 = 2;
+    pub const VERSION: u8 = 1;
     pub const SPACE: usize = 8 + 768;
     pub const OUTCOME_YES: u8 = 1;
     pub const OUTCOME_NO: u8 = 0;
@@ -265,7 +265,7 @@ pub struct OracleConfig {
     pub bump: u8,
     pub version: u8,
     pub market: Pubkey,
-    pub resolver: OracleResolverV2,
+    pub resolver: OracleResolver,
     pub source_program: Pubkey,
     pub source_queue: Pubkey,
     pub source_id: [u8; 32],
@@ -314,7 +314,7 @@ pub struct ResolutionReceipt {
     pub bump: u8,
     pub version: u8,
     pub market: Pubkey,
-    pub resolver: OracleResolverV2,
+    pub resolver: OracleResolver,
     pub outcome: u8,
     pub observation_value: i128,
     pub observation_exponent: i32,
@@ -459,7 +459,7 @@ pub struct InitializeEngineArgs {
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct OracleConfigArgs {
-    pub resolver: OracleResolverV2,
+    pub resolver: OracleResolver,
     pub source_program: Pubkey,
     pub source_queue: Pubkey,
     pub source_id: [u8; 32],
@@ -653,7 +653,7 @@ pub struct HybridMarketCreated {
     pub market_id: u64,
     pub creator: Pubkey,
     pub category: MarketCategory,
-    pub resolver: OracleResolverV2,
+    pub resolver: OracleResolver,
     pub liquidity_parameter: u64,
     pub initial_subsidy: u64,
     pub trade_fee_bps: u16,
@@ -703,7 +703,7 @@ pub struct HybridMarketLocked {
 pub struct HybridMarketResolved {
     pub market: Pubkey,
     pub outcome: u8,
-    pub resolver: OracleResolverV2,
+    pub resolver: OracleResolver,
     pub outstanding_liability: u64,
     pub evidence_hash: [u8; 32],
     pub settled_at: i64,

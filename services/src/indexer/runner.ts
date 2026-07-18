@@ -2,7 +2,7 @@ import { mkdir, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { AccountLayout } from "@solana/spl-token";
 import { Connection, Keypair, type PublicKey } from "@solana/web3.js";
-import { hybridVaultPda } from "nortia-client/v2";
+import { hybridVaultPda } from "nortia-client/market-engine";
 import { config } from "../config.js";
 import { createProgram, phaseName } from "../solana.js";
 import { buildHybridMarketSnapshot } from "./snapshot.js";
@@ -32,7 +32,7 @@ async function main() {
   const connection = new Connection(config.rpcUrl, "confirmed");
   const program = createProgram(connection, Keypair.generate());
   const writeSnapshot = async () => {
-    const [legacyRows, hybridRows, oracleRows, receiptRows, metadataRows, positionRows] = await Promise.all([
+    const [privateRows, publicRows, oracleRows, receiptRows, metadataRows, positionRows] = await Promise.all([
       program.account.market.all(),
       program.account.hybridMarket.all(),
       program.account.oracleConfig.all(),
@@ -54,10 +54,10 @@ async function main() {
       const market = account.market.toBase58();
       traderCounts.set(market, (traderCounts.get(market) ?? 0) + 1);
     }
-    const vaults = hybridRows.map(({ publicKey }) => hybridVaultPda(publicKey));
+    const vaults = publicRows.map(({ publicKey }) => hybridVaultPda(publicKey));
     const balances = await vaultBalances(connection, vaults);
     const now = Math.floor(Date.now() / 1_000);
-    const hybridMarkets = hybridRows.map(({ publicKey, account }, index) => {
+    const publicMarkets = publicRows.map(({ publicKey, account }, index) => {
       const oracle = oracles.get(account.oracleConfig.toBase58());
       if (!oracle) throw new Error(`Missing oracle config for ${publicKey.toBase58()}`);
       const vault = vaults[index];
@@ -74,7 +74,7 @@ async function main() {
         now,
       });
     });
-    const markets = legacyRows.map(({ publicKey, account }) => ({
+    const privateMarkets = privateRows.map(({ publicKey, account }) => ({
       address: publicKey.toBase58(),
       authority: account.authority.toBase58(),
       marketId: account.marketId.toString(),
@@ -101,12 +101,12 @@ async function main() {
       settlementEvidenceHash: Buffer.from(account.settlementEvidenceHash).toString("hex"),
     }));
     const snapshot = {
-      schemaVersion: 2,
+      schemaVersion: 1,
       generatedAt: new Date().toISOString(),
       network: "solana-devnet",
       programId: program.programId.toBase58(),
-      markets,
-      hybridMarkets,
+      privateMarkets,
+      publicMarkets,
     };
 
     await mkdir(path.dirname(config.indexOutputPath), { recursive: true });
@@ -115,8 +115,8 @@ async function main() {
     await rename(temporary, config.indexOutputPath);
     process.stdout.write(`${JSON.stringify({
       event: "index-complete",
-      legacyMarkets: markets.length,
-      hybridMarkets: hybridMarkets.length,
+      privateMarkets: privateMarkets.length,
+      publicMarkets: publicMarkets.length,
       output: config.indexOutputPath,
     })}\n`);
   };

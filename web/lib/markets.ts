@@ -8,7 +8,7 @@ export type HybridMarketDetails = {
   treasuryOwner: string;
   collateralMint: string;
   oracleConfig: string;
-  resolverId: "txline-stat-v2" | "pyth-price-v2" | "switchboard-quote-v1" | "optimistic-v1" | "uma-wormhole-v1" | "chainlink-report-v1" | "stork-price-v1";
+  resolverId: "txline-stat" | "pyth-price" | "switchboard-quote" | "optimistic" | "uma-wormhole" | "chainlink-report" | "stork-price";
   metadataPublished: boolean;
   rules: string | null;
   yesLabel: string;

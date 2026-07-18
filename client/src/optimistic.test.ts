@@ -11,7 +11,7 @@ test("optimistic evidence hash matches the Solana SHA-256 vector", async () => {
   const market = new PublicKey(new Uint8Array(32));
   assert.equal(
     hex(await optimisticEvidenceHash("assertion", market, 1, "https://example.com/final-result")),
-    "07f9aed92b70676680b53e40263415a19bdc2f6404b3f1b3878e0ce91f2e41ef",
+    "9d5b023ae88a1ed0167dbe0b9139a1fb60a9ea2700a6178a5cd1122f7d686378",
   );
 });
 

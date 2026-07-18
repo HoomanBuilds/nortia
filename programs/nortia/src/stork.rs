@@ -4,7 +4,7 @@ use crate::{
     constants::STORK_ORACLE_PROGRAM_ID,
     error::NortiaError,
     oracles::{compare_values, NormalizedObservation},
-    state::{OracleConfig, OracleResolverV2},
+    state::{OracleConfig, OracleResolver},
 };
 
 const STORK_FEED_SEED: &[u8] = b"stork_feed";
@@ -19,7 +19,7 @@ pub fn validate_stork_account(
     clock: &Clock,
 ) -> Result<NormalizedObservation> {
     require!(
-        oracle.resolver == OracleResolverV2::StorkPriceV1
+        oracle.resolver == OracleResolver::StorkPrice
             && oracle.source_program == STORK_ORACLE_PROGRAM_ID
             && oracle.source_queue == Pubkey::default(),
         NortiaError::InvalidOracleConfiguration
@@ -101,7 +101,7 @@ mod tests {
             bump: 1,
             version: OracleConfig::VERSION,
             market: Pubkey::new_unique(),
-            resolver: OracleResolverV2::StorkPriceV1,
+            resolver: OracleResolver::StorkPrice,
             source_program: STORK_ORACLE_PROGRAM_ID,
             source_queue: Pubkey::default(),
             source_id: FEED_ID,

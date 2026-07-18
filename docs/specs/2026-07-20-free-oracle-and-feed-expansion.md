@@ -68,7 +68,7 @@ Stork stores only its latest value. Therefore, the keeper must update and resolv
 
 | Category | Default resolver | Other allowed resolvers |
 | --- | --- | --- |
-| Sports | TxLINE | None in V2 until a generic signed-stat strategy is implemented |
+| Sports | TxLINE | None in the current protocol until a generic signed-stat strategy is implemented |
 | Crypto | Pyth sponsored push | Pyth pull, Stork |
 | Economics | Pyth pull or sponsored push | Switchboard, Stork, bonded assertion |
 | Politics | Bonded assertion | Switchboard numeric feed |
@@ -113,4 +113,3 @@ No resolver depends on an automatic offchain action. Keepers are permissionless,
 - Stork Solana API: https://docs.stork.network/api-reference/contract-apis/solana
 - Stork Solana addresses: https://docs.stork.network/resources/contract-addresses/solana
 - Stork asset registry: https://docs.stork.network/resources/asset-id-registry
-

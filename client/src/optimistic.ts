@@ -5,8 +5,8 @@ export const MAX_OPTIMISTIC_EVIDENCE_URI_BYTES = 160;
 export type OptimisticEvidenceRole = "assertion" | "challenge";
 
 const DOMAINS: Readonly<Record<OptimisticEvidenceRole, string>> = {
-  assertion: "nortia-optimistic-assertion-v1",
-  challenge: "nortia-optimistic-challenge-v1",
+  assertion: "nortia-optimistic-assertion",
+  challenge: "nortia-optimistic-challenge",
 };
 
 export function normalizeEvidenceUri(value: string): string {

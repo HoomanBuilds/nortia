@@ -14,17 +14,17 @@ All current deployment work is pinned to Solana devnet and Circle devnet USDC. N
 | Surface | Status |
 | --- | --- |
 | Next.js landing page and market application | Working |
-| Wallet connection, market creation, trading, portfolio, and claims | Working against the V2 IDL |
+| Wallet connection, market creation, trading, portfolio, and claims | Working against the current Nortia IDL |
 | Integer-only binary LMSR program | Built and tested |
-| TxLINE V1 private replay | Live on devnet |
-| TxLINE V2 resolver | Built and tested |
+| TxLINE private replay | Live on devnet |
+| TxLINE stat resolver | Built and tested |
 | Pyth timestamped price resolver | Built and tested |
 | Switchboard canonical quote resolver | Built and tested, curated feed provisioning required |
 | Bonded optimistic resolver | Built and tested |
-| V2 devnet program upgrade | Awaiting additional faucet SOL for program growth and the transient upload buffer |
+| Devnet market-engine upgrade | Funding and final deployment verification in progress |
 | UMA over Wormhole and Chainlink report adapters | Disabled until exact verifiers are deployed and tested |
 
-The existing V1 deployment remains usable while the V2 upgrade is pending. The deployment script checks authority, cluster identity, binary capacity, rent, and temporary buffer funding before spending any SOL.
+The private-pool demo remains usable while the canonical market engine is prepared for deployment. The deployment script checks authority, cluster identity, binary capacity, rent, and temporary buffer funding before spending any SOL.
 
 ## Product flow
 
@@ -72,15 +72,15 @@ flowchart LR
 ```
 
 ```text
-programs/nortia/    V1 private pools and additive V2 LMSR, oracle, receipt, and position state
+programs/nortia/    Private pools plus canonical LMSR, oracle, receipt, and position state
 circuits/           Noir placement and redemption circuits plus generated verifier programs
 client/             Exact LMSR math, PDA derivation, oracle inputs, portfolio math, and privacy primitives
 services/committee/ Private pool members and batch coordinator
-services/indexer/   V1 and V2 account snapshots, metadata verification, and resolution receipts
+services/indexer/   Private-pool and LMSR account snapshots, metadata verification, and resolution receipts
 services/keeper/    Lock, oracle settlement, optimistic finalization, and timeout automation
 services/prover/    Self-hosted Nargo and Sunspot execution boundary
 services/pyth/      Timestamped Hermes update retrieval and Pyth transaction composition
-services/txline/    TxLINE REST, final-record selection, and V2 proof mapping
+services/txline/    TxLINE REST, final-record selection, and stat-proof mapping
 web/                Next.js landing page and wallet-backed market application
 deployments/        Canonical public devnet addresses and transaction evidence
 docs/specs/         Product, economics, oracle, security, and integration specifications
@@ -89,7 +89,7 @@ docs/plans/         Ordered implementation and deployment plans
 
 Root Cargo files and `programs/` follow the Anchor workspace convention. JavaScript packages remain isolated under `web/`, `client/`, and `services/`.
 
-## V2 lifecycle
+## Market lifecycle
 
 | Phase | Trading | Permissionless actions | Exit |
 | --- | --- | --- | --- |
@@ -116,7 +116,7 @@ The program enforces every boundary. UI buttons are derived from the same state 
 - Solvency: every value-moving instruction checks that the vault covers the largest possible outcome liability.
 - Optimistic cap: each binary outcome liability cannot exceed the configured resolver bond.
 
-The legacy private pool retains its separate one-percent successful-pool fee, split 90% to the treasury and 10% to the resolving keeper. Refund paths remain fee-free.
+The private pool retains its separate one-percent successful-pool fee, split 90% to the treasury and 10% to the resolving keeper. Refund paths remain fee-free.
 
 ## Resolver policy
 
@@ -178,7 +178,7 @@ The keeper accepts only `game_finalised`, status `100`, final period `100`, and 
 What worked well:
 
 - One normalized score schema simplifies tournament-wide ingestion.
-- The `statKeys` V2 endpoint maps cleanly to deterministic market predicates.
+- The `statKeys` endpoint maps cleanly to deterministic market predicates.
 - Published daily-root PDA rules make CPI integration inspectable.
 - Historical, snapshot, bounded updates, and SSE cover live operation and recovery.
 
@@ -248,9 +248,9 @@ npm --prefix web run build
 
 Current verified results:
 
-- 61 Rust tests pass.
-- 38 client tests pass.
-- 34 service tests pass.
+- 68 Rust tests pass.
+- 40 client assertions across 8 test files pass.
+- 41 service assertions across 12 test files pass.
 - Clippy passes with warnings denied.
 - Anchor produces a valid SBF artifact.
 - Next.js typecheck and optimized production build pass.
@@ -258,7 +258,7 @@ Current verified results:
 
 ## Deployment
 
-The V1 private TxLINE stack is live on Solana devnet. Public evidence is stored in `deployments/devnet.json`.
+The private TxLINE stack is live on Solana devnet. Public evidence is stored in `deployments/devnet.json`.
 
 | Account | Address |
 | --- | --- |
@@ -269,20 +269,20 @@ The V1 private TxLINE stack is live on Solana devnet. Public evidence is stored 
 | Judge replay market | `44cD1kbvuheo5wSM4gxEZvAfitAXbC25f2u4Mzs48qix` |
 | Replay USDC vault | `EqjB6nuMcvhtTw9Cngs2EgSNjthC6VrxFDthZnoYxtyM` |
 
-The upgraded V2 artifact is larger than the current program allocation. The devnet script calculates the program growth rent, temporary upload buffer rent, fee reserve, payer balance, and upgrade authority before attempting a transaction:
+The current market-engine artifact is larger than the deployed private-pool program allocation. The devnet script calculates the program growth rent, temporary upload buffer rent, fee reserve, payer balance, and upgrade authority before attempting a transaction:
 
 ```bash
 scripts/deploy-devnet.sh
 ```
 
-After a successful upgrade, the same command initializes the additive V2 engine with a 70/30 fee split. Existing V1 PDAs and account layouts remain unchanged.
+After a successful upgrade, the same command initializes the canonical market engine with a 70/30 fee split. Existing private-pool PDAs and account layouts remain unchanged.
 
 Create the canonical timestamped Pyth market after funding the creator with Circle devnet USDC:
 
 ```bash
 NORTIA_KEYPAIR_PATH=/path/to/authority.json \
-NORTIA_V2_OBSERVATION_AT=2026-07-21T12:00:00Z \
-npm --prefix services run deploy:v2-pyth-market
+NORTIA_PYTH_OBSERVATION_AT=2026-07-21T12:00:00Z \
+npm --prefix services run deploy:pyth-market
 ```
 
 Create or verify the canonical private replay:

@@ -1,5 +1,5 @@
 const FRIENDLY_ERRORS: Readonly<Record<string, string>> = {
-  InvalidEngineConfiguration: "The V2 market engine is not ready on this deployment.",
+  InvalidEngineConfiguration: "The market engine is not ready on this deployment.",
   InvalidMarketConfiguration: "Review the market dates, liquidity, and trade limits.",
   InvalidOracleConfiguration: "The selected resolver configuration is not supported.",
   InvalidMarketMetadata: "The question or rules no longer match this market's immutable hashes.",

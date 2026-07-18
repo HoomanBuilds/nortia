@@ -20,7 +20,7 @@ import {
   type HybridPhaseName,
   type HybridPositionStatus,
 } from "nortia-client/portfolio";
-import { hybridMetadataPda, hybridVaultPda } from "nortia-client/v2";
+import { hybridMetadataPda, hybridVaultPda } from "nortia-client/market-engine";
 import {
   AlertTriangle,
   ArrowUpRight,

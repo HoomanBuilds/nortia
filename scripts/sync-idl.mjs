@@ -12,7 +12,7 @@ if (idl.address !== expectedProgram) {
   throw new Error(`Refusing to sync IDL for unexpected program ${String(idl.address)}`);
 }
 if (!idl.instructions.some((instruction) => instruction.name === "buy_hybrid_shares")) {
-  throw new Error("Generated IDL does not contain the V2 market instructions");
+  throw new Error("Generated IDL does not contain the market trading instructions");
 }
 
 for (const destination of [

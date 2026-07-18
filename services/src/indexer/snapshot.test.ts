@@ -14,7 +14,7 @@ const integer = (value: number | bigint) => ({
 });
 
 const market = {
-  version: 2,
+  version: 1,
   marketId: integer(42),
   creator: key(1),
   liquidityOwner: key(2),
@@ -56,7 +56,7 @@ const market = {
 const oracle = {
   version: 1,
   market: key(10),
-  resolver: { pythPriceV2: {} },
+  resolver: { pythPrice: {} },
   sourceProgram: key(11),
   sourceQueue: PublicKey.default,
   sourceId: Array(32).fill(12),
@@ -76,7 +76,7 @@ const oracle = {
   consumed: false,
 };
 
-test("V2 snapshot preserves exact amounts and deterministic LMSR probability", () => {
+test("LMSR snapshot preserves exact amounts and deterministic probability", () => {
   const snapshot = buildHybridMarketSnapshot({
     address: key(10),
     vault: key(14),
@@ -91,7 +91,7 @@ test("V2 snapshot preserves exact amounts and deterministic LMSR probability", (
 
   assert.equal(snapshot.marketId, "42");
   assert.equal(snapshot.category, "crypto");
-  assert.equal(snapshot.resolver, "pyth-price-v2");
+  assert.equal(snapshot.resolver, "pyth-price");
   assert.equal(snapshot.yesProbabilityPpm, 524_980);
   assert.equal(snapshot.vaultBalance, "75000000");
   assert.equal(snapshot.volume, "24000000");
@@ -204,7 +204,7 @@ test("resolution receipts expose immutable oracle evidence", () => {
   const receipt = buildResolutionReceiptSnapshot({
     version: 1,
     market: key(10),
-    resolver: { switchboardQuoteV1: {} },
+    resolver: { switchboardQuote: {} },
     outcome: 1,
     observationValue: integer(1_234_000_000_000_000_000n),
     observationExponent: -18,
@@ -219,7 +219,7 @@ test("resolution receipts expose immutable oracle evidence", () => {
     finalizedAt: integer(1_305),
   });
 
-  assert.equal(receipt.resolver, "switchboard-quote-v1");
+  assert.equal(receipt.resolver, "switchboard-quote");
   assert.equal(receipt.outcome, "yes");
   assert.equal(receipt.observationValue, "1234000000000000000");
   assert.equal(receipt.sampleCount, 3);

@@ -9,14 +9,14 @@ import { hybridPhaseName, oracleResolverName } from "./solana.js";
 
 const base: HybridKeeperInput = {
   phase: "open",
-  resolver: "pyth-price-v2",
+  resolver: "pyth-price",
   lockTs: 100,
   resolveNotBeforeTs: 120,
   resolutionDeadlineTs: 200,
   proposal: null,
 };
 
-test("open V2 markets lock before their resolution boundary", () => {
+test("open LMSR markets lock before their resolution boundary", () => {
   assert.equal(planHybridKeeperAction(base, 99), "none");
   assert.equal(planHybridKeeperAction(base, 100), "lock");
   assert.equal(planHybridKeeperAction({ ...base, phase: "locked" }, 100), "none");
@@ -24,10 +24,10 @@ test("open V2 markets lock before their resolution boundary", () => {
 
 test("machine resolvers become actionable at the inclusive observation boundary", () => {
   const expected = new Map<HybridResolver, ReturnType<typeof planHybridKeeperAction>>([
-    ["pyth-price-v2", "resolve-pyth"],
-    ["txline-stat-v2", "resolve-txline"],
-    ["switchboard-quote-v1", "resolve-switchboard"],
-    ["stork-price-v1", "resolve-stork"],
+    ["pyth-price", "resolve-pyth"],
+    ["txline-stat", "resolve-txline"],
+    ["switchboard-quote", "resolve-switchboard"],
+    ["stork-price", "resolve-stork"],
   ]);
   for (const [resolver, action] of expected) {
     assert.equal(planHybridKeeperAction({ ...base, resolver }, 120), action);
@@ -46,7 +46,7 @@ test("machine resolver timeout is strict and terminal states remain inert", () =
 test("optimistic assertions finalize only after their challenge window", () => {
   const optimistic: HybridKeeperInput = {
     ...base,
-    resolver: "optimistic-v1",
+    resolver: "optimistic",
     phase: "resolving",
     proposal: { challengeDeadline: 150, challenged: false, finalized: false },
   };
@@ -57,7 +57,7 @@ test("optimistic assertions finalize only after their challenge window", () => {
 test("optimistic disputes wait for arbitration and timeout to invalid", () => {
   const disputed: HybridKeeperInput = {
     ...base,
-    resolver: "optimistic-v1",
+    resolver: "optimistic",
     phase: "disputed",
     proposal: { challengeDeadline: 150, challenged: true, finalized: false },
   };
@@ -73,13 +73,13 @@ test("optimistic disputes wait for arbitration and timeout to invalid", () => {
 });
 
 test("optimistic markets without an assertion use generic hard timeout", () => {
-  const optimistic = { ...base, resolver: "optimistic-v1" as const };
+  const optimistic = { ...base, resolver: "optimistic" as const };
   assert.equal(planHybridKeeperAction(optimistic, 120), "none");
   assert.equal(planHybridKeeperAction(optimistic, 201), "resolve-timeout");
 });
 
 test("disabled resolver variants never produce a settlement action", () => {
-  for (const resolver of ["uma-wormhole-v1", "chainlink-report-v1"] as const) {
+  for (const resolver of ["uma-wormhole", "chainlink-report"] as const) {
     assert.equal(planHybridKeeperAction({ ...base, resolver }, 120), "none");
     assert.equal(planHybridKeeperAction({ ...base, resolver }, 201), "resolve-timeout");
   }
@@ -88,11 +88,11 @@ test("disabled resolver variants never produce a settlement action", () => {
 test("Anchor enum objects map to the keeper's stable names", () => {
   assert.equal(hybridPhaseName({ open: {} }), "open");
   assert.equal(hybridPhaseName({ resolving: {} }), "resolving");
-  assert.equal(oracleResolverName({ txlineStatV2: {} }), "txline-stat-v2");
-  assert.equal(oracleResolverName({ pythPriceV2: {} }), "pyth-price-v2");
-  assert.equal(oracleResolverName({ switchboardQuoteV1: {} }), "switchboard-quote-v1");
-  assert.equal(oracleResolverName({ optimisticV1: {} }), "optimistic-v1");
-  assert.equal(oracleResolverName({ storkPriceV1: {} }), "stork-price-v1");
+  assert.equal(oracleResolverName({ txlineStat: {} }), "txline-stat");
+  assert.equal(oracleResolverName({ pythPrice: {} }), "pyth-price");
+  assert.equal(oracleResolverName({ switchboardQuote: {} }), "switchboard-quote");
+  assert.equal(oracleResolverName({ optimistic: {} }), "optimistic");
+  assert.equal(oracleResolverName({ storkPrice: {} }), "stork-price");
   assert.throws(() => hybridPhaseName({ broken: {} }), /hybrid phase/);
   assert.throws(() => oracleResolverName({ broken: {} }), /oracle resolver/);
 });

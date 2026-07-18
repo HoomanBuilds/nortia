@@ -41,7 +41,7 @@ Expected evidence:
 
 - Three placement transactions with commitments and no public side.
 - Two distinct committee attestations on the batch transaction.
-- TxLINE final record and V2 proof receipt.
+- TxLINE final record and stat-proof receipt.
 - Resolution transaction with fee transfer to treasury.
 - Winning claim transaction with recipient balance increasing by 1.485000 USDC.
 
@@ -82,9 +82,9 @@ Do not print, screen-record, or commit any keypair file or secret environment va
 ### TxLINE
 
 - Devnet subscription active.
-- Fixtures, odds, replay, and V2 proof calls succeed.
+- Fixtures, odds, replay, and stat-proof calls succeed.
 - Final sequence is observed, positive, and recorded.
-- Direct official V2 view succeeds.
+- Direct official TxLINE validation view succeeds.
 - CPI gate result is documented.
 
 ### Web and services
@@ -238,7 +238,7 @@ Positive:
 - One normalized schema across fixtures, odds, and scores.
 - Historical replay enables deterministic demos.
 - Solana-anchored Merkle roots enable verifiable settlement.
-- V2 indexed predicates support multi-stat sports conditions.
+- Indexed predicates support multi-stat sports conditions.
 
 Friction to report only if observed:
 

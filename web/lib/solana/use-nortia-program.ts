@@ -13,7 +13,7 @@ import {
   SWITCHBOARD_QUOTE_PROGRAM_KEY,
   TXLINE_PROGRAM_KEY,
 } from "@/lib/solana/constants";
-import { enginePda } from "nortia-client/v2";
+import { enginePda } from "nortia-client/market-engine";
 import { protocolPda } from "@/lib/solana/pdas";
 
 export function useNortiaProgram() {

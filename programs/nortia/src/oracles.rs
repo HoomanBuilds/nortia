@@ -1,16 +1,16 @@
 use anchor_lang::prelude::*;
 use core::cmp::Ordering;
-use pyth_solana_receiver_sdk::price_update::{PriceUpdateV2, VerificationLevel};
+use pyth_solana_receiver_sdk::price_update::{PriceUpdateV2 as PythPriceUpdate, VerificationLevel};
 
 use crate::{
     constants::{FEE_SPLIT_DENOMINATOR, PYTH_PUSH_ORACLE_PROGRAM_ID, PYTH_RECEIVER_PROGRAM_ID},
     error::NortiaError,
-    state::{OracleConfig, OracleResolverV2, ValueComparator},
+    state::{OracleConfig, OracleResolver, ValueComparator},
 };
 
 pub struct ValidatedPythUpdate {
     pub observation: NormalizedObservation,
-    pub update: PriceUpdateV2,
+    pub update: PythPriceUpdate,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -25,12 +25,12 @@ pub struct NormalizedObservation {
 }
 
 pub fn validate_pyth_observation(
-    update: &PriceUpdateV2,
+    update: &PythPriceUpdate,
     oracle: &OracleConfig,
     clock: &Clock,
 ) -> Result<NormalizedObservation> {
     require!(
-        oracle.resolver == OracleResolverV2::PythPriceV2
+        oracle.resolver == OracleResolver::PythPrice
             && (oracle.source_program == PYTH_RECEIVER_PROGRAM_ID
                 || oracle.source_program == PYTH_PUSH_ORACLE_PROGRAM_ID),
         NortiaError::InvalidOracleConfiguration
@@ -116,7 +116,7 @@ pub fn validate_pyth_account(
     let data = price_update
         .try_borrow_data()
         .map_err(|_| error!(NortiaError::InvalidOracleConfiguration))?;
-    let update = PriceUpdateV2::try_deserialize(&mut data.as_ref())
+    let update = PythPriceUpdate::try_deserialize(&mut data.as_ref())
         .map_err(|_| error!(NortiaError::InvalidOracleConfiguration))?;
     let observation = validate_pyth_observation(&update, oracle, clock)?;
     Ok(ValidatedPythUpdate {
@@ -211,7 +211,7 @@ mod tests {
             bump: 1,
             version: OracleConfig::VERSION,
             market: Pubkey::new_unique(),
-            resolver: OracleResolverV2::PythPriceV2,
+            resolver: OracleResolver::PythPrice,
             source_program: PYTH_RECEIVER_PROGRAM_ID,
             source_queue: Pubkey::default(),
             source_id: FEED_ID,
@@ -232,8 +232,8 @@ mod tests {
         }
     }
 
-    fn price_update() -> PriceUpdateV2 {
-        PriceUpdateV2 {
+    fn price_update() -> PythPriceUpdate {
+        PythPriceUpdate {
             write_authority: Pubkey::new_unique(),
             verification_level: VerificationLevel::Full,
             price_message: PriceFeedMessage {

@@ -73,7 +73,7 @@ async function main() {
   const signature = await program.methods.initializeMarket({
     marketId,
     category: { sports: {} },
-    resolverKind: { txlineStatV2: {} },
+    resolverKind: { txlineStat: {} },
     questionHash: hash(fixture.question),
     rulesHash: hash(fixture.rules),
     fixtureId: new BN(fixture.id),

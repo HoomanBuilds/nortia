@@ -1,13 +1,13 @@
-# Nortia V2 security and deployment review
+# Nortia security and deployment review
 
 - Review date: 2026-07-20
 - Network scope: Solana devnet only
 - Collateral scope: Circle devnet USDC only
-- Deployment scope: additive upgrade of the existing Nortia program
+- Deployment scope: upgrade of the existing devnet program while preserving the private-pool demo
 
 ## Outcome
 
-The V2 source, generated IDL, service adapters, client math, wallet flows, category-aware oracle creation, and web build pass their local release gates. The existing V1 deployment remains live. The V2 program upgrade is not yet live because the upgrade-authority wallet cannot currently cover both ProgramData growth and the temporary upload buffer.
+The current source, generated IDL, service adapters, client math, wallet flows, category-aware oracle creation, and web build pass their local release gates. The private-pool demo remains live on devnet. The market-engine program upgrade is not yet live because the upgrade-authority wallet cannot currently cover both ProgramData growth and the temporary upload buffer.
 
 The deployment script now exits before spending funds when the cluster, authority, artifact, capacity, rent, or transient balance gate fails.
 
@@ -26,9 +26,9 @@ The deployment script now exits before spending funds when the cluster, authorit
 | Next.js optimized production build | Pass |
 | Desktop visual review | Pass |
 | True 390px device emulation | Pass, no page-level horizontal overflow |
-| V1 program and PDA decoding | Pass against current devnet accounts |
+| Private-pool program and PDA decoding | Pass against current devnet accounts |
 | Oracle API smoke tests | Pass for Pyth Crypto, Pyth Economics, readiness, and fail-closed Stork access |
-| V2 deployment transaction | Pending 1.331878786 additional devnet SOL |
+| Market-engine deployment transaction | Pending 1.331878786 additional devnet SOL |
 
 ## Protocol properties reviewed
 
@@ -40,12 +40,12 @@ The deployment script now exits before spending funds when the cluster, authorit
 - Creator subsidy covers `ceil(b * ln(2))` plus the rounding reserve.
 - Every buy, sell, resolution, claim, and liquidity withdrawal preserves the outstanding-liability bound.
 - The creator cannot withdraw collateral reserved for unsettled traders.
-- A V2 market enters `Closed` only when outstanding liability and projected vault balance are both zero.
+- A public LMSR market enters `Closed` only when outstanding liability and projected vault balance are both zero.
 - The optimistic resolver caps each binary liability by the configured bond.
 
 ### State and authorization
 
-- V2 uses additive PDA namespaces and does not alter V1 account layouts.
+- The market engine uses isolated PDA namespaces and does not alter private-pool account layouts.
 - Trading requires `Open`, a time strictly before lock, an unexpired user deadline, and a valid exact-share size.
 - Price guards are maximum spend for buys and minimum proceeds for sells.
 - Position PDAs bind market and wallet owner.
@@ -76,10 +76,10 @@ The deployment script now exits before spending funds when the cluster, authorit
 ## Findings fixed during review
 
 1. The deployment workflow could begin expensive work without calculating ProgramData growth and temporary buffer rent. It now performs a fail-fast funding preflight.
-2. The initializer returned when the V1 protocol PDA existed and therefore skipped V2 engine initialization. It now initializes each layer idempotently.
+2. The initializer returned when the private-pool protocol PDA existed and therefore skipped market-engine initialization. It now initializes each layer idempotently.
 3. The deploy path accepted any configured RPC origin. It now checks the Solana devnet genesis hash.
-4. The V2 `Closed` enum had no reachable transition. Markets now close only after liability and the vault are fully drained.
-5. The landing page still described the V1 fixed-ticket and 90/10 fee model as the whole product. It now presents general LMSR markets and the separate legacy private-pool economics accurately.
+4. The LMSR `Closed` enum had no reachable transition. Markets now close only after liability and the vault are fully drained.
+5. The landing page still described the fixed-ticket and 90/10 fee model as the whole product. It now presents general LMSR markets and the separate private-pool economics accurately.
 6. Next.js carried a vulnerable nested PostCSS release. A compatible override pins the patched release.
 7. Stork REST examples contain fractional nanoseconds, while the first parser required whole-second divisibility. The contract now floors nanoseconds to seconds and tests the maximum fractional component.
 8. Hermes catalog results were trusted as typed objects and an empty Economics search could retain a Crypto selection. Catalog parsing now rejects malformed values and market creation fails closed when no category-compatible feed is selected.
@@ -96,7 +96,7 @@ The deployment script now exits before spending funds when the cluster, authorit
 
 ### Devnet integration gaps
 
-- V2 must be upgraded and the engine PDA initialized before wallet V2 actions become available.
+- The current program must be upgraded and the engine PDA initialized before wallet LMSR actions become available.
 - A canonical Pyth market still needs one full devnet create, trade, resolve, claim, and liquidity-withdraw receipt sequence.
 - Switchboard feed definitions and managed update instructions must be provisioned externally before a canonical quote market can be demonstrated.
 - Stork requires a `STORK_API_TOKEN` plus its external Solana pusher. Nortia does not claim this path is free without access credentials.
@@ -117,7 +117,7 @@ Do not send an upgrade transaction until all of the following are true:
 2. The payer retains a fee reserve after ProgramData extension and buffer creation.
 3. The generated IDL is synchronized to services and web.
 4. All gates in this review pass on the exact deployment commit.
-5. A post-upgrade read confirms that V1 accounts still decode and the V2 engine contains the intended 70/30 fee split.
+5. A post-upgrade read confirms that private-pool accounts still decode and the market engine contains the intended 70/30 fee split.
 
 The exact 2026-07-20 preflight for artifact `b3bc4a017002e82b367f4f6175a9c7062f4661fd4664ae5b7a715b97b4ac4b0b` requires 12.127081840 transient SOL. The upgrade authority has 10.795203054 SOL, leaving a 1.331878786 SOL shortfall. The separately funded devnet wallet remains untouched until the transfer amount is explicitly approved.
 

@@ -20,7 +20,7 @@ export type PrivatePosition = {
   status: "prepared" | "open" | "claimable" | "claimed" | "refundable" | "refunded" | "lost";
 };
 
-const STORAGE_KEY = "nortia.private-positions.v1";
+const STORAGE_KEY = "nortia.private-positions";
 
 export function loadPrivatePositions(): PrivatePosition[] {
   if (typeof window === "undefined") return [];

@@ -108,7 +108,7 @@ Final settlement record requirements:
 - `period == 100` in both proven score leaves.
 - `seq >= 1` and equal to the observed final record sequence.
 
-## 6. V2 proof request
+## 6. Stat-proof request
 
 ```text
 GET /api/scores/stat-validation
@@ -178,7 +178,7 @@ Checks:
 
 ## 9. CPI contract
 
-The official V2 discriminator is:
+The official `validate_stat_v2` discriminator is:
 
 `[208, 215, 194, 214, 241, 71, 246, 178]`
 
@@ -209,7 +209,7 @@ Before the rest of the program depends on CPI, measure:
 - Raw payload size.
 - Full instruction size.
 - Full versioned transaction size.
-- Compute units consumed by direct V2 validation.
+- Compute units consumed by direct stat validation.
 - Compute units consumed through the market CPI.
 - Whether address lookup tables are needed.
 - Whether the official daily root exists for the selected proof.
@@ -227,7 +227,7 @@ If atomic CPI misses the scheduled gate, ship a separate market configured at cr
 
 Fallback flow:
 
-1. Server fetches the same V2 proof.
+1. Server fetches the same stat proof.
 2. Official TxLINE program validates it through `.view()` simulation.
 3. The app records proof digest, fixture, sequence, values, root PDA, simulation logs, and result.
 4. A pinned resolution authority submits the one-way result to Nortia.

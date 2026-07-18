@@ -7,7 +7,7 @@ use crate::{
     constants::{SWITCHBOARD_DEVNET_QUEUE, SWITCHBOARD_QUOTE_PROGRAM_ID},
     error::NortiaError,
     oracles::{compare_values, NormalizedObservation},
-    state::{OracleConfig, OracleResolverV2},
+    state::{OracleConfig, OracleResolver},
 };
 
 const SWITCHBOARD_QUOTE_DISCRIMINATOR: &[u8; 8] = b"SBOracle";
@@ -20,7 +20,7 @@ pub fn validate_switchboard_account(
     clock: &Clock,
 ) -> Result<NormalizedObservation> {
     require!(
-        oracle.resolver == OracleResolverV2::SwitchboardQuoteV1
+        oracle.resolver == OracleResolver::SwitchboardQuote
             && oracle.source_program == SWITCHBOARD_QUOTE_PROGRAM_ID
             && oracle.source_queue == SWITCHBOARD_DEVNET_QUEUE,
         NortiaError::InvalidOracleConfiguration
@@ -159,7 +159,7 @@ mod tests {
             bump: 1,
             version: OracleConfig::VERSION,
             market: Pubkey::new_unique(),
-            resolver: OracleResolverV2::SwitchboardQuoteV1,
+            resolver: OracleResolver::SwitchboardQuote,
             source_program: SWITCHBOARD_QUOTE_PROGRAM_ID,
             source_queue: queue,
             source_id: FEED_ID,

@@ -2,13 +2,13 @@
 
 This workspace keeps network and automation responsibilities outside the web application.
 
-- `txline/` authenticates snapshots, historical scores, SSE data, and V2 proof payloads.
+- `txline/` authenticates snapshots, historical scores, SSE data, and TxLINE stat-proof payloads.
 - `indexer/` reads Nortia market accounts and emits a normalized discovery snapshot.
 - `committee/` runs one share-validation member per process with durable local state.
 - `pyth/` catalogs financial feeds, validates timestamped Hermes updates, and consumes sponsored push accounts.
 - `switchboard/` validates stored feed definitions and composes managed quote updates with resolution.
 - `stork/` lists token-gated assets and validates exact signed asset metadata for the external chain pusher.
-- `keeper/` executes V1 and V2 locking, TxLINE, Pyth, Switchboard, optimistic, and timeout transitions.
+- `keeper/` executes private-pool and LMSR locking, TxLINE, Pyth, Switchboard, optimistic, and timeout transitions.
 
 Run three committee processes with distinct `COMMITTEE_MEMBER_INDEX`, port, key material, and state paths. The current hackathon profile keeps committee signing operator-managed. Production should move signer keys into isolated remote signers or HSMs.
 
@@ -26,4 +26,4 @@ The 47 sponsored Pyth feeds resolve directly from canonical shard-0 push account
 
 TxLINE's hackathon credentials remain separate from the oracle provider profile because the free event access still uses authenticated API requests. Switchboard public Crossbar needs no API key for low-volume use, though authenticated upstream jobs can require protected variables. Stork requires `STORK_API_TOKEN` and an external Stork chain pusher to update the canonical Solana account before the keeper resolves it.
 
-The indexer emits schema version 2 with backward-compatible `markets` for V1 pools and `hybridMarkets` for V2. V2 entries preserve token amounts as integer strings and include LMSR probability, current vault balance, oracle configuration, lifecycle state, fee totals, trader count, verified immutable metadata, and the resolution receipt when present. Metadata is omitted unless its question, rules, and outcome labels match the hashes committed by the market account.
+The indexer emits its initial canonical schema with `privateMarkets` for private pools and `publicMarkets` for LMSR markets. Public-market entries preserve token amounts as integer strings and include probability, current vault balance, oracle configuration, lifecycle state, fee totals, trader count, verified immutable metadata, and the resolution receipt when present. Metadata is omitted unless its question, rules, and outcome labels match the hashes committed by the market account.

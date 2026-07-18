@@ -81,7 +81,7 @@ pub mod nortia {
                 && args.question_hash != [0; 32]
                 && args.rules_hash != [0; 32]
                 && args.category == MarketCategory::Sports
-                && args.resolver_kind == ResolverKind::TxlineStatV2
+                && args.resolver_kind == ResolverKind::TxlineStat
                 && args.fixture_id > 0
                 && (0..=MAX_TOTAL_GOALS_THRESHOLD).contains(&args.total_goals_threshold)
                 && args.fixture_start_ts > 0
@@ -569,7 +569,7 @@ pub mod nortia {
         let initial_subsidy =
             lmsr::required_subsidy(args.liquidity_parameter, args.rounding_reserve)
                 .map_err(|_| error!(NortiaError::InvalidLmsrState))?;
-        let resolver_security_cap = if args.oracle.resolver == OracleResolverV2::OptimisticV1 {
+        let resolver_security_cap = if args.oracle.resolver == OracleResolver::Optimistic {
             require!(
                 args.oracle.bond_amount >= initial_subsidy,
                 NortiaError::InvalidOracleConfiguration
@@ -904,7 +904,7 @@ pub mod nortia {
         let ema_confidence_bytes = validated.update.price_message.ema_conf.to_le_bytes();
         let posted_slot_bytes = validated.update.posted_slot.to_le_bytes();
         let evidence_hash = hashv(&[
-            b"nortia-pyth-resolution-v1",
+            b"nortia-pyth-resolution",
             ctx.accounts.market.key().as_ref(),
             ctx.accounts.oracle_config.config_hash.as_ref(),
             ctx.accounts.oracle_config.source_id.as_ref(),
@@ -948,7 +948,7 @@ pub mod nortia {
             .try_borrow_data()
             .map_err(|_| error!(NortiaError::InvalidStorkFeed))?;
         let evidence_hash = hashv(&[
-            b"nortia-stork-resolution-v1",
+            b"nortia-stork-resolution",
             ctx.accounts.market.key().as_ref(),
             ctx.accounts.oracle_config.config_hash.as_ref(),
             ctx.accounts.oracle_config.source_id.as_ref(),
@@ -994,7 +994,7 @@ pub mod nortia {
             .serialize(&mut evidence_bytes)
             .map_err(|_| error!(NortiaError::InvalidScorePayload))?;
         let evidence_hash = hashv(&[
-            b"nortia-txline-resolution-v2",
+            b"nortia-txline-resolution",
             ctx.accounts.market.key().as_ref(),
             ctx.accounts.oracle_config.config_hash.as_ref(),
             ctx.accounts.oracle_config.source_id.as_ref(),
@@ -1038,7 +1038,7 @@ pub mod nortia {
             .try_borrow_data()
             .map_err(|_| error!(NortiaError::InvalidSwitchboardQuote))?;
         let evidence_hash = hashv(&[
-            b"nortia-switchboard-resolution-v1",
+            b"nortia-switchboard-resolution",
             ctx.accounts.market.key().as_ref(),
             ctx.accounts.oracle_config.config_hash.as_ref(),
             ctx.accounts.oracle_config.source_queue.as_ref(),
@@ -1193,9 +1193,9 @@ pub mod nortia {
             optimistic_finalize_outcome(&ctx.accounts.market, &ctx.accounts.proposal, now)?;
         let evidence_hash = hashv(&[
             if timed_out {
-                b"nortia-optimistic-proposal-timeout-v1"
+                b"nortia-optimistic-proposal-timeout"
             } else {
-                b"nortia-optimistic-unchallenged-v1"
+                b"nortia-optimistic-unchallenged"
             },
             ctx.accounts.market.key().as_ref(),
             ctx.accounts.oracle_config.config_hash.as_ref(),
@@ -1267,7 +1267,7 @@ pub mod nortia {
         };
         let (winner_payout, treasury_fee) = optimistic_dispute_payout(proposal.bond_amount)?;
         let evidence_hash = hashv(&[
-            b"nortia-optimistic-arbitration-v1",
+            b"nortia-optimistic-arbitration",
             ctx.accounts.market.key().as_ref(),
             ctx.accounts.oracle_config.config_hash.as_ref(),
             ctx.accounts.proposal.key().as_ref(),
@@ -1325,7 +1325,7 @@ pub mod nortia {
             NortiaError::InvalidPhase
         );
         let evidence_hash = hashv(&[
-            b"nortia-optimistic-dispute-timeout-v1",
+            b"nortia-optimistic-dispute-timeout",
             ctx.accounts.market.key().as_ref(),
             ctx.accounts.oracle_config.config_hash.as_ref(),
             ctx.accounts.proposal.key().as_ref(),
@@ -1399,7 +1399,7 @@ pub mod nortia {
         );
         let deadline_bytes = ctx.accounts.market.resolution_deadline_ts.to_le_bytes();
         let evidence_hash = hashv(&[
-            b"nortia-oracle-timeout-v1",
+            b"nortia-oracle-timeout",
             ctx.accounts.market.key().as_ref(),
             ctx.accounts.oracle_config.config_hash.as_ref(),
             &deadline_bytes,
@@ -2009,7 +2009,7 @@ pub struct ResolveHybridWithPyth<'info> {
         bump = oracle_config.bump,
         constraint = oracle_config.market == market.key()
             @ NortiaError::InvalidOracleConfiguration,
-        constraint = oracle_config.resolver == OracleResolverV2::PythPriceV2
+        constraint = oracle_config.resolver == OracleResolver::PythPrice
             @ NortiaError::InvalidOracleConfiguration,
         constraint = !oracle_config.consumed @ NortiaError::ResolutionReplay
     )]
@@ -2054,7 +2054,7 @@ pub struct ResolveHybridWithTxline<'info> {
         bump = oracle_config.bump,
         constraint = oracle_config.market == market.key()
             @ NortiaError::InvalidOracleConfiguration,
-        constraint = oracle_config.resolver == OracleResolverV2::TxlineStatV2
+        constraint = oracle_config.resolver == OracleResolver::TxlineStat
             @ NortiaError::InvalidOracleConfiguration,
         constraint = !oracle_config.consumed @ NortiaError::ResolutionReplay
     )]
@@ -2101,7 +2101,7 @@ pub struct ResolveHybridWithSwitchboard<'info> {
         bump = oracle_config.bump,
         constraint = oracle_config.market == market.key()
             @ NortiaError::InvalidOracleConfiguration,
-        constraint = oracle_config.resolver == OracleResolverV2::SwitchboardQuoteV1
+        constraint = oracle_config.resolver == OracleResolver::SwitchboardQuote
             @ NortiaError::InvalidOracleConfiguration,
         constraint = !oracle_config.consumed @ NortiaError::ResolutionReplay
     )]
@@ -2146,7 +2146,7 @@ pub struct ResolveHybridWithStork<'info> {
         bump = oracle_config.bump,
         constraint = oracle_config.market == market.key()
             @ NortiaError::InvalidOracleConfiguration,
-        constraint = oracle_config.resolver == OracleResolverV2::StorkPriceV1
+        constraint = oracle_config.resolver == OracleResolver::StorkPrice
             @ NortiaError::InvalidOracleConfiguration,
         constraint = !oracle_config.consumed @ NortiaError::ResolutionReplay
     )]
@@ -2191,7 +2191,7 @@ pub struct ProposeOptimisticResolution<'info> {
         bump = oracle_config.bump,
         constraint = oracle_config.market == market.key()
             @ NortiaError::InvalidOracleConfiguration,
-        constraint = oracle_config.resolver == OracleResolverV2::OptimisticV1
+        constraint = oracle_config.resolver == OracleResolver::Optimistic
             @ NortiaError::InvalidOracleConfiguration,
         constraint = !oracle_config.consumed @ NortiaError::ResolutionReplay
     )]
@@ -2727,7 +2727,7 @@ fn validate_optimistic_proposal(
         valid_optimistic_evidence_uri(evidence.uri)
             && *evidence.hash
                 == optimistic_evidence_hash(
-                    b"nortia-optimistic-assertion-v1",
+                    b"nortia-optimistic-assertion",
                     market_key,
                     evidence.outcome,
                     evidence.uri,
@@ -2773,7 +2773,7 @@ fn validate_optimistic_challenge(
             && valid_optimistic_evidence_uri(evidence.uri)
             && *evidence.hash
                 == optimistic_evidence_hash(
-                    b"nortia-optimistic-challenge-v1",
+                    b"nortia-optimistic-challenge",
                     market_key,
                     evidence.outcome,
                     evidence.uri,
@@ -2966,7 +2966,7 @@ fn validate_oracle_config(
         NortiaError::InvalidOracleConfiguration
     );
     match args.resolver {
-        OracleResolverV2::TxlineStatV2 => require!(
+        OracleResolver::TxlineStat => require!(
             *category == MarketCategory::Sports
                 && args.source_program == TXLINE_PROGRAM_ID
                 && args.source_queue == Pubkey::default()
@@ -2978,7 +2978,7 @@ fn validate_oracle_config(
                 && txline::fixture_id_from_source_id(&args.source_id).is_ok(),
             NortiaError::InvalidOracleConfiguration
         ),
-        OracleResolverV2::PythPriceV2 => require!(
+        OracleResolver::PythPrice => require!(
             (*category == MarketCategory::Crypto || *category == MarketCategory::Economics)
                 && (args.source_program == PYTH_RECEIVER_PROGRAM_ID
                     || args.source_program == PYTH_PUSH_ORACLE_PROGRAM_ID)
@@ -2991,7 +2991,7 @@ fn validate_oracle_config(
                 && args.bond_amount == 0,
             NortiaError::InvalidOracleConfiguration
         ),
-        OracleResolverV2::StorkPriceV1 => require!(
+        OracleResolver::StorkPrice => require!(
             (*category == MarketCategory::Crypto || *category == MarketCategory::Economics)
                 && args.source_program == STORK_ORACLE_PROGRAM_ID
                 && args.source_queue == Pubkey::default()
@@ -3004,7 +3004,7 @@ fn validate_oracle_config(
                 && args.bond_amount == 0,
             NortiaError::InvalidOracleConfiguration
         ),
-        OracleResolverV2::SwitchboardQuoteV1 => require!(
+        OracleResolver::SwitchboardQuote => require!(
             *category != MarketCategory::Sports
                 && *category != MarketCategory::Crypto
                 && args.source_program == SWITCHBOARD_QUOTE_PROGRAM_ID
@@ -3017,7 +3017,7 @@ fn validate_oracle_config(
                 && args.bond_amount == 0,
             NortiaError::InvalidOracleConfiguration
         ),
-        OracleResolverV2::OptimisticV1 => require!(
+        OracleResolver::Optimistic => require!(
             *category != MarketCategory::Sports
                 && *category != MarketCategory::Crypto
                 && args.source_program == crate::ID
@@ -3032,7 +3032,7 @@ fn validate_oracle_config(
                 && args.bond_amount >= MIN_OPTIMISTIC_BOND,
             NortiaError::InvalidOracleConfiguration
         ),
-        OracleResolverV2::UmaWormholeV1 | OracleResolverV2::ChainlinkReportV1 => {
+        OracleResolver::UmaWormhole | OracleResolver::ChainlinkReport => {
             return err!(NortiaError::ResolverNotEnabled)
         }
     }
@@ -3547,7 +3547,7 @@ mod tests {
             bump: 3,
             version: OracleConfig::VERSION,
             market,
-            resolver: OracleResolverV2::PythPriceV2,
+            resolver: OracleResolver::PythPrice,
             source_program: PYTH_RECEIVER_PROGRAM_ID,
             source_queue: Pubkey::default(),
             source_id: [7; 32],
@@ -3573,7 +3573,7 @@ mod tests {
             bump: 0,
             version: 0,
             market: Pubkey::default(),
-            resolver: OracleResolverV2::PythPriceV2,
+            resolver: OracleResolver::PythPrice,
             outcome: HybridMarket::OUTCOME_UNSET,
             observation_value: 0,
             observation_exponent: 0,
@@ -3616,7 +3616,7 @@ mod tests {
 
     fn optimistic_oracle_args() -> OracleConfigArgs {
         OracleConfigArgs {
-            resolver: OracleResolverV2::OptimisticV1,
+            resolver: OracleResolver::Optimistic,
             source_program: crate::ID,
             source_queue: Pubkey::default(),
             source_id: [7; 32],
@@ -3914,7 +3914,7 @@ mod tests {
     #[test]
     fn oracle_templates_reject_disabled_and_mismatched_resolvers() {
         let mut oracle = OracleConfigArgs {
-            resolver: OracleResolverV2::PythPriceV2,
+            resolver: OracleResolver::PythPrice,
             source_program: PYTH_RECEIVER_PROGRAM_ID,
             source_queue: Pubkey::default(),
             source_id: [1; 32],
@@ -3942,14 +3942,14 @@ mod tests {
         oracle.source_program = Pubkey::new_unique();
         assert!(validate_oracle_config(&MarketCategory::Crypto, &oracle, 2_000).is_err());
         oracle.source_program = PYTH_RECEIVER_PROGRAM_ID;
-        oracle.resolver = OracleResolverV2::UmaWormholeV1;
+        oracle.resolver = OracleResolver::UmaWormhole;
         assert!(validate_oracle_config(&MarketCategory::Politics, &oracle, 2_000).is_err());
     }
 
     #[test]
     fn stork_template_is_restricted_to_financial_categories() {
         let mut oracle = OracleConfigArgs {
-            resolver: OracleResolverV2::StorkPriceV1,
+            resolver: OracleResolver::StorkPrice,
             source_program: STORK_ORACLE_PROGRAM_ID,
             source_queue: Pubkey::default(),
             source_id: [1; 32],
@@ -3976,7 +3976,7 @@ mod tests {
     #[test]
     fn txline_template_requires_sports_fixture_and_integer_threshold() {
         let mut oracle = OracleConfigArgs {
-            resolver: OracleResolverV2::TxlineStatV2,
+            resolver: OracleResolver::TxlineStat,
             source_program: TXLINE_PROGRAM_ID,
             source_queue: Pubkey::default(),
             source_id: txline::txline_source_id(42).unwrap(),
@@ -4005,7 +4005,7 @@ mod tests {
     #[test]
     fn switchboard_template_requires_queue_slots_and_multiple_samples() {
         let mut oracle = OracleConfigArgs {
-            resolver: OracleResolverV2::SwitchboardQuoteV1,
+            resolver: OracleResolver::SwitchboardQuote,
             source_program: SWITCHBOARD_QUOTE_PROGRAM_ID,
             source_queue: SWITCHBOARD_DEVNET_QUEUE,
             source_id: [7; 32],
@@ -4087,7 +4087,7 @@ mod tests {
     #[test]
     fn optimistic_evidence_matches_the_client_hash_vector() {
         let hash = optimistic_evidence_hash(
-            b"nortia-optimistic-assertion-v1",
+            b"nortia-optimistic-assertion",
             Pubkey::default(),
             HybridMarket::OUTCOME_YES,
             "https://example.com/final-result",
@@ -4095,9 +4095,9 @@ mod tests {
         assert_eq!(
             hash,
             [
-                0x07, 0xf9, 0xae, 0xd9, 0x2b, 0x70, 0x67, 0x66, 0x80, 0xb5, 0x3e, 0x40, 0x26, 0x34,
-                0x15, 0xa1, 0x9b, 0xdc, 0x2f, 0x64, 0x04, 0xb3, 0xf1, 0xb3, 0x87, 0x8e, 0x0c, 0xe9,
-                0x1f, 0x2e, 0x41, 0xef,
+                0x9d, 0x5b, 0x02, 0x3a, 0xe8, 0x8a, 0x1e, 0xd0, 0x16, 0x7d, 0xbe, 0x0b, 0x91, 0x39,
+                0xa1, 0xfb, 0x60, 0xa9, 0xea, 0x27, 0x00, 0xa6, 0x17, 0x8a, 0x5c, 0xd1, 0x12, 0x2f,
+                0x7d, 0x68, 0x63, 0x78,
             ]
         );
         assert!(!valid_optimistic_evidence_uri(
@@ -4122,7 +4122,7 @@ mod tests {
         market.resolve_not_before_ts = 2_000;
         market.resolution_deadline_ts = 6_000;
         let mut oracle = resolution_oracle(Pubkey::new_unique());
-        oracle.resolver = OracleResolverV2::OptimisticV1;
+        oracle.resolver = OracleResolver::Optimistic;
         oracle.observation_ts = 2_000;
         oracle.observation_window_secs = 3_000;
         oracle.challenge_period_secs = 3_600;
@@ -4130,7 +4130,7 @@ mod tests {
         let market_key = Pubkey::new_unique();
         let assertion_uri = "https://example.com/final-result";
         let assertion_hash = optimistic_evidence_hash(
-            b"nortia-optimistic-assertion-v1",
+            b"nortia-optimistic-assertion",
             market_key,
             HybridMarket::OUTCOME_YES,
             assertion_uri,
@@ -4152,7 +4152,7 @@ mod tests {
             5_610
         );
         let invalid_hash = optimistic_evidence_hash(
-            b"nortia-optimistic-assertion-v1",
+            b"nortia-optimistic-assertion",
             market_key,
             HybridMarket::OUTCOME_INVALID,
             assertion_uri,
@@ -4187,7 +4187,7 @@ mod tests {
         market.phase = HybridPhase::Resolving;
         let challenge_uri = "ipfs://bafy-opposing-evidence";
         let challenge_hash = optimistic_evidence_hash(
-            b"nortia-optimistic-challenge-v1",
+            b"nortia-optimistic-challenge",
             market_key,
             HybridMarket::OUTCOME_NO,
             challenge_uri,
@@ -4206,7 +4206,7 @@ mod tests {
         )
         .is_ok());
         let same_outcome_hash = optimistic_evidence_hash(
-            b"nortia-optimistic-challenge-v1",
+            b"nortia-optimistic-challenge",
             market_key,
             HybridMarket::OUTCOME_YES,
             challenge_uri,
@@ -4368,7 +4368,7 @@ mod tests {
     }
 
     #[test]
-    fn v2_account_allocations_cover_serialized_state() {
+    fn account_allocations_cover_serialized_state() {
         let engine = EngineConfig {
             bump: 1,
             version: EngineConfig::VERSION,
