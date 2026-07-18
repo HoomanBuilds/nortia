@@ -49,10 +49,6 @@ pub fn validate_stork_account(
             .try_into()
             .map_err(|_| error!(NortiaError::InvalidStorkFeed))?,
     );
-    require!(
-        timestamp_ns % NANOS_PER_SECOND == 0,
-        NortiaError::InvalidObservationTime
-    );
     let timestamp = i64::try_from(timestamp_ns / NANOS_PER_SECOND)
         .map_err(|_| error!(NortiaError::InvalidObservationTime))?;
     let value = i128::from_le_bytes(
@@ -200,7 +196,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_early_late_future_fractional_and_non_positive_values() {
+    fn rejects_early_late_future_and_non_positive_values() {
         let key = Pubkey::find_program_address(
             &[STORK_FEED_SEED, FEED_ID.as_ref()],
             &STORK_ORACLE_PROGRAM_ID,
@@ -219,11 +215,21 @@ mod tests {
                     .is_err()
             );
         }
+    }
+
+    #[test]
+    fn floors_fractional_nanoseconds_to_market_seconds() {
+        let key = Pubkey::find_program_address(
+            &[STORK_FEED_SEED, FEED_ID.as_ref()],
+            &STORK_ORACLE_PROGRAM_ID,
+        )
+        .0;
         let mut data = feed_data(OBSERVATION_TS + 1, 1);
-        data[40..48]
-            .copy_from_slice(&(((OBSERVATION_TS + 1) as u64 * NANOS_PER_SECOND) + 1).to_le_bytes());
-        assert!(
-            validate_with(&key, &STORK_ORACLE_PROGRAM_ID, &mut data, &oracle_config(),).is_err()
+        data[40..48].copy_from_slice(
+            &(((OBSERVATION_TS + 1) as u64 * NANOS_PER_SECOND) + 999_999_999).to_le_bytes(),
         );
+        let observation =
+            validate_with(&key, &STORK_ORACLE_PROGRAM_ID, &mut data, &oracle_config()).unwrap();
+        assert_eq!(observation.timestamp, OBSERVATION_TS + 1);
     }
 }
