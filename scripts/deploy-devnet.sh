@@ -4,7 +4,6 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
-cluster="devnet"
 rpc_url="${SOLANA_RPC_URL:-https://api.devnet.solana.com}"
 devnet_genesis_hash="EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG"
 if [[ "$(solana genesis-hash --url "$rpc_url")" != "$devnet_genesis_hash" ]]; then
@@ -23,6 +22,7 @@ redeem_so="$repo_root/circuits/target/redeem.so"
 redeem_keypair="$repo_root/circuits/target/redeem-keypair.json"
 program_so="$repo_root/target/deploy/nortia.so"
 program_keypair="$repo_root/target/deploy/nortia-keypair.json"
+buffer_keypair="${NORTIA_BUFFER_KEYPAIR_PATH:-$repo_root/target/deploy/nortia-buffer-keypair.json}"
 
 for artifact in "$placement_so" "$placement_keypair" "$redeem_so" "$redeem_keypair"; do
   if [[ ! -f "$artifact" ]]; then
@@ -38,36 +38,52 @@ export SOLANA_RPC_URL="$rpc_url"
 
 anchor build
 
+if [[ ! -f "$buffer_keypair" ]]; then
+  solana-keygen new --no-bip39-passphrase --silent --outfile "$buffer_keypair"
+fi
+
 program_id="$(solana address -k "$program_keypair")"
 deployer_pubkey="$(solana address -k "$deployer_keypair")"
+buffer_pubkey="$(solana address -k "$buffer_keypair")"
 binary_size="$(wc -c < "$program_so")"
-# Upgradeable loader accounts prepend serialized state before the program bytes.
-program_data_size=$((binary_size + 45))
 buffer_data_size=$((binary_size + 37))
 buffer_rent="$(solana rent "$buffer_data_size" --lamports --url "$rpc_url" | awk '{ print $3 }')"
 fee_reserve="${NORTIA_DEPLOY_FEE_RESERVE_LAMPORTS:-100000000}"
-program_rent="$(solana rent "$program_data_size" --lamports --url "$rpc_url" | awk '{ print $3 }')"
 existing_program_lamports=0
+current_program_capacity=0
+target_program_capacity="$binary_size"
+program_exists=false
 
 if program_json="$(solana program show "$program_id" --url "$rpc_url" --output json-compact 2>/dev/null)"; then
-  current_size="$(printf '%s' "$program_json" | node -e 'let value=""; process.stdin.on("data", chunk => value += chunk); process.stdin.on("end", () => process.stdout.write(String(JSON.parse(value).dataLen)))')"
+  program_exists=true
+  current_program_capacity="$(printf '%s' "$program_json" | node -e 'let value=""; process.stdin.on("data", chunk => value += chunk); process.stdin.on("end", () => process.stdout.write(String(JSON.parse(value).dataLen)))')"
   existing_program_lamports="$(printf '%s' "$program_json" | node -e 'let value=""; process.stdin.on("data", chunk => value += chunk); process.stdin.on("end", () => process.stdout.write(String(JSON.parse(value).lamports)))')"
   upgrade_authority="$(printf '%s' "$program_json" | node -e 'let value=""; process.stdin.on("data", chunk => value += chunk); process.stdin.on("end", () => process.stdout.write(String(JSON.parse(value).authority)))')"
   if [[ "$upgrade_authority" != "$deployer_pubkey" ]]; then
     printf 'Deployer %s is not the upgrade authority for %s.\n' "$deployer_pubkey" "$program_id" >&2
     exit 1
   fi
-  current_program_capacity=$((current_size - 45))
-  if (( binary_size <= current_program_capacity )); then
-    program_rent="$existing_program_lamports"
+  target_program_capacity="$current_program_capacity"
+  if (( binary_size > current_program_capacity )); then
+    required_growth=$((binary_size - current_program_capacity))
+    rounded_growth=$((((required_growth + 10239) / 10240) * 10240))
+    target_program_capacity=$((current_program_capacity + rounded_growth))
   fi
 fi
 
+program_data_size=$((target_program_capacity + 45))
+program_rent="$(solana rent "$program_data_size" --lamports --url "$rpc_url" | awk '{ print $3 }')"
 additional_program_rent=$((program_rent - existing_program_lamports))
 if (( additional_program_rent < 0 )); then
   additional_program_rent=0
 fi
-required_lamports=$((additional_program_rent + buffer_rent + fee_reserve))
+existing_buffer_lamports="$(solana balance "$buffer_pubkey" --lamports --url "$rpc_url" 2>/dev/null | awk '{ print $1 }' || true)"
+existing_buffer_lamports="${existing_buffer_lamports:-0}"
+additional_buffer_rent=$((buffer_rent - existing_buffer_lamports))
+if (( additional_buffer_rent < 0 )); then
+  additional_buffer_rent=0
+fi
+required_lamports=$((additional_program_rent + additional_buffer_rent + fee_reserve))
 available_lamports="$(solana balance "$deployer_pubkey" --lamports --url "$rpc_url" | awk '{ print $1 }')"
 if (( available_lamports < required_lamports )); then
   shortfall_lamports=$((required_lamports - available_lamports))
@@ -79,12 +95,23 @@ if (( available_lamports < required_lamports )); then
 fi
 
 if ! solana program show "$NORTIA_PLACEMENT_VERIFIER" --url "$rpc_url" >/dev/null 2>&1; then
-  solana program deploy "$placement_so" --program-id "$placement_keypair" --max-len "$(wc -c < "$placement_so")" --url "$rpc_url" --keypair "$deployer_keypair"
+  solana program deploy "$placement_so" --program-id "$placement_keypair" --max-len "$(wc -c < "$placement_so")" --url "$rpc_url" --keypair "$deployer_keypair" --commitment confirmed --use-quic --max-sign-attempts 15
 fi
 
 if ! solana program show "$NORTIA_REDEEM_VERIFIER" --url "$rpc_url" >/dev/null 2>&1; then
-  solana program deploy "$redeem_so" --program-id "$redeem_keypair" --max-len "$(wc -c < "$redeem_so")" --url "$rpc_url" --keypair "$deployer_keypair"
+  solana program deploy "$redeem_so" --program-id "$redeem_keypair" --max-len "$(wc -c < "$redeem_so")" --url "$rpc_url" --keypair "$deployer_keypair" --commitment confirmed --use-quic --max-sign-attempts 15
 fi
 
-anchor deploy --provider.cluster "$cluster" --provider.wallet "$deployer_keypair"
+while [[ "$program_exists" == true ]] && (( current_program_capacity < binary_size )); do
+  solana program extend "$program_id" 10240 --keypair "$deployer_keypair" --url "$rpc_url" --commitment confirmed
+  current_program_capacity=$((current_program_capacity + 10240))
+done
+
+solana program write-buffer "$program_so" --buffer "$buffer_keypair" --buffer-authority "$deployer_keypair" --keypair "$deployer_keypair" --url "$rpc_url" --commitment confirmed --use-quic --max-sign-attempts 15
+
+activation_program_id="$program_id"
+if [[ "$program_exists" == false ]]; then
+  activation_program_id="$program_keypair"
+fi
+solana program deploy --program-id "$activation_program_id" --buffer "$buffer_keypair" --upgrade-authority "$deployer_keypair" --keypair "$deployer_keypair" --url "$rpc_url" --commitment confirmed --use-quic --max-sign-attempts 15
 npm --prefix services run deploy:initialize

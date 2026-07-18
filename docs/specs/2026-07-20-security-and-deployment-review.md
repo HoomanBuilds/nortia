@@ -7,9 +7,9 @@
 
 ## Outcome
 
-The current source, generated IDL, service adapters, client math, wallet flows, category-aware oracle creation, and web build pass their local release gates. The private-pool demo remains live on devnet. The market-engine program upgrade is not yet live because the upgrade-authority wallet cannot currently cover both ProgramData growth and the temporary upload buffer.
+The current source, generated IDL, service adapters, client math, wallet flows, category-aware oracle creation, and web build pass their local release gates. The private-pool demo and canonical market engine are live together on devnet.
 
-The deployment script now exits before spending funds when the cluster, authority, artifact, capacity, rent, or transient balance gate fails.
+The finalized upgrade uses source commit `d3d1f31` and artifact SHA-256 `7ee32050810420b26bf005fab725d5f82892457a20f0cd8dd0b1a191840c8b8f`. The deployment script exits before spending funds when the cluster, authority, artifact, capacity, rent, or transient balance gate fails.
 
 ## Verified gates
 
@@ -28,7 +28,8 @@ The deployment script now exits before spending funds when the cluster, authorit
 | True 390px device emulation | Pass, no page-level horizontal overflow |
 | Private-pool program and PDA decoding | Pass against current devnet accounts |
 | Oracle API smoke tests | Pass for Pyth Crypto, Pyth Economics, readiness, and fail-closed Stork access |
-| Market-engine deployment transaction | Pending 1.331878786 additional devnet SOL |
+| Market engine deployment transaction | Pass, finalized at slot 477612502 |
+| Engine account initialization and decode | Pass, finalized at slot 477612604 |
 
 ## Protocol properties reviewed
 
@@ -83,6 +84,8 @@ The deployment script now exits before spending funds when the cluster, authorit
 6. Next.js carried a vulnerable nested PostCSS release. A compatible override pins the patched release.
 7. Stork REST examples contain fractional nanoseconds, while the first parser required whole-second divisibility. The contract now floors nanoseconds to seconds and tests the maximum fractional component.
 8. Hermes catalog results were trusted as typed objects and an empty Economics search could retain a Crypto selection. Catalog parsing now rejects malformed values and market creation fails closed when no category-compatible feed is selected.
+9. The deployment command could not grow the existing ProgramData account by the full artifact delta in one transaction. The script now extends it in loader-safe 10,240-byte increments.
+10. Large writes through the public RPC hit HTTP 429 limits and left an incomplete but funded buffer. The deployment path now uses a named resumable buffer and QUIC writes, then activates the verified buffer separately.
 
 ## Residual risks and release blockers
 
@@ -96,7 +99,6 @@ The deployment script now exits before spending funds when the cluster, authorit
 
 ### Devnet integration gaps
 
-- The current program must be upgraded and the engine PDA initialized before wallet LMSR actions become available.
 - A canonical Pyth market still needs one full devnet create, trade, resolve, claim, and liquidity-withdraw receipt sequence.
 - Switchboard feed definitions and managed update instructions must be provisioned externally before a canonical quote market can be demonstrated.
 - Stork requires a `STORK_API_TOKEN` plus its external Solana pusher. Nortia does not claim this path is free without access credentials.
@@ -109,16 +111,25 @@ The production dependency scan reports no critical advisories. It reports 3 mode
 
 The repository does not apply `npm audit fix --force`. Mainnet release remains blocked until the Solana and Pyth dependency graph can move to patched compatible releases or the affected code paths are removed and revalidated.
 
-## Deployment decision
+## Deployment evidence
 
-Do not send an upgrade transaction until all of the following are true:
+The devnet upgrade was sent only after all of the following were true:
 
 1. `scripts/deploy-devnet.sh` passes the genesis, authority, capacity, and transient-funding preflight.
 2. The payer retains a fee reserve after ProgramData extension and buffer creation.
 3. The generated IDL is synchronized to services and web.
 4. All gates in this review pass on the exact deployment commit.
-5. A post-upgrade read confirms that private-pool accounts still decode and the market engine contains the intended 70/30 fee split.
+5. A post-upgrade read confirmed that private-pool accounts still decode and the market engine contains the intended 70/30 fee split.
 
-The exact 2026-07-20 preflight for artifact `b3bc4a017002e82b367f4f6175a9c7062f4661fd4664ae5b7a715b97b4ac4b0b` requires 12.127081840 transient SOL. The upgrade authority has 10.795203054 SOL, leaving a 1.331878786 SOL shortfall. The separately funded devnet wallet remains untouched until the transfer amount is explicitly approved.
+The user-authorized 10 SOL transfer finalized at slot `477608167`. The program upgrade signature `fbLhJNSLXgngf3J5n8toXJCYFTaYygNk9UeL7LoLSJXW9fGCrTESthV3ssqnCfVVPVNSeYAuNERHvkinWFDh5TL` finalized at slot `477612502`. The temporary buffer closed during activation and returned its rent.
 
-After deployment, record program slot, ProgramData length, engine PDA, initialization signatures, demo market addresses, vaults, trades, receipts, claims, and final balances under `deployments/`.
+Engine initialization signature `44cfsahbGDwyusRJbu1WCx3fUEFBpmRzuka4oUpN2NrmEavtiwdB3KZWDrGWgtGwEbyBtUnSFjmsBqcGixsVLZUm` finalized at slot `477612604`. Independent IDL decoding confirms:
+
+- Engine PDA `EWgvZgWZNc1m2yunKonZwavnPgY6n6T2BbwXFC6kdRpf`.
+- Authority and treasury owner `5yFHYFS1y8hVuVte6F3ae9NMh3i4F1ZGyTynwb8onb5S`.
+- Circle devnet USDC mint `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`.
+- Pyth receiver `rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ`.
+- Switchboard quote program `orac1eFjzWL5R3RbbdMV68K9H6TaCVVcL6LjvQQWAbz`.
+- Version `1`, unpaused state, and treasury fee share `7000` basis points.
+
+The canonical machine-readable evidence is stored in `deployments/devnet.json`. A complete Pyth create, trade, resolve, claim, and liquidity-withdraw sequence remains a devnet integration gate rather than a program-deployment blocker.

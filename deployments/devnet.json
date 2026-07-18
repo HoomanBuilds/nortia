@@ -1,13 +1,16 @@
 {
   "network": "solana-devnet",
-  "checkedAt": "2026-07-20T11:16:40Z",
-  "status": "v1-deployed-v2-pending-funding",
+  "checkedAt": "2026-07-20T12:14:37Z",
+  "status": "private-pool-and-market-engine-deployed",
   "programs": {
     "nortia": {
       "programId": "4S2EvdGrbKJ9zazvB4gtR83crTrVJWqqwoVVvEQy8VE9",
       "programData": "38zjkVVYSt6A2ZA5vN4grWH4kwY6GUGM4uzhaugNdZWS",
-      "deploySignature": "3VUMoDz8XNJdfJfEHfiXWc7mBPbSaA9DSYXFTKhkZU11zRaFnCnqWE5w9o72pSe4HhYS1r9UUjnXkkNtYgHbvjiu",
-      "dataLengthBytes": 432296
+      "deploySignature": "fbLhJNSLXgngf3J5n8toXJCYFTaYygNk9UeL7LoLSJXW9fGCrTESthV3ssqnCfVVPVNSeYAuNERHvkinWFDh5TL",
+      "deploySlot": 477612502,
+      "dataLengthBytes": 1087656,
+      "lamports": 7571289840,
+      "upgradeAuthority": "5yFHYFS1y8hVuVte6F3ae9NMh3i4F1ZGyTynwb8onb5S"
     },
     "placementVerifier": {
       "programId": "6Hbwzfm315jkt1xFgLMbnKxVG6wXMiJH1zTUh2ujzcAt",
@@ -53,18 +56,31 @@
       "GL1retjPLC2jij2Cyy8BP65CR99mT4RtVWaFgA3jGiSs"
     ]
   },
-  "v2Upgrade": {
-    "status": "pending-funding",
-    "commit": "20a153c",
-    "artifactSha256": "b3bc4a017002e82b367f4f6175a9c7062f4661fd4664ae5b7a715b97b4ac4b0b",
-    "artifactLengthBytes": 1080080,
-    "currentProgramDataLengthBytes": 432296,
-    "engineAddress": "8B9mT96Zryy4PpcQDFToKPjBa2BunjxfwASWDGPFCYid",
+  "programUpgrade": {
+    "status": "confirmed",
+    "commit": "d3d1f31",
+    "artifactSha256": "7ee32050810420b26bf005fab725d5f82892457a20f0cd8dd0b1a191840c8b8f",
+    "artifactLengthBytes": 1080016,
+    "programDataLengthBytes": 1087656,
+    "upgradeSignature": "fbLhJNSLXgngf3J5n8toXJCYFTaYygNk9UeL7LoLSJXW9fGCrTESthV3ssqnCfVVPVNSeYAuNERHvkinWFDh5TL",
+    "upgradeSlot": 477612502,
+    "uploadBuffer": "hSAj4czxLYGs2yrBdPmWcjJhNGZKA4B3vjXCnJ1RMJR",
+    "uploadBufferClosed": true,
+    "engineAddress": "EWgvZgWZNc1m2yunKonZwavnPgY6n6T2BbwXFC6kdRpf",
+    "engineInitializeSignature": "44cfsahbGDwyusRJbu1WCx3fUEFBpmRzuka4oUpN2NrmEavtiwdB3KZWDrGWgtGwEbyBtUnSFjmsBqcGixsVLZUm",
+    "engineInitializeSlot": 477612604,
+    "engineVersion": 1,
+    "treasuryFeeShareBps": 7000,
+    "paused": false,
     "oracleProviderProfile": "free",
-    "requiredTransientLamports": 12127081840,
-    "availableLamports": 10795203054,
-    "shortfallLamports": 1331878786,
-    "preflightAt": "2026-07-20T11:16:40Z"
+    "authorityBalanceLamportsAfterInitialization": 16225521462
+  },
+  "deploymentFunding": {
+    "source": "C9q8YptFdiv2bkQXtRzeJKQWgfBwa3gZKWhVF8g7KVNZ",
+    "recipient": "5yFHYFS1y8hVuVte6F3ae9NMh3i4F1ZGyTynwb8onb5S",
+    "lamports": 10000000000,
+    "signature": "36e4WELWBXbWUYKizSsQBu18xj9pMdM8t1zfnySodA9UHCM3Q11gih9HChVLxGKprGS71wm1aPtpKBjXtoT8ETaj",
+    "slot": 477608167
   },
   "sampleMarket": {
     "address": "44cD1kbvuheo5wSM4gxEZvAfitAXbC25f2u4Mzs48qix",

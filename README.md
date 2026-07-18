@@ -21,10 +21,10 @@ All current deployment work is pinned to Solana devnet and Circle devnet USDC. N
 | Pyth timestamped price resolver | Built and tested |
 | Switchboard canonical quote resolver | Built and tested, curated feed provisioning required |
 | Bonded optimistic resolver | Built and tested |
-| Devnet market-engine upgrade | Funding and final deployment verification in progress |
+| Devnet market engine | Live and verified |
 | UMA over Wormhole and Chainlink report adapters | Disabled until exact verifiers are deployed and tested |
 
-The private-pool demo remains usable while the canonical market engine is prepared for deployment. The deployment script checks authority, cluster identity, binary capacity, rent, and temporary buffer funding before spending any SOL.
+The private-pool demo and canonical market engine are live together under the same devnet program. The deployment script checks authority, cluster identity, binary capacity, rent, and resumable buffer funding before spending any SOL.
 
 ## Product flow
 
@@ -266,16 +266,19 @@ The private TxLINE stack is live on Solana devnet. Public evidence is stored in 
 | Placement verifier | `6Hbwzfm315jkt1xFgLMbnKxVG6wXMiJH1zTUh2ujzcAt` |
 | Redeem verifier | `7PQFWh8XRoGya1fJSM69Rpjcec8cqKJi3e3gVYwwk3YW` |
 | Protocol PDA | `CJi67t1hHprwceArXdPyw6xLrN1Y3QbcvSC4R2SXoKZR` |
+| Market engine PDA | `EWgvZgWZNc1m2yunKonZwavnPgY6n6T2BbwXFC6kdRpf` |
 | Judge replay market | `44cD1kbvuheo5wSM4gxEZvAfitAXbC25f2u4Mzs48qix` |
 | Replay USDC vault | `EqjB6nuMcvhtTw9Cngs2EgSNjthC6VrxFDthZnoYxtyM` |
 
-The current market-engine artifact is larger than the deployed private-pool program allocation. The devnet script calculates the program growth rent, temporary upload buffer rent, fee reserve, payer balance, and upgrade authority before attempting a transaction:
+The market engine upgrade finalized at slot `477612502`, and its canonical engine PDA initialized at slot `477612604`. The decoded engine is unpaused, pins Circle devnet USDC plus the reviewed Pyth and Switchboard programs, and stores the intended 70/30 fee split.
+
+The devnet script calculates ProgramData growth rent, resumable upload-buffer rent, fee reserve, payer balance, and upgrade authority before attempting a transaction. It extends ProgramData in loader-safe increments and uses QUIC for large program writes:
 
 ```bash
 scripts/deploy-devnet.sh
 ```
 
-After a successful upgrade, the same command initializes the canonical market engine with a 70/30 fee split. Existing private-pool PDAs and account layouts remain unchanged.
+The same command initializes or verifies the protocol and market engine idempotently. Existing private-pool PDAs and account layouts remain unchanged.
 
 Create the canonical timestamped Pyth market after funding the creator with Circle devnet USDC:
 
