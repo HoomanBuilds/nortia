@@ -100,7 +100,9 @@ export const SPONSORED_PYTH_FEED_IDS = new Set<string>(
 
 export const PYTH_PRICE_FEEDS: readonly PythFeed[] = SPONSORED_PYTH_FEEDS.map(
   ([symbol, id, heartbeatSeconds]) => {
-    const [base, quote = "USD"] = symbol.split("/");
+    const parts = symbol.split("/");
+    const base = parts[0] ?? symbol;
+    const quote = parts[1] ?? "USD";
     const assetType: PythAssetType = symbol.includes(".RR")
       ? "Crypto Redemption Rate"
       : symbol.startsWith("NAV.")
@@ -145,9 +147,13 @@ function stringAttribute(attributes: Record<string, unknown>, key: string): stri
   return typeof value === "string" ? value.trim() : "";
 }
 
-export function normalizePythFeed(feed: HermesFeed): PythFeed | null {
+export function normalizePythFeed(value: unknown): PythFeed | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const feed = value as HermesFeed;
   const id = typeof feed.id === "string" ? feed.id.toLowerCase().replace(/^0x/, "") : "";
-  const attributes = feed.attributes ?? {};
+  const attributes = feed.attributes && typeof feed.attributes === "object"
+    ? feed.attributes
+    : {};
   const assetType = stringAttribute(attributes, "asset_type") as PythAssetType;
   const symbol = stringAttribute(attributes, "display_symbol");
   const base = stringAttribute(attributes, "base");
@@ -180,7 +186,7 @@ export function normalizePythFeed(feed: HermesFeed): PythFeed | null {
 }
 
 export function searchPythFeeds(
-  values: readonly HermesFeed[],
+  values: readonly unknown[],
   input: { query?: string; category?: "all" | "crypto" | "economics"; limit?: number } = {},
 ): PythFeed[] {
   const query = input.query?.trim().toLowerCase() ?? "";

@@ -25,6 +25,9 @@ test("curated Pyth feeds are exact unique 32-byte identifiers", () => {
 });
 
 test("Hermes catalog normalization maps financial classes and rejects unsafe entries", () => {
+  assert.equal(normalizePythFeed(null), null);
+  assert.equal(normalizePythFeed("not-a-feed"), null);
+  assert.equal(normalizePythFeed({ id: "a".repeat(64), attributes: null }), null);
   const equity = normalizePythFeed({
     id: "a".repeat(64),
     attributes: {
