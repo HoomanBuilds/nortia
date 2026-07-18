@@ -16,6 +16,8 @@ pub enum MarketCategory {
     Technology,
     Culture,
     Other,
+    Economics,
+    Science,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq)]
@@ -175,6 +177,7 @@ pub enum OracleResolverV2 {
     OptimisticV1,
     UmaWormholeV1,
     ChainlinkReportV1,
+    StorkPriceV1,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq)]

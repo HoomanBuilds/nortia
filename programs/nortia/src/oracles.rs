@@ -3,10 +3,15 @@ use core::cmp::Ordering;
 use pyth_solana_receiver_sdk::price_update::{PriceUpdateV2, VerificationLevel};
 
 use crate::{
-    constants::{FEE_SPLIT_DENOMINATOR, PYTH_RECEIVER_PROGRAM_ID},
+    constants::{FEE_SPLIT_DENOMINATOR, PYTH_PUSH_ORACLE_PROGRAM_ID, PYTH_RECEIVER_PROGRAM_ID},
     error::NortiaError,
     state::{OracleConfig, OracleResolverV2, ValueComparator},
 };
+
+pub struct ValidatedPythUpdate {
+    pub observation: NormalizedObservation,
+    pub update: PriceUpdateV2,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct NormalizedObservation {
@@ -26,7 +31,8 @@ pub fn validate_pyth_observation(
 ) -> Result<NormalizedObservation> {
     require!(
         oracle.resolver == OracleResolverV2::PythPriceV2
-            && oracle.source_program == PYTH_RECEIVER_PROGRAM_ID,
+            && (oracle.source_program == PYTH_RECEIVER_PROGRAM_ID
+                || oracle.source_program == PYTH_PUSH_ORACLE_PROGRAM_ID),
         NortiaError::InvalidOracleConfiguration
     );
     require!(
@@ -81,6 +87,41 @@ pub fn validate_pyth_observation(
         slot: update.posted_slot,
         confidence: price.conf,
         sample_count: 0,
+    })
+}
+
+pub fn validate_pyth_account(
+    price_update: &AccountInfo<'_>,
+    oracle: &OracleConfig,
+    clock: &Clock,
+) -> Result<ValidatedPythUpdate> {
+    require_keys_eq!(
+        *price_update.owner,
+        oracle.source_program,
+        NortiaError::InvalidOracleConfiguration
+    );
+    if oracle.source_program == PYTH_PUSH_ORACLE_PROGRAM_ID {
+        let shard = 0u16.to_le_bytes();
+        let canonical = Pubkey::find_program_address(
+            &[shard.as_ref(), oracle.source_id.as_ref()],
+            &PYTH_PUSH_ORACLE_PROGRAM_ID,
+        )
+        .0;
+        require_keys_eq!(
+            *price_update.key,
+            canonical,
+            NortiaError::InvalidOracleConfiguration
+        );
+    }
+    let data = price_update
+        .try_borrow_data()
+        .map_err(|_| error!(NortiaError::InvalidOracleConfiguration))?;
+    let update = PriceUpdateV2::try_deserialize(&mut data.as_ref())
+        .map_err(|_| error!(NortiaError::InvalidOracleConfiguration))?;
+    let observation = validate_pyth_observation(&update, oracle, clock)?;
+    Ok(ValidatedPythUpdate {
+        observation,
+        update,
     })
 }
 
@@ -219,6 +260,23 @@ mod tests {
         }
     }
 
+    fn serialized_price_update() -> Vec<u8> {
+        let mut data = Vec::new();
+        price_update().try_serialize(&mut data).unwrap();
+        data
+    }
+
+    fn validate_account(
+        key: &Pubkey,
+        owner: &Pubkey,
+        data: &mut [u8],
+        oracle: &OracleConfig,
+    ) -> Result<ValidatedPythUpdate> {
+        let mut lamports = 1;
+        let account = AccountInfo::new(key, false, false, &mut lamports, data, owner, false);
+        validate_pyth_account(&account, oracle, &clock())
+    }
+
     #[test]
     fn comparison_normalizes_decimal_exponents() {
         assert!(compare_values(10_001, -2, 100, 0, ValueComparator::GreaterThan).unwrap());
@@ -322,5 +380,58 @@ mod tests {
         oracle.comparator = ValueComparator::GreaterThanOrEqual;
         let inclusive = validate_pyth_observation(&price_update(), &oracle, &clock()).unwrap();
         assert_eq!(inclusive.outcome, 1);
+    }
+
+    #[test]
+    fn pyth_account_accepts_receiver_and_canonical_push_owners() {
+        let receiver_key = Pubkey::new_unique();
+        let mut receiver_data = serialized_price_update();
+        let receiver = validate_account(
+            &receiver_key,
+            &PYTH_RECEIVER_PROGRAM_ID,
+            &mut receiver_data,
+            &oracle_config(),
+        )
+        .unwrap();
+        assert_eq!(receiver.observation.outcome, 1);
+
+        let mut push_oracle = oracle_config();
+        push_oracle.source_program = PYTH_PUSH_ORACLE_PROGRAM_ID;
+        let shard = 0u16.to_le_bytes();
+        let push_key = Pubkey::find_program_address(
+            &[shard.as_ref(), FEED_ID.as_ref()],
+            &PYTH_PUSH_ORACLE_PROGRAM_ID,
+        )
+        .0;
+        let mut push_data = serialized_price_update();
+        let push = validate_account(
+            &push_key,
+            &PYTH_PUSH_ORACLE_PROGRAM_ID,
+            &mut push_data,
+            &push_oracle,
+        )
+        .unwrap();
+        assert_eq!(push.observation.outcome, 1);
+    }
+
+    #[test]
+    fn pyth_push_account_rejects_wrong_owner_and_pda() {
+        let mut oracle = oracle_config();
+        oracle.source_program = PYTH_PUSH_ORACLE_PROGRAM_ID;
+        let shard = 0u16.to_le_bytes();
+        let key = Pubkey::find_program_address(
+            &[shard.as_ref(), FEED_ID.as_ref()],
+            &PYTH_PUSH_ORACLE_PROGRAM_ID,
+        )
+        .0;
+        let mut data = serialized_price_update();
+        assert!(validate_account(&key, &PYTH_RECEIVER_PROGRAM_ID, &mut data, &oracle,).is_err());
+        assert!(validate_account(
+            &Pubkey::new_unique(),
+            &PYTH_PUSH_ORACLE_PROGRAM_ID,
+            &mut data,
+            &oracle,
+        )
+        .is_err());
     }
 }

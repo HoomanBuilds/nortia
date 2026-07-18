@@ -90,6 +90,8 @@ pub enum NortiaError {
     MarketNotReadyForResolution,
     #[msg("The Switchboard quote account or payload is invalid")]
     InvalidSwitchboardQuote,
+    #[msg("The Stork feed account or payload is invalid")]
+    InvalidStorkFeed,
     #[msg("The optimistic assertion or challenge is invalid")]
     InvalidAssertion,
     #[msg("The optimistic challenge window is closed")]

@@ -3,6 +3,7 @@ pub mod error;
 pub mod lmsr;
 pub mod oracles;
 pub mod state;
+pub mod stork;
 pub mod switchboard;
 pub mod txline;
 pub mod zk;
@@ -10,7 +11,6 @@ pub mod zk;
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, TransferChecked};
 use core::cmp::max;
-use pyth_solana_receiver_sdk::price_update::PriceUpdateV2;
 use solana_sha256_hasher::hashv;
 
 pub use constants::*;
@@ -884,41 +884,32 @@ pub mod nortia {
 
     pub fn resolve_hybrid_with_pyth(ctx: Context<ResolveHybridWithPyth>) -> Result<()> {
         let clock = Clock::get()?;
-        let observation = oracles::validate_pyth_observation(
-            &ctx.accounts.price_update,
+        let price_update_info = ctx.accounts.price_update.to_account_info();
+        let validated = oracles::validate_pyth_account(
+            &price_update_info,
             &ctx.accounts.oracle_config,
             &clock,
         )?;
+        let observation = validated.observation;
         let value_bytes = observation.value.to_le_bytes();
         let exponent_bytes = observation.exponent.to_le_bytes();
         let timestamp_bytes = observation.timestamp.to_le_bytes();
         let confidence_bytes = observation.confidence.to_le_bytes();
-        let previous_timestamp_bytes = ctx
-            .accounts
-            .price_update
+        let previous_timestamp_bytes = validated
+            .update
             .price_message
             .prev_publish_time
             .to_le_bytes();
-        let ema_price_bytes = ctx
-            .accounts
-            .price_update
-            .price_message
-            .ema_price
-            .to_le_bytes();
-        let ema_confidence_bytes = ctx
-            .accounts
-            .price_update
-            .price_message
-            .ema_conf
-            .to_le_bytes();
-        let posted_slot_bytes = ctx.accounts.price_update.posted_slot.to_le_bytes();
+        let ema_price_bytes = validated.update.price_message.ema_price.to_le_bytes();
+        let ema_confidence_bytes = validated.update.price_message.ema_conf.to_le_bytes();
+        let posted_slot_bytes = validated.update.posted_slot.to_le_bytes();
         let evidence_hash = hashv(&[
             b"nortia-pyth-resolution-v1",
             ctx.accounts.market.key().as_ref(),
             ctx.accounts.oracle_config.config_hash.as_ref(),
             ctx.accounts.oracle_config.source_id.as_ref(),
             ctx.accounts.price_update.key().as_ref(),
-            ctx.accounts.price_update.write_authority.as_ref(),
+            validated.update.write_authority.as_ref(),
             &value_bytes,
             &exponent_bytes,
             &timestamp_bytes,
@@ -936,6 +927,46 @@ pub mod nortia {
             FinalizeHybridResolutionArgs {
                 receipt_bump: ctx.bumps.receipt,
                 source_account: ctx.accounts.price_update.key(),
+                observation,
+                evidence_hash,
+                now: clock.unix_timestamp,
+                vault_balance: ctx.accounts.vault.amount,
+                timeout: false,
+            },
+        )
+    }
+
+    pub fn resolve_hybrid_with_stork(ctx: Context<ResolveHybridWithStork>) -> Result<()> {
+        let clock = Clock::get()?;
+        let feed_account_info = ctx.accounts.feed_account.to_account_info();
+        let observation =
+            stork::validate_stork_account(&feed_account_info, &ctx.accounts.oracle_config, &clock)?;
+        let value_bytes = observation.value.to_le_bytes();
+        let exponent_bytes = observation.exponent.to_le_bytes();
+        let timestamp_bytes = observation.timestamp.to_le_bytes();
+        let feed_data = feed_account_info
+            .try_borrow_data()
+            .map_err(|_| error!(NortiaError::InvalidStorkFeed))?;
+        let evidence_hash = hashv(&[
+            b"nortia-stork-resolution-v1",
+            ctx.accounts.market.key().as_ref(),
+            ctx.accounts.oracle_config.config_hash.as_ref(),
+            ctx.accounts.oracle_config.source_id.as_ref(),
+            ctx.accounts.feed_account.key().as_ref(),
+            &value_bytes,
+            &exponent_bytes,
+            &timestamp_bytes,
+            feed_data.as_ref(),
+        ])
+        .to_bytes();
+        drop(feed_data);
+        finalize_hybrid_resolution(
+            &mut ctx.accounts.market,
+            &mut ctx.accounts.oracle_config,
+            &mut ctx.accounts.receipt,
+            FinalizeHybridResolutionArgs {
+                receipt_bump: ctx.bumps.receipt,
+                source_account: ctx.accounts.feed_account.key(),
                 observation,
                 evidence_hash,
                 now: clock.unix_timestamp,
@@ -1991,7 +2022,8 @@ pub struct ResolveHybridWithPyth<'info> {
         bump
     )]
     pub receipt: Box<Account<'info, ResolutionReceipt>>,
-    pub price_update: Box<Account<'info, PriceUpdateV2>>,
+    /// CHECK: Owner, full verification, feed ID, timestamp, and canonical push PDA are checked in the handler.
+    pub price_update: UncheckedAccount<'info>,
     #[account(
         seeds = [HYBRID_VAULT_SEED, market.key().as_ref()],
         bump = market.vault_bump,
@@ -2091,6 +2123,51 @@ pub struct ResolveHybridWithSwitchboard<'info> {
     pub vault: Box<Account<'info, TokenAccount>>,
     /// CHECK: Owner, canonical PDA, queue, feed, samples, and payload are verified in the handler.
     pub quote_account: UncheckedAccount<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct ResolveHybridWithStork<'info> {
+    #[account(mut)]
+    pub keeper: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [HYBRID_MARKET_SEED, market.creator.as_ref(), &market.market_id.to_le_bytes()],
+        bump = market.bump,
+        constraint = market.oracle_config == oracle_config.key()
+            @ NortiaError::InvalidOracleConfiguration,
+        constraint = market.collateral_mint == vault.mint
+            @ NortiaError::InvalidCollateralMint
+    )]
+    pub market: Box<Account<'info, HybridMarket>>,
+    #[account(
+        mut,
+        seeds = [ORACLE_CONFIG_SEED, market.key().as_ref()],
+        bump = oracle_config.bump,
+        constraint = oracle_config.market == market.key()
+            @ NortiaError::InvalidOracleConfiguration,
+        constraint = oracle_config.resolver == OracleResolverV2::StorkPriceV1
+            @ NortiaError::InvalidOracleConfiguration,
+        constraint = !oracle_config.consumed @ NortiaError::ResolutionReplay
+    )]
+    pub oracle_config: Box<Account<'info, OracleConfig>>,
+    #[account(
+        init,
+        payer = keeper,
+        space = ResolutionReceipt::SPACE,
+        seeds = [RESOLUTION_RECEIPT_SEED, market.key().as_ref()],
+        bump
+    )]
+    pub receipt: Box<Account<'info, ResolutionReceipt>>,
+    #[account(
+        seeds = [HYBRID_VAULT_SEED, market.key().as_ref()],
+        bump = market.vault_bump,
+        token::mint = market.collateral_mint,
+        token::authority = market
+    )]
+    pub vault: Box<Account<'info, TokenAccount>>,
+    /// CHECK: Owner, canonical PDA, feed ID, timestamp, and payload are checked in the handler.
+    pub feed_account: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
 }
 
@@ -2902,13 +2979,28 @@ fn validate_oracle_config(
             NortiaError::InvalidOracleConfiguration
         ),
         OracleResolverV2::PythPriceV2 => require!(
-            args.source_program == PYTH_RECEIVER_PROGRAM_ID
+            (*category == MarketCategory::Crypto || *category == MarketCategory::Economics)
+                && (args.source_program == PYTH_RECEIVER_PROGRAM_ID
+                    || args.source_program == PYTH_PUSH_ORACLE_PROGRAM_ID)
                 && args.source_queue == Pubkey::default()
                 && (-18..=18).contains(&args.threshold_exponent)
                 && args.max_staleness_secs > 0
                 && args.max_staleness_slots == 0
                 && args.max_confidence_bps > 0
                 && args.max_confidence_bps <= FEE_SPLIT_DENOMINATOR
+                && args.bond_amount == 0,
+            NortiaError::InvalidOracleConfiguration
+        ),
+        OracleResolverV2::StorkPriceV1 => require!(
+            (*category == MarketCategory::Crypto || *category == MarketCategory::Economics)
+                && args.source_program == STORK_ORACLE_PROGRAM_ID
+                && args.source_queue == Pubkey::default()
+                && (-18..=18).contains(&args.threshold_exponent)
+                && args.max_staleness_secs > 0
+                && args.max_staleness_slots == 0
+                && args.max_confidence_bps == 0
+                && args.min_samples == 0
+                && args.challenge_period_secs == 0
                 && args.bond_amount == 0,
             NortiaError::InvalidOracleConfiguration
         ),
@@ -3840,6 +3932,10 @@ mod tests {
             config_hash: [2; 32],
         };
         assert!(validate_oracle_config(&MarketCategory::Crypto, &oracle, 2_000).is_ok());
+        assert!(validate_oracle_config(&MarketCategory::Economics, &oracle, 2_000).is_ok());
+        assert!(validate_oracle_config(&MarketCategory::Politics, &oracle, 2_000).is_err());
+        oracle.source_program = PYTH_PUSH_ORACLE_PROGRAM_ID;
+        assert!(validate_oracle_config(&MarketCategory::Crypto, &oracle, 2_000).is_ok());
         oracle.threshold_exponent = -19;
         assert!(validate_oracle_config(&MarketCategory::Crypto, &oracle, 2_000).is_err());
         oracle.threshold_exponent = -2;
@@ -3848,6 +3944,33 @@ mod tests {
         oracle.source_program = PYTH_RECEIVER_PROGRAM_ID;
         oracle.resolver = OracleResolverV2::UmaWormholeV1;
         assert!(validate_oracle_config(&MarketCategory::Politics, &oracle, 2_000).is_err());
+    }
+
+    #[test]
+    fn stork_template_is_restricted_to_financial_categories() {
+        let mut oracle = OracleConfigArgs {
+            resolver: OracleResolverV2::StorkPriceV1,
+            source_program: STORK_ORACLE_PROGRAM_ID,
+            source_queue: Pubkey::default(),
+            source_id: [1; 32],
+            comparator: ValueComparator::GreaterThanOrEqual,
+            threshold: 100_000_000_000_000_000_000,
+            threshold_exponent: -18,
+            observation_ts: 2_000,
+            observation_window_secs: 30,
+            max_staleness_secs: 10,
+            max_staleness_slots: 0,
+            max_confidence_bps: 0,
+            min_samples: 0,
+            challenge_period_secs: 0,
+            bond_amount: 0,
+            config_hash: [2; 32],
+        };
+        assert!(validate_oracle_config(&MarketCategory::Crypto, &oracle, 2_000).is_ok());
+        assert!(validate_oracle_config(&MarketCategory::Economics, &oracle, 2_000).is_ok());
+        assert!(validate_oracle_config(&MarketCategory::Science, &oracle, 2_000).is_err());
+        oracle.source_program = Pubkey::new_unique();
+        assert!(validate_oracle_config(&MarketCategory::Crypto, &oracle, 2_000).is_err());
     }
 
     #[test]

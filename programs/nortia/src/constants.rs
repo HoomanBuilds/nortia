@@ -42,7 +42,10 @@ pub const PROTOCOL_AUTHORITY: Pubkey = pubkey!("5yFHYFS1y8hVuVte6F3ae9NMh3i4F1ZG
 pub const DEVNET_USDC_MINT: Pubkey = pubkey!("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU");
 pub const TXLINE_PROGRAM_ID: Pubkey = pubkey!("6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J");
 pub const PYTH_RECEIVER_PROGRAM_ID: Pubkey = pubkey!("rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ");
+pub const PYTH_PUSH_ORACLE_PROGRAM_ID: Pubkey =
+    pubkey!("pythWSnswVUd12oZpeFP8e9CVaEqJg25g1Vtc2biRsT");
 pub const SWITCHBOARD_QUOTE_PROGRAM_ID: Pubkey =
     pubkey!("orac1eFjzWL5R3RbbdMV68K9H6TaCVVcL6LjvQQWAbz");
 pub const SWITCHBOARD_DEVNET_QUEUE: Pubkey =
     pubkey!("EYiAmGSdsQTuCw413V5BzaruWuCCSDgTPtBGvLkXHbe7");
+pub const STORK_ORACLE_PROGRAM_ID: Pubkey = pubkey!("stork1JUZMKYgjNagHiK2KdMmb42iTnYe9bYUCDUk8n");
