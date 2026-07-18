@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { PriceUpdate } from "@pythnetwork/hermes-client";
 import receiverSdk from "@pythnetwork/pyth-solana-receiver";
+import { PublicKey } from "@solana/web3.js";
 import { PythClient, type HermesPriceApi } from "./client.js";
+import { pythPushFeedAccount } from "./settlement.js";
 
 const FEED = "e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43";
 
@@ -12,6 +14,12 @@ test("Pyth receiver SDK is importable and pinned to the onchain program", () => 
     "rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ",
   );
   assert.equal(typeof receiverSdk.PythSolanaReceiver, "function");
+  const expected = receiverSdk.getPriceFeedAccountForProgram(
+    0,
+    FEED,
+    new PublicKey("pythWSnswVUd12oZpeFP8e9CVaEqJg25g1Vtc2biRsT"),
+  );
+  assert.equal(pythPushFeedAccount(FEED).toBase58(), expected.toBase58());
 });
 
 function response(overrides: Partial<PriceUpdate> = {}): PriceUpdate {

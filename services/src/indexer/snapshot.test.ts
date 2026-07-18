@@ -118,6 +118,26 @@ test("snapshot closes trading at the exact lock boundary", () => {
   assert.equal(snapshot.vaultBalance, null);
 });
 
+test("snapshot recognizes appended Economics and Science categories", () => {
+  for (const [category, expected] of [
+    [{ economics: {} }, "economics"],
+    [{ science: {} }, "science"],
+  ] as const) {
+    const snapshot = buildHybridMarketSnapshot({
+      address: key(10),
+      vault: key(14),
+      vaultBalance: null,
+      market: { ...market, category },
+      oracle,
+      receipt: null,
+      metadata: null,
+      traderCount: 0,
+      now: 1_000,
+    });
+    assert.equal(snapshot.category, expected);
+  }
+});
+
 test("published metadata must match every immutable market hash", () => {
   const question = "Will BTC be above 120000 USD?";
   const rules = "Use the timestamped Pyth BTC/USD update.";

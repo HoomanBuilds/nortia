@@ -16,6 +16,8 @@ import {
 } from "../solana.js";
 import { TxlineClient, latestFinalScore } from "../txline/client.js";
 import { validationPayload } from "../txline/validation.js";
+import { resolveStorkHybridMarket } from "../stork/settlement.js";
+import { resolveSwitchboardHybridMarket } from "../switchboard/managed.js";
 
 const TXLINE_PROGRAM = new PublicKey("6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J");
 const PARTICIPANT_GOAL_KEYS = [1, 2] as const;
@@ -218,25 +220,28 @@ export async function runHybridKeeperPass(input: {
         );
         continue;
       }
+      if (action === "resolve-stork") {
+        const signature = await resolveStorkHybridMarket({
+          keypair: input.keypair,
+          market: marketAddress,
+          oracle,
+          program: input.program,
+        });
+        input.log({ event: "stork-market-resolved", signature, ...context });
+        continue;
+      }
       if (action !== "resolve-switchboard") {
         throw new Error(`Unsupported hybrid keeper action: ${action}`);
       }
-      const quoteAccount = PublicKey.findProgramAddressSync(
-        [oracle.sourceQueue.toBuffer(), Buffer.from(oracle.sourceId)],
-        oracle.sourceProgram,
-      )[0];
-      const signature = await input.program.methods
-        .resolveHybridWithSwitchboard()
-        .accountsPartial({
-          keeper: input.keypair.publicKey,
-          market: marketAddress,
-          oracleConfig: oracleConfigPda(marketAddress),
-          receipt: resolutionReceiptPda(marketAddress),
-          vault: hybridVaultPda(marketAddress),
-          quoteAccount,
-          systemProgram: SystemProgram.programId,
-        })
-        .rpc();
+      const signature = await resolveSwitchboardHybridMarket({
+        connection: input.connection,
+        keypair: input.keypair,
+        market: marketAddress,
+        oracle,
+        program: input.program,
+        crossbarOrigin: config.switchboardCrossbarOrigin,
+        computeUnitPriceMicroLamports: config.switchboardComputeUnitPriceMicroLamports,
+      });
       input.log({ event: "switchboard-market-resolved", signature, ...context });
     } catch (error) {
       input.log({

@@ -5,6 +5,8 @@ type OracleAccessInput = {
   pythApiKey?: string | null;
   pythOrigin?: string;
   switchboardOrigin?: string;
+  storkOrigin?: string;
+  storkApiToken?: string | null;
 };
 
 function secureOrigin(value: string, label: string): string {
@@ -32,6 +34,8 @@ export function resolveOracleAccess(input: OracleAccessInput) {
       pythApiKey: null,
       pythMinimumRequestIntervalMs: 1_100,
       switchboardOrigin: "https://crossbar.switchboard.xyz",
+      storkOrigin: "https://rest.dev.stork-oracle.network",
+      storkApiToken: null,
     } as const;
   }
   const pythApiKey = input.pythApiKey?.trim();
@@ -45,5 +49,10 @@ export function resolveOracleAccess(input: OracleAccessInput) {
       input.switchboardOrigin ?? "https://crossbar.switchboard.xyz",
       "SWITCHBOARD_CROSSBAR_ORIGIN",
     ),
+    storkOrigin: secureOrigin(
+      input.storkOrigin ?? "https://rest.dev.stork-oracle.network",
+      "STORK_REST_ORIGIN",
+    ),
+    storkApiToken: input.storkApiToken?.trim() || null,
   } as const;
 }

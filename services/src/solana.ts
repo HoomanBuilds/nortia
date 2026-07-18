@@ -47,6 +47,7 @@ export function oracleResolverName(resolver: Record<string, unknown>): HybridRes
     optimisticV1: "optimistic-v1",
     umaWormholeV1: "uma-wormhole-v1",
     chainlinkReportV1: "chainlink-report-v1",
+    storkPriceV1: "stork-price-v1",
   };
   const mapped = name ? names[name] : undefined;
   if (!mapped) throw new Error("Unknown Nortia oracle resolver");

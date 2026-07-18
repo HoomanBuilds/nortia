@@ -30,6 +30,8 @@ const oracleAccess = resolveOracleAccess({
   pythOrigin: process.env.PYTH_HERMES_ORIGIN,
   pythApiKey: process.env.PYTH_API_KEY,
   switchboardOrigin: process.env.SWITCHBOARD_CROSSBAR_ORIGIN,
+  storkOrigin: process.env.STORK_REST_ORIGIN,
+  storkApiToken: process.env.STORK_API_TOKEN,
 });
 
 export const config = {
@@ -48,8 +50,11 @@ export const config = {
   pythApiKey: oracleAccess.pythApiKey,
   pythMinimumRequestIntervalMs: oracleAccess.pythMinimumRequestIntervalMs,
   switchboardCrossbarOrigin: oracleAccess.switchboardOrigin,
+  storkRestOrigin: oracleAccess.storkOrigin,
+  storkApiToken: oracleAccess.storkApiToken,
   treasuryFeeShareBps: basisPoints("NORTIA_TREASURY_FEE_SHARE_BPS", 7_000),
   pythComputeUnitPriceMicroLamports: integer("PYTH_COMPUTE_UNIT_PRICE_MICROLAMPORTS", 50_000),
+  switchboardComputeUnitPriceMicroLamports: integer("SWITCHBOARD_COMPUTE_UNIT_PRICE_MICROLAMPORTS", 50_000),
   keeperDryRun: process.env.KEEPER_DRY_RUN !== "false",
   keeperIntervalMs: integer("KEEPER_INTERVAL_MS", 15_000),
   indexOutputPath: path.resolve(process.env.INDEX_OUTPUT_PATH ?? "./state/markets.json"),

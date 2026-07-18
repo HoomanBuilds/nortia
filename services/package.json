@@ -22,6 +22,8 @@
     "@pythnetwork/pyth-solana-receiver": "0.13.0",
     "@solana/spl-token": "0.4.15",
     "@solana/web3.js": "1.98.4",
+    "@switchboard-xyz/common": "5.8.3",
+    "@switchboard-xyz/on-demand": "3.10.4",
     "bn.js": "5.2.5",
     "nortia-client": "file:../client",
     "poseidon-lite": "0.3.0"

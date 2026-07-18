@@ -6,7 +6,8 @@ export type HybridResolver =
   | "switchboard-quote-v1"
   | "optimistic-v1"
   | "uma-wormhole-v1"
-  | "chainlink-report-v1";
+  | "chainlink-report-v1"
+  | "stork-price-v1";
 
 export type OptimisticProposalState = {
   challengeDeadline: number;
@@ -29,6 +30,7 @@ export type HybridKeeperAction =
   | "resolve-pyth"
   | "resolve-txline"
   | "resolve-switchboard"
+  | "resolve-stork"
   | "finalize-optimistic"
   | "timeout-optimistic-dispute"
   | "resolve-timeout";
@@ -79,6 +81,7 @@ export function planHybridKeeperAction(
   if (market.resolver === "switchboard-quote-v1") {
     return machineReady ? "resolve-switchboard" : "none";
   }
+  if (market.resolver === "stork-price-v1") return machineReady ? "resolve-stork" : "none";
   if (market.resolver !== "optimistic-v1" || !market.proposal || market.proposal.finalized) {
     return "none";
   }

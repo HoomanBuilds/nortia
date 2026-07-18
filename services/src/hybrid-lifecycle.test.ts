@@ -27,6 +27,7 @@ test("machine resolvers become actionable at the inclusive observation boundary"
     ["pyth-price-v2", "resolve-pyth"],
     ["txline-stat-v2", "resolve-txline"],
     ["switchboard-quote-v1", "resolve-switchboard"],
+    ["stork-price-v1", "resolve-stork"],
   ]);
   for (const [resolver, action] of expected) {
     assert.equal(planHybridKeeperAction({ ...base, resolver }, 120), action);
@@ -91,6 +92,7 @@ test("Anchor enum objects map to the keeper's stable names", () => {
   assert.equal(oracleResolverName({ pythPriceV2: {} }), "pyth-price-v2");
   assert.equal(oracleResolverName({ switchboardQuoteV1: {} }), "switchboard-quote-v1");
   assert.equal(oracleResolverName({ optimisticV1: {} }), "optimistic-v1");
+  assert.equal(oracleResolverName({ storkPriceV1: {} }), "stork-price-v1");
   assert.throws(() => hybridPhaseName({ broken: {} }), /hybrid phase/);
   assert.throws(() => oracleResolverName({ broken: {} }), /oracle resolver/);
 });

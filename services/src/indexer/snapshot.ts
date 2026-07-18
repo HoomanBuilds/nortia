@@ -241,6 +241,8 @@ export function buildHybridMarketSnapshot(input: {
         technology: "technology",
         culture: "culture",
         other: "other",
+        economics: "economics",
+        science: "science",
       },
       "market category",
     ),

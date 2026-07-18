@@ -8,6 +8,8 @@ test("free provider profile uses public endpoints without forwarding credentials
     pythApiKey: "must-not-leak",
     pythOrigin: "https://paid.example/pyth",
     switchboardOrigin: "https://paid.example/crossbar",
+    storkOrigin: "https://paid.example/stork",
+    storkApiToken: "must-not-leak",
   });
   assert.deepEqual(access, {
     profile: "free",
@@ -15,6 +17,8 @@ test("free provider profile uses public endpoints without forwarding credentials
     pythApiKey: null,
     pythMinimumRequestIntervalMs: 1_100,
     switchboardOrigin: "https://crossbar.switchboard.xyz",
+    storkOrigin: "https://rest.dev.stork-oracle.network",
+    storkApiToken: null,
   });
 });
 
@@ -24,6 +28,8 @@ test("managed provider profile retains configurable authenticated adapters", () 
     pythApiKey: "secret-key",
     pythOrigin: "https://provider.example/hermes/",
     switchboardOrigin: "https://provider.example/crossbar/",
+    storkOrigin: "https://provider.example/stork/",
+    storkApiToken: "stork-key",
   });
   assert.deepEqual(access, {
     profile: "managed",
@@ -31,6 +37,8 @@ test("managed provider profile retains configurable authenticated adapters", () 
     pythApiKey: "secret-key",
     pythMinimumRequestIntervalMs: 0,
     switchboardOrigin: "https://provider.example/crossbar",
+    storkOrigin: "https://provider.example/stork",
+    storkApiToken: "stork-key",
   });
 });
 

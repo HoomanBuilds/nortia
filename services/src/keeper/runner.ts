@@ -51,6 +51,8 @@ async function main() {
     pythOrigin: config.pythHermesOrigin,
     pythAuthenticated: config.pythApiKey !== null,
     switchboardOrigin: config.switchboardCrossbarOrigin,
+    storkOrigin: config.storkRestOrigin,
+    storkAuthenticated: config.storkApiToken !== null,
     dryRun: config.keeperDryRun,
   });
 
