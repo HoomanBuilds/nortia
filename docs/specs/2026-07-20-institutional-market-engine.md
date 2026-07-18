@@ -362,7 +362,7 @@ Use for:
 - Supported equities, FX, metals, indices, and macroeconomic feeds.
 - Deterministic above, below, range, or change predicates.
 
-Verification:
+Pull verification:
 
 - Use a Pyth-owned `PriceUpdateV2` account with full verification.
 - Pin the 32-byte feed ID.
@@ -374,13 +374,18 @@ Verification:
 - Reject confidence wider than the market's configured maximum.
 - Store publish time, confidence, feed ID, price account, and evidence hash.
 
-Timestamped markets should use an ephemeral historical price update for the specified observation time, not an arbitrary current push-feed account. A narrow time window and permissionless keepers reduce selection risk. Rules must state the exact timestamp and comparison semantics.
+Sponsored push verification:
 
-Push-feed accounts remain useful for low-latency charts and indicative prices. Nortia does not use the continuously updated push account as the settlement primitive for a point-in-time market. The resolver accepts a permissionlessly posted `PriceUpdateV2` for the pinned feed and verifies the unique publish interval around the market timestamp onchain.
+- Pin the official Pyth push-oracle program.
+- Derive the canonical shard-0 PDA from the configured feed ID.
+- Apply the same positive-price, observation-window, staleness, confidence, and exponent checks.
+- Require the keeper to consume the latest account while it brackets the market timestamp.
+
+Non-sponsored timestamped markets use an ephemeral historical update for the specified observation time. Sponsored feeds may use the canonical push account when the keeper resolves inside its narrow bracket. If that bracket is missed, the push path cannot select an older value and the market eventually becomes invalid. Rules must state the exact timestamp and comparison semantics.
 
 Status: implemented in V2 with normalized receipts and invalid-market timeout handling.
 
-Devnet provider policy: `ORACLE_PROVIDER_PROFILE=free` uses the public legacy-compatible Hermes endpoint without forwarding credentials and paces calls below its public rate limit. `managed` retains API-key and custom-origin support behind an explicit switch. Endpoint changes do not relax onchain receiver, feed, timestamp, confidence, or full-verification checks.
+Devnet provider policy: `ORACLE_PROVIDER_PROFILE=free` uses sponsored push accounts or the public legacy-compatible Hermes endpoint without forwarding credentials and paces calls below its public rate limit. `managed` retains API-key and custom-origin support behind an explicit switch. Endpoint changes do not relax onchain owner, PDA, feed, timestamp, confidence, or full-verification checks.
 
 ### Resolver tier A or B: Switchboard canonical quote
 
@@ -406,6 +411,25 @@ A custom feed is only as credible as its source jobs. One HTTP endpoint repeated
 Switchboard V1 is restricted away from sports and volatile crypto price templates. Pyth handles timestamped crypto prices, while Switchboard is used for finalized custom numeric facts whose source value is stable during the observation window.
 
 Status: implemented in V2 using the official 0.13 quote parser through its Pinocchio-compatible feature set.
+
+### Resolver tier A: Stork verified price
+
+Use for:
+
+- Additional Crypto and Economics price assets whose Stork feed is available.
+
+Verification:
+
+- Pin the official Stork Solana program.
+- Derive the canonical `stork_feed` PDA from the exact 32-byte feed ID.
+- Pin the account discriminator and embedded feed ID.
+- Convert the signed nanosecond timestamp to contract seconds with overflow checks.
+- Require a positive 1e18-scaled value inside the market's observation window.
+- Store the raw account hash, timestamp, feed ID, value, and result in the resolution receipt.
+
+Stork stores the latest value, so an external Stork pusher and the Nortia keeper must update and resolve promptly. The REST API requires `STORK_API_TOKEN`; this resolver is supported but unavailable in the free profile until that credential is configured.
+
+Status: implemented in V2 with fail-closed readiness and timeout refunds.
 
 ### Resolver tier B: native bonded optimistic assertion
 
@@ -476,13 +500,14 @@ Status: research and partner integration path. No generic API-based Chainlink cl
 | --- | --- | --- | --- |
 | World Cup sports | TxLINE stat V2 | None in current V2 | Fixture or predicate is unsupported |
 | Other sports | Disabled until a reviewed sports adapter exists | None | No canonical final source is named |
-| Crypto price | Pyth verified price | None in current V2 | Feed ID, timestamp, or confidence policy is missing |
-| Equities, FX, metals | Pyth verified price | Switchboard stable quote | Market-hours and corporate-action rules are missing |
+| Crypto price | Pyth sponsored push or verified pull | Stork when configured | Feed ID, timestamp, or confidence policy is missing |
+| Equities, FX, metals, commodities, rates | Pyth verified pull | Switchboard stable quote or Stork | Market-hours and corporate-action rules are missing |
 | Macroeconomic data | Pyth supported feed or Switchboard stable quote | Bonded optimistic | Release vintage and revision policy are missing |
 | Weather | Switchboard multi-source official station feed | Bonded optimistic | Station, unit, observation window, or missing-data rule is absent |
 | Elections and politics | Bonded optimistic | UMA bridge is planned | Certification source and recount rules are ambiguous |
 | Governance | Bonded optimistic | Native onchain adapter is planned | Target program and proposal ID are not pinned |
 | Technology and culture | Bonded optimistic | UMA bridge is planned | The question depends on subjective interpretation |
+| Science | Bonded optimistic or Switchboard stable quote | None | Source, unit, observation window, or revision rule is absent |
 
 ## 12. Oracle safety invariants
 

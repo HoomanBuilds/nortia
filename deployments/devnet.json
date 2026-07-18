@@ -1,6 +1,6 @@
 {
   "network": "solana-devnet",
-  "checkedAt": "2026-07-20T09:42:29Z",
+  "checkedAt": "2026-07-20T11:16:40Z",
   "status": "v1-deployed-v2-pending-funding",
   "programs": {
     "nortia": {
@@ -23,6 +23,20 @@
     },
     "txline": {
       "programId": "6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J"
+    },
+    "pythReceiver": {
+      "programId": "rec5EKMGg6MxZYaMdyBfgwp4d5rB9T1VQH5pJv5LtFJ"
+    },
+    "pythPushOracle": {
+      "programId": "pythWSnswVUd12oZpeFP8e9CVaEqJg25g1Vtc2biRsT"
+    },
+    "switchboardQuote": {
+      "programId": "orac1eFjzWL5R3RbbdMV68K9H6TaCVVcL6LjvQQWAbz",
+      "devnetQueue": "EYiAmGSdsQTuCw413V5BzaruWuCCSDgTPtBGvLkXHbe7"
+    },
+    "stork": {
+      "programId": "stork1JUZMKYgjNagHiK2KdMmb42iTnYe9bYUCDUk8n",
+      "apiTokenConfigured": false
     }
   },
   "protocol": {
@@ -41,16 +55,16 @@
   },
   "v2Upgrade": {
     "status": "pending-funding",
-    "commit": "47326e3",
-    "artifactSha256": "f7f96f1794322ae7091560ee905bb1467229d6039271d24af73e57901aa2bf7d",
-    "artifactLengthBytes": 1051224,
+    "commit": "20a153c",
+    "artifactSha256": "b3bc4a017002e82b367f4f6175a9c7062f4661fd4664ae5b7a715b97b4ac4b0b",
+    "artifactLengthBytes": 1080080,
     "currentProgramDataLengthBytes": 432296,
     "engineAddress": "8B9mT96Zryy4PpcQDFToKPjBa2BunjxfwASWDGPFCYid",
     "oracleProviderProfile": "free",
-    "requiredTransientLamports": 11725406320,
-    "availableLamports": 795203054,
-    "shortfallLamports": 10930203266,
-    "preflightAt": "2026-07-20T09:42:29Z"
+    "requiredTransientLamports": 12127081840,
+    "availableLamports": 10795203054,
+    "shortfallLamports": 1331878786,
+    "preflightAt": "2026-07-20T11:16:40Z"
   },
   "sampleMarket": {
     "address": "44cD1kbvuheo5wSM4gxEZvAfitAXbC25f2u4Mzs48qix",
