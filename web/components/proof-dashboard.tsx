@@ -17,7 +17,7 @@ export function ProofDashboard() {
   return (
     <>
       <section className="proof-status-grid">
-        <div><span>Connected resolvers</span><strong>01</strong><small>TxLINE sports</small></div>
+        <div><span>Verified resolver paths</span><strong>05</strong><small>sports, prices, numeric, facts</small></div>
         <div><span>Onchain validation gates</span><strong>03</strong><small>source, rule, accounting</small></div>
         <div><span>Private public inputs</span><strong>07</strong><small>placement and redeem</small></div>
         <div><span>Refund fee</span><strong>0%</strong><small>all failure paths</small></div>
@@ -46,7 +46,7 @@ export function ProofDashboard() {
 
       <section className="resolver-registry">
         <div><span className="eyebrow">Resolver registry</span><h2>General markets need specific evidence.</h2><p>Nortia's core is category-neutral. Every new category still needs an adapter with explicit finality, freshness, dispute, and refund rules.</p></div>
-        <div className="resolver-table"><div><span>Sports statistics</span><b className="ready">TxLINE connected</b></div><div><span>Price thresholds</span><b>Adapter review</b></div><div><span>Governance outcomes</span><b>Adapter review</b></div><div><span>Public assertions</span><b>Adapter review</b></div></div>
+        <div className="resolver-table"><div><span>Sports statistics</span><b className="ready">TxLINE connected</b></div><div><span>Financial prices</span><b className="ready">Pyth push + pull</b></div><div><span>Custom numeric facts</span><b className="ready">Switchboard managed</b></div><div><span>Additional price assets</span><b>Stork key required</b></div><div><span>Long-tail public facts</span><b className="ready">Bonded assertions</b></div></div>
       </section>
     </>
   );

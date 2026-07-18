@@ -1,6 +1,6 @@
 export type MarketStatus = "live" | "upcoming" | "settled";
 export type TradingState = "open" | "locked" | "batched" | "resolving" | "disputed" | "resolved" | "refunding" | "closed";
-export type MarketCategory = "Sports" | "Crypto" | "Politics" | "Technology" | "Culture" | "Other";
+export type MarketCategory = "Sports" | "Crypto" | "Economics" | "Politics" | "Technology" | "Culture" | "Science" | "Other";
 
 export type HybridMarketDetails = {
   creator: string;
@@ -8,7 +8,7 @@ export type HybridMarketDetails = {
   treasuryOwner: string;
   collateralMint: string;
   oracleConfig: string;
-  resolverId: "txline-stat-v2" | "pyth-price-v2" | "switchboard-quote-v1" | "optimistic-v1" | "uma-wormhole-v1" | "chainlink-report-v1";
+  resolverId: "txline-stat-v2" | "pyth-price-v2" | "switchboard-quote-v1" | "optimistic-v1" | "uma-wormhole-v1" | "chainlink-report-v1" | "stork-price-v1";
   metadataPublished: boolean;
   rules: string | null;
   yesLabel: string;

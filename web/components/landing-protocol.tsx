@@ -9,9 +9,9 @@ import { cn } from "@/lib/utils";
 gsap.registerPlugin(ScrollTrigger);
 
 const layers = [
-  { title: "Market Engine", medium: "Continuous prediction", description: "One collateralized binary LMSR prices sports, crypto, politics, technology, culture, and future verified categories.", span: "col-span-2 row-span-2", metric: "LMSR / USDC" },
+  { title: "Market Engine", medium: "Continuous prediction", description: "One collateralized binary LMSR prices sports, crypto, economics, politics, technology, culture, science, and other objective facts.", span: "col-span-2 row-span-2", metric: "LMSR / USDC" },
   { title: "TxLINE Sports", medium: "Signed match data", description: "World Cup scores and match events resolve through a verifiable Solana CPI.", span: "col-span-1 row-span-1", metric: "SSE + MERKLE" },
-  { title: "Pyth Prices", medium: "Pull oracle", description: "A fully verified update must uniquely bracket the market's immutable observation timestamp.", span: "col-span-1 row-span-2", metric: "PRICE + TIME" },
+  { title: "Pyth Prices", medium: "Push + pull oracle", description: "Sponsored Solana accounts and timestamped updates cover crypto, equities, FX, commodities, metals, rates, NAV, and indices.", span: "col-span-1 row-span-2", metric: "3,000+ FEEDS" },
   { title: "Bonded Facts", medium: "Optimistic evidence", description: "Long-tail facts use public evidence, opposing bonds, a challenge window, and dispute fallback.", span: "col-span-1 row-span-1", metric: "PROPOSE + CHALLENGE" },
   { title: "USDC Vault", medium: "Solana escrow", description: "Creator subsidy bounds LMSR loss while exact liability remains reserved for unsettled positions.", span: "col-span-2 row-span-1", metric: "6 DECIMALS" },
   { title: "Public Receipt", medium: "Proof surface", description: "Every resolution exposes the source account, observation, evidence hash, outcome, and final timestamp.", span: "col-span-1 row-span-1", metric: "AUDITABLE" },

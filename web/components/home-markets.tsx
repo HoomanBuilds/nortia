@@ -6,7 +6,7 @@ import { MarketCard } from "@/components/market-card";
 import { canPlaceOrder, markets, type Market } from "@/lib/markets";
 
 const filters = ["All", "Open", "Resolved"] as const;
-const categories = ["All categories", "Sports", "Crypto", "Politics", "Technology", "Culture"] as const;
+const categories = ["All categories", "Sports", "Crypto", "Economics", "Politics", "Technology", "Culture", "Science", "Other"] as const;
 
 export function HomeMarkets({ initialMarkets = markets }: { initialMarkets?: Market[] }) {
   const [filter, setFilter] = useState<(typeof filters)[number]>("All");
@@ -44,7 +44,7 @@ export function HomeMarkets({ initialMarkets = markets }: { initialMarkets?: Mar
       {visible.length > 0 ? (
         <div className="market-grid">{visible.map((market) => <MarketCard market={market} key={market.id} />)}</div>
       ) : (
-        <div className="empty-catalog"><strong>No connected markets in this category yet.</strong><span>TxLINE sports is Nortia's first production resolver. New categories appear only when their resolver adapter is verified.</span></div>
+        <div className="empty-catalog"><strong>No connected markets in this category yet.</strong><span>Create one with TxLINE, Pyth, Switchboard, Stork, or Nortia's bonded assertion resolver.</span></div>
       )}
     </section>
   );

@@ -98,6 +98,8 @@ function categoryName(value: Record<string, unknown>): MarketCategory | null {
     technology: "Technology",
     culture: "Culture",
     other: "Other",
+    economics: "Economics",
+    science: "Science",
   };
   return names[enumKey(value)] ?? null;
 }
@@ -107,6 +109,7 @@ function resolverName(value: Record<string, unknown>): Pick<HybridMarketDetails,
     txlinestatv2: { resolverId: "txline-stat-v2", label: "TxLINE" },
     pythpricev2: { resolverId: "pyth-price-v2", label: "Pyth" },
     switchboardquotev1: { resolverId: "switchboard-quote-v1", label: "Switchboard" },
+    storkpricev1: { resolverId: "stork-price-v1", label: "Stork" },
     optimisticv1: { resolverId: "optimistic-v1", label: "Bonded" },
     umawormholev1: { resolverId: "uma-wormhole-v1", label: "UMA" },
     chainlinkreportv1: { resolverId: "chainlink-report-v1", label: "Chainlink" },
@@ -150,6 +153,8 @@ function categoryCode(category: MarketCategory): string {
     Technology: "TEC",
     Culture: "CUL",
     Other: "MKT",
+    Economics: "ECO",
+    Science: "SCI",
   };
   return codes[category];
 }
