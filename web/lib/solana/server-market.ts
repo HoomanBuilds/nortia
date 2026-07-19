@@ -478,15 +478,15 @@ export async function getOnchainMarkets(): Promise<Market[]> {
   const [privateRows, hybridRows, positionRows] = await Promise.all([
     rpc.getProgramAccounts(NORTIA_PROGRAM_KEY, {
       commitment: "confirmed",
-      filters: [coder.memcmp("Market")],
+      filters: [{ memcmp: coder.memcmp("Market") }],
     }),
     rpc.getProgramAccounts(NORTIA_PROGRAM_KEY, {
       commitment: "confirmed",
-      filters: [coder.memcmp("HybridMarket")],
+      filters: [{ memcmp: coder.memcmp("HybridMarket") }],
     }),
     rpc.getProgramAccounts(NORTIA_PROGRAM_KEY, {
       commitment: "confirmed",
-      filters: [coder.memcmp("Position")],
+      filters: [{ memcmp: coder.memcmp("Position") }],
     }),
   ]);
 
@@ -583,7 +583,7 @@ async function hybridTraderCount(
     commitment: "confirmed",
     dataSlice: { offset: 0, length: 0 },
     filters: [
-      coder.memcmp("Position"),
+      { memcmp: coder.memcmp("Position") },
       { memcmp: { offset: 10, bytes: address.toBase58() } },
     ],
   });
