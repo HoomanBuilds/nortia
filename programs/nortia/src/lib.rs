@@ -764,13 +764,19 @@ pub mod nortia {
             &ctx.accounts.token_program,
             quote.raw_amount,
         )?;
+        let (treasury_transfer, liquidity_transfer) = coalesce_hybrid_fee_transfers(
+            ctx.accounts.treasury_token.key(),
+            treasury_fee,
+            ctx.accounts.liquidity_token.key(),
+            liquidity_fee,
+        )?;
         transfer_from_owner(
             &ctx.accounts.owner,
             &ctx.accounts.owner_token,
             &ctx.accounts.treasury_token,
             &ctx.accounts.collateral_mint,
             &ctx.accounts.token_program,
-            treasury_fee,
+            treasury_transfer,
         )?;
         transfer_from_owner(
             &ctx.accounts.owner,
@@ -778,7 +784,7 @@ pub mod nortia {
             &ctx.accounts.liquidity_token,
             &ctx.accounts.collateral_mint,
             &ctx.accounts.token_program,
-            liquidity_fee,
+            liquidity_transfer,
         )?;
         emit_hybrid_trade(
             &ctx.accounts.market,
@@ -834,6 +840,12 @@ pub mod nortia {
             liquidity_fee,
         )?;
 
+        let (treasury_transfer, liquidity_transfer) = coalesce_hybrid_fee_transfers(
+            ctx.accounts.treasury_token.key(),
+            treasury_fee,
+            ctx.accounts.liquidity_token.key(),
+            liquidity_fee,
+        )?;
         transfer_from_hybrid_vault(
             &ctx.accounts.market,
             &ctx.accounts.vault,
@@ -848,7 +860,7 @@ pub mod nortia {
             &ctx.accounts.treasury_token,
             &ctx.accounts.collateral_mint,
             &ctx.accounts.token_program,
-            treasury_fee,
+            treasury_transfer,
         )?;
         transfer_from_hybrid_vault(
             &ctx.accounts.market,
@@ -856,7 +868,7 @@ pub mod nortia {
             &ctx.accounts.liquidity_token,
             &ctx.accounts.collateral_mint,
             &ctx.accounts.token_program,
-            liquidity_fee,
+            liquidity_transfer,
         )?;
         emit_hybrid_trade(
             &ctx.accounts.market,
@@ -1966,12 +1978,14 @@ pub struct TradeHybridShares<'info> {
     pub vault: Box<Account<'info, TokenAccount>>,
     #[account(
         mut,
+        dup,
         constraint = treasury_token.mint == collateral_mint.key()
             @ NortiaError::InvalidTreasury
     )]
     pub treasury_token: Box<Account<'info, TokenAccount>>,
     #[account(
         mut,
+        dup,
         constraint = liquidity_token.mint == collateral_mint.key()
             @ NortiaError::InvalidTokenAccount
     )]
@@ -3146,6 +3160,23 @@ fn split_hybrid_fee(fee: u64, treasury_share_bps: u16) -> Result<(u64, u64)> {
     Ok((treasury, liquidity))
 }
 
+fn coalesce_hybrid_fee_transfers(
+    treasury_token: Pubkey,
+    treasury_fee: u64,
+    liquidity_token: Pubkey,
+    liquidity_fee: u64,
+) -> Result<(u64, u64)> {
+    if treasury_token != liquidity_token {
+        return Ok((treasury_fee, liquidity_fee));
+    }
+    Ok((
+        treasury_fee
+            .checked_add(liquidity_fee)
+            .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?,
+        0,
+    ))
+}
+
 fn apply_position_buy(
     position: &mut Position,
     side: lmsr::OutcomeSide,
@@ -3296,7 +3327,7 @@ fn transfer_from_owner<'info>(
     token_program: &Program<'info, Token>,
     amount: u64,
 ) -> Result<()> {
-    if amount == 0 {
+    if amount == 0 || source.key() == destination.key() {
         return Ok(());
     }
     let transfer_accounts = TransferChecked {
@@ -3772,6 +3803,25 @@ mod tests {
         assert_eq!(split_hybrid_fee(100, 7_000).unwrap(), (70, 30));
         assert_eq!(split_hybrid_fee(1, 7_000).unwrap(), (0, 1));
         assert!(split_hybrid_fee(100, 10_000).is_err());
+    }
+
+    #[test]
+    fn hybrid_fee_transfers_coalesce_identical_destinations() {
+        let shared = Pubkey::new_unique();
+        assert_eq!(
+            coalesce_hybrid_fee_transfers(shared, 70, shared, 30).unwrap(),
+            (100, 0)
+        );
+        assert!(coalesce_hybrid_fee_transfers(shared, u64::MAX, shared, 1).is_err());
+    }
+
+    #[test]
+    fn hybrid_fee_transfers_preserve_distinct_destinations() {
+        assert_eq!(
+            coalesce_hybrid_fee_transfers(Pubkey::new_unique(), 70, Pubkey::new_unique(), 30,)
+                .unwrap(),
+            (70, 30)
+        );
     }
 
     #[test]
