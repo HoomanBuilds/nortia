@@ -14,7 +14,7 @@ import { formatUsdc } from "nortia-client/economics";
 import { AlertTriangle, ArrowUpRight, Clock3, EyeOff, ReceiptText, Wallet } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { HybridPortfolio, type HybridPortfolioSummary } from "@/components/hybrid-portfolio";
-import { SolanaNetworkIcon, UsdcTokenIcon } from "@/components/market-icons";
+import { UsdcTokenIcon } from "@/components/market-icons";
 import { RecoveryPanel } from "@/components/recovery-panel";
 import { commitmentPath, fieldBigInt, fieldHex } from "@/lib/crypto";
 import { loadPrivatePositions, savePrivatePosition, type PrivatePosition } from "@/lib/positions";
@@ -41,7 +41,7 @@ export function PortfolioDashboard() {
   const [positions, setPositions] = useState<PrivatePosition[]>([]);
   const [pending, setPending] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [hybridSummary, setHybridSummary] = useState<HybridPortfolioSummary>({ loading: false, active: 0, claimable: 0n });
+  const [hybridSummary, setHybridSummary] = useState<HybridPortfolioSummary>({ loading: false, active: 0, claimable: 0n, value: 0n, pnl: 0n });
 
   const replacePosition = useCallback((position: PrivatePosition) => {
     savePrivatePosition(position);
@@ -177,9 +177,9 @@ export function PortfolioDashboard() {
     <>
       <div className="portfolio-stats">
         <div><span><UsdcTokenIcon size={14} />Connected balance</span><strong>{connected && balances ? balances.usdc.toFixed(2) : "--"} <small>USDC</small></strong></div>
-        <div><span>Active positions</span><strong>{hybridSummary.loading ? "--" : hybridSummary.active}</strong></div>
+        <div><span><UsdcTokenIcon size={14} />Portfolio value</span><strong>{hybridSummary.loading ? "--" : formatUsdc(hybridSummary.value)} <small>USDC</small></strong></div>
+        <div><span>Total profit and loss</span><strong className={hybridSummary.pnl >= 0n ? "positive" : "negative"}>{hybridSummary.loading ? "--" : `${hybridSummary.pnl >= 0n ? "+" : "-"}${formatUsdc(hybridSummary.pnl >= 0n ? hybridSummary.pnl : -hybridSummary.pnl)}`} <small>USDC</small></strong></div>
         <div><span><UsdcTokenIcon size={14} />Claimable</span><strong>{hybridSummary.loading ? "--" : formatUsdc(hybridSummary.claimable)} <small>USDC</small></strong></div>
-        <div><span><SolanaNetworkIcon size={14} />Wallet</span><strong className="network-value">{publicKey ? `${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}` : "Not connected"}</strong></div>
       </div>
       {!connected && (
         <section className="wallet-gate">
@@ -189,7 +189,7 @@ export function PortfolioDashboard() {
         </section>
       )}
       <HybridPortfolio onSummary={setHybridSummary} />
-      <div className="portfolio-grid"><RecoveryPanel onRecovered={onRecovered} /><aside className="portfolio-side"><div className="portfolio-info-card"><span><UsdcTokenIcon size={17} /></span><div><strong>Fee model</strong><p>Each LMSR fill charges a 1% curve fee, split 70% to Nortia and 30% to market liquidity.</p></div></div><div className="portfolio-info-card"><span><ReceiptText size={17} /></span><div><strong>Redeem privately</strong><p>A winning commitment can be redeemed with a fresh address, without linking the payout to the order wallet.</p></div></div><div className="portfolio-info-card"><span><Clock3 size={17} /></span><div><strong>Permissionless fallback</strong><p>Any caller can open refunds after a missed deadline. A keeper is useful, but it is never the only recovery path.</p></div></div></aside></div>
+      <div className="portfolio-grid"><RecoveryPanel onRecovered={onRecovered} /><aside className="portfolio-side"><div className="portfolio-info-card"><span><UsdcTokenIcon size={17} /></span><div><strong>Fee model</strong><p>Each LMSR fill uses an immutable base rate up to 1%. The effective fee is probability-sensitive and splits 70% to Nortia and 30% to market liquidity.</p></div></div><div className="portfolio-info-card"><span><ReceiptText size={17} /></span><div><strong>Redeem privately</strong><p>A winning commitment can be redeemed with a fresh address, without linking the payout to the order wallet.</p></div></div><div className="portfolio-info-card"><span><Clock3 size={17} /></span><div><strong>Permissionless fallback</strong><p>Any caller can open refunds after a missed deadline. A keeper is useful, but it is never the only recovery path.</p></div></div></aside></div>
       <section className="empty-positions">
         <div><span>Position</span><span>Market</span><span>Stake</span><span>Status</span></div>
         {positions.length === 0 ? <div className="empty-position-state"><EyeOff size={22} /><h3>No recovered positions</h3><p>Create or open a market, then save the private recovery record before signing.</p><Link href="/markets">Browse markets <ArrowUpRight size={14} /></Link></div> : <div className="position-list">{positions.map((position) => <article key={position.commitment}><strong>{position.side.toUpperCase()}</strong><span>{position.question}</span><b className="asset-value"><UsdcTokenIcon size={14} />{position.ticketUsdc.toFixed(2)} USDC</b><em>{position.status}{position.status === "claimable" && <button type="button" disabled={!connected || pending === position.commitment} onClick={() => void redeem(position)}>Claim</button>}{position.status === "refundable" && <button type="button" disabled={!connected || pending === position.commitment} onClick={() => void refund(position)}>Refund</button>}</em></article>)}</div>}

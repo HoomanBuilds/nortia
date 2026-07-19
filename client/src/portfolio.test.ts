@@ -5,6 +5,8 @@ import {
   POSITION_OWNER_OFFSET,
   hybridPositionPayout,
   hybridPositionStatus,
+  hybridMarkedPnl,
+  hybridMarkedValue,
   hybridRealizedPnl,
   withdrawableHybridLiquidity,
 } from "./portfolio.js";
@@ -49,6 +51,25 @@ test("realized profit and loss includes prior sell proceeds", () => {
     totalProceeds: 2_250_000n,
     payout: 0n,
   }), -5_750_000n);
+});
+
+test("open positions use the current LMSR probabilities for marked value", () => {
+  const markedValue = hybridMarkedValue({
+    yesShares: 8_000_000n,
+    noShares: 2_000_000n,
+  }, 625_000n);
+  assert.equal(markedValue, 5_750_000n);
+  assert.equal(hybridMarkedPnl({
+    totalSpent: 6_500_000n,
+    totalProceeds: 1_000_000n,
+    markedValue,
+  }), 250_000n);
+});
+
+test("position mark rejects an invalid probability", () => {
+  const position = { yesShares: 1_000_000n, noShares: 0n };
+  assert.throws(() => hybridMarkedValue(position, -1n), /probability/i);
+  assert.throws(() => hybridMarkedValue(position, 1_000_001n), /probability/i);
 });
 
 test("liquidity withdrawal never consumes unsettled trader liability", () => {

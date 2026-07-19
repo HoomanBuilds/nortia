@@ -9,9 +9,12 @@ import {
 } from "@solana/spl-token";
 import { PublicKey, type Transaction } from "@solana/web3.js";
 import { formatUsdc } from "nortia-client/economics";
+import { lmsrYesProbability } from "nortia-client/lmsr";
 import {
   HYBRID_LIQUIDITY_OWNER_OFFSET,
   POSITION_OWNER_OFFSET,
+  hybridMarkedPnl,
+  hybridMarkedValue,
   hybridPositionPayout,
   hybridPositionStatus,
   hybridRealizedPnl,
@@ -47,6 +50,7 @@ type HybridMarketAccount = {
   outcome: number;
   yesQuantity: IntegerLike;
   noQuantity: IntegerLike;
+  liquidityParameter: IntegerLike;
   outstandingLiability: IntegerLike;
   lockTs: IntegerLike;
 };
@@ -82,7 +86,9 @@ type PositionRow = {
   totalProceeds: bigint;
   settledAmount: bigint;
   payout: bigint;
+  markedValue: bigint;
   pnl: bigint;
+  yesProbability: bigint;
   phase: HybridPhaseName;
   outcome: HybridOutcomeName;
   status: HybridPositionStatus;
@@ -100,6 +106,8 @@ export type HybridPortfolioSummary = {
   loading: boolean;
   active: number;
   claimable: bigint;
+  value: bigint;
+  pnl: bigint;
 };
 
 type PendingAction = {
@@ -153,6 +161,10 @@ export function HybridPortfolio({ onSummary }: { onSummary(summary: HybridPortfo
     claimable: positions
       .filter((position) => position.status === "claimable")
       .reduce((total, position) => total + position.payout, 0n),
+    value: positions
+      .filter((position) => position.status !== "settled")
+      .reduce((total, position) => total + position.markedValue, 0n),
+    pnl: positions.reduce((total, position) => total + position.pnl, 0n),
   }), [loading, positions]);
 
   useEffect(() => onSummary(summary), [onSummary, summary]);
@@ -200,9 +212,15 @@ export function HybridPortfolio({ onSummary }: { onSummary(summary: HybridPortfo
           noShares: BigInt(position.noShares.toString()),
         };
         const payout = hybridPositionPayout(shares, outcome);
+        const yesProbability = lmsrYesProbability({
+          yes: BigInt(market.yesQuantity.toString()),
+          no: BigInt(market.noQuantity.toString()),
+        }, BigInt(market.liquidityParameter.toString()));
         const details = metadata.get(position.market.toBase58());
         const totalSpent = BigInt(position.totalSpent.toString());
         const totalProceeds = BigInt(position.totalProceeds.toString());
+        const final = phase === "resolved" || phase === "closed";
+        const markedValue = final ? payout : hybridMarkedValue(shares, yesProbability);
         return [{
           address: positionAddress,
           marketAddress: position.market,
@@ -216,7 +234,11 @@ export function HybridPortfolio({ onSummary }: { onSummary(summary: HybridPortfo
           totalProceeds,
           settledAmount: BigInt(position.settledAmount.toString()),
           payout,
-          pnl: hybridRealizedPnl({ totalSpent, totalProceeds, payout }),
+          markedValue,
+          pnl: final
+            ? hybridRealizedPnl({ totalSpent, totalProceeds, payout })
+            : hybridMarkedPnl({ totalSpent, totalProceeds, markedValue }),
+          yesProbability,
           phase,
           outcome,
           status: hybridPositionStatus(phase, outcome, position.settled, shares),
@@ -351,14 +373,14 @@ export function HybridPortfolio({ onSummary }: { onSummary(summary: HybridPortfo
         <button type="button" disabled={loading || pending !== null} onClick={() => void refresh()}><RefreshCw size={13} className={loading ? "spin" : ""} />Refresh</button>
       </div>
       <div className="hybrid-position-table">
-        <div className="hybrid-position-head"><span>Market</span><span>Holdings</span><span>Cash flow</span><span>Settlement</span><span>Action</span></div>
+        <div className="hybrid-position-head"><span>Market</span><span>Holdings</span><span>Cash flow</span><span>Value and P/L</span><span>Action</span></div>
         {loading && positions.length === 0 ? <div className="portfolio-loading"><RefreshCw size={18} className="spin" />Reading wallet positions from devnet</div> : positions.length === 0 ? <div className="portfolio-loading"><WalletCards size={18} />No LMSR positions found for this wallet. <Link href="/markets">Browse markets</Link></div> : positions.map((position) => {
           const key = `settle:${position.address.toBase58()}`;
           return <article className="hybrid-position-row" key={position.address.toBase58()}>
             <div><Link href={`/markets/${position.marketAddress.toBase58()}`}>{position.question}</Link><small>{shortAddress(position.marketAddress)}</small></div>
             <div className="position-holdings"><span className="yes">{formatUsdc(position.yesShares)} {position.yesLabel}</span><span className="no">{formatUsdc(position.noShares)} {position.noLabel}</span></div>
             <div><strong>{formatUsdc(position.totalSpent)} USDC spent</strong><small>{formatUsdc(position.totalProceeds)} USDC sold</small></div>
-            <div><strong>{position.phase === "resolved" ? `${formatUsdc(position.payout)} USDC` : position.phase}</strong><small className={position.pnl >= 0n ? "positive" : "negative"}>{position.phase === "resolved" ? `${signedUsdc(position.pnl)} final P/L` : `Locks ${new Date(position.market.lockTs.toNumber() * 1_000).toLocaleString()}`}</small></div>
+            <div><strong>{formatUsdc(position.markedValue)} USDC {position.phase === "resolved" || position.phase === "closed" ? "payout" : "mark"}</strong><small className={position.pnl >= 0n ? "positive" : "negative"}>{signedUsdc(position.pnl)} {position.phase === "resolved" || position.phase === "closed" ? "final" : "unrealized"} P/L</small><small>YES {(Number(position.yesProbability) / 10_000).toFixed(2)}%</small></div>
             <div className="portfolio-row-action"><span className={`position-status ${position.status}`}>{position.status}</span>{position.status === "claimable" && <button type="button" disabled={pending !== null} onClick={() => void settle(position)}>{actionLabel(pending, key, `Claim ${formatUsdc(position.payout)} USDC`)}</button>}{position.status === "settled" && <span className="settled-check"><Check size={12} />Paid {formatUsdc(position.settledAmount)}</span>}</div>
           </article>;
         })}

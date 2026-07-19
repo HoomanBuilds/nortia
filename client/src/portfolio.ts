@@ -9,6 +9,7 @@ export type HybridPositionStatus = "open" | "locked" | "resolving" | "disputed" 
 
 export const POSITION_OWNER_OFFSET = 42;
 export const HYBRID_LIQUIDITY_OWNER_OFFSET = 51;
+export const PROBABILITY_SCALE = 1_000_000n;
 
 export function hybridPositionPayout(
   position: HybridPositionShares,
@@ -37,6 +38,28 @@ export function hybridRealizedPnl(input: {
   payout: bigint;
 }): bigint {
   return input.totalProceeds + input.payout - input.totalSpent;
+}
+
+export function hybridMarkedValue(
+  position: HybridPositionShares,
+  yesProbability: bigint,
+): bigint {
+  if (yesProbability < 0n || yesProbability > PROBABILITY_SCALE) {
+    throw new Error("YES probability is outside the supported range");
+  }
+  const noProbability = PROBABILITY_SCALE - yesProbability;
+  return (
+    position.yesShares * yesProbability
+    + position.noShares * noProbability
+  ) / PROBABILITY_SCALE;
+}
+
+export function hybridMarkedPnl(input: {
+  totalSpent: bigint;
+  totalProceeds: bigint;
+  markedValue: bigint;
+}): bigint {
+  return input.totalProceeds + input.markedValue - input.totalSpent;
 }
 
 export function withdrawableHybridLiquidity(
