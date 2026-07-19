@@ -56,6 +56,7 @@ export const config = {
   pythComputeUnitPriceMicroLamports: integer("PYTH_COMPUTE_UNIT_PRICE_MICROLAMPORTS", 50_000),
   switchboardComputeUnitPriceMicroLamports: integer("SWITCHBOARD_COMPUTE_UNIT_PRICE_MICROLAMPORTS", 50_000),
   keeperDryRun: process.env.KEEPER_DRY_RUN !== "false",
+  keeperOnce: process.env.KEEPER_ONCE === "true",
   keeperIntervalMs: integer("KEEPER_INTERVAL_MS", 15_000),
   indexOutputPath: path.resolve(process.env.INDEX_OUTPUT_PATH ?? "./state/markets.json"),
   indexOnce: process.env.INDEX_ONCE === "true",

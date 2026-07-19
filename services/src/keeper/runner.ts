@@ -54,6 +54,7 @@ async function main() {
     storkOrigin: config.storkRestOrigin,
     storkAuthenticated: config.storkApiToken !== null,
     dryRun: config.keeperDryRun,
+    once: config.keeperOnce,
   });
 
   for (;;) {
@@ -171,6 +172,7 @@ async function main() {
       now,
       log,
     });
+    if (config.keeperOnce) return;
     await delay(config.keeperIntervalMs);
   }
 }
