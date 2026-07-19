@@ -4,10 +4,11 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { ChevronDown, ExternalLink, LogOut, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
+import { SolanaNetworkIcon, SolTokenIcon, UsdcTokenIcon } from "@/components/market-icons";
 import { useWalletBalances } from "@/lib/solana/use-wallet-balances";
 
 export function WalletControl() {
-  const { connected, connecting, disconnect, publicKey } = useWallet();
+  const { connected, connecting, disconnect, publicKey, wallet } = useWallet();
   const { setVisible } = useWalletModal();
   const [open, setOpen] = useState(false);
   const { balances } = useWalletBalances();
@@ -19,7 +20,7 @@ export function WalletControl() {
   if (!connected || !publicKey) {
     return (
       <button className="account-button" type="button" onClick={() => setVisible(true)} disabled={connecting}>
-        <Wallet size={15} />
+        {wallet?.adapter.icon ? <img className="wallet-adapter-icon" src={wallet.adapter.icon} alt="" width={16} height={16} /> : <Wallet aria-hidden="true" size={15} />}
         <span>{connecting ? "Connecting" : "Connect wallet"}</span>
       </button>
     );
@@ -29,16 +30,16 @@ export function WalletControl() {
   return (
     <div className="wallet-control">
       <button className="account-button" type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
-        <Wallet size={15} />
+        {wallet?.adapter.icon ? <img className="wallet-adapter-icon" src={wallet.adapter.icon} alt="" width={16} height={16} /> : <Wallet aria-hidden="true" size={15} />}
         <span>{address.slice(0, 4)}...{address.slice(-4)}</span>
         <ChevronDown size={14} />
       </button>
       {open && (
         <div className="account-popover">
-          <div className="popover-label">Connected on Solana devnet</div>
+          <div className="popover-label"><SolanaNetworkIcon size={14} />Connected on Solana devnet</div>
           <strong>{address.slice(0, 8)}...{address.slice(-8)}</strong>
-          <div className="account-balance"><span>USDC balance</span><b>{balances ? balances.usdc.toFixed(2) : "..."} USDC</b></div>
-          <div className="account-balance compact"><span>Network fees</span><b>{balances ? balances.sol.toFixed(4) : "..."} SOL</b></div>
+          <div className="account-balance"><span><UsdcTokenIcon size={15} />USDC balance</span><b>{balances ? balances.usdc.toFixed(2) : "..."} USDC</b></div>
+          <div className="account-balance compact"><span><SolTokenIcon size={15} />Network fees</span><b>{balances ? balances.sol.toFixed(4) : "..."} SOL</b></div>
           <div className="wallet-popover-actions">
             <a href={`https://explorer.solana.com/address/${address}?cluster=devnet`} target="_blank" rel="noreferrer">Explorer <ExternalLink size={12} /></a>
             <button type="button" onClick={() => void disconnect()}><LogOut size={12} />Disconnect</button>

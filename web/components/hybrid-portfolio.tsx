@@ -25,13 +25,13 @@ import {
   AlertTriangle,
   ArrowUpRight,
   Check,
-  CircleDollarSign,
   RefreshCw,
   ShieldCheck,
   WalletCards,
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { UsdcTokenIcon } from "@/components/market-icons";
 import { translateNortiaError } from "@/lib/solana/errors";
 import { useNortiaProgram } from "@/lib/solana/use-nortia-program";
 
@@ -368,7 +368,7 @@ export function HybridPortfolio({ onSummary }: { onSummary(summary: HybridPortfo
         return <article key={row.address.toBase58()}><div><Link href={`/markets/${row.address.toBase58()}`}>{row.question}</Link><small>{row.phase} - {shortAddress(row.address)}</small></div><strong>{formatUsdc(row.withdrawable)} USDC available</strong><button type="button" disabled={row.withdrawable === 0n || pending !== null} onClick={() => void withdraw(row)}>{actionLabel(pending, key, row.phase === "resolved" ? "Withdraw surplus" : "Await resolution")}</button></article>;
       })}</div>}
       {error && <div className="portfolio-action-error"><AlertTriangle size={14} />{error}</div>}
-      {signature && <a className="portfolio-signature" href={`https://explorer.solana.com/tx/${signature}?cluster=devnet`} target="_blank" rel="noreferrer"><CircleDollarSign size={13} />Confirmed on devnet <ArrowUpRight size={12} /></a>}
+      {signature && <a className="portfolio-signature" href={`https://explorer.solana.com/tx/${signature}?cluster=devnet`} target="_blank" rel="noreferrer"><UsdcTokenIcon size={13} />Confirmed on devnet <ArrowUpRight size={12} /></a>}
     </section>
   );
 }

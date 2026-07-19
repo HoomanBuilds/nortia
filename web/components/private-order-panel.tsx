@@ -6,6 +6,7 @@ import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-tok
 import { PublicKey, SystemProgram } from "@solana/web3.js";
 import { AlertTriangle, Check, EyeOff, Info, LockKeyhole, ShieldCheck, Sparkles, Wallet } from "lucide-react";
 import { useState } from "react";
+import { UsdcTokenIcon } from "@/components/market-icons";
 import type { Market } from "@/lib/markets";
 import { canPlaceOrder, tradingStateLabel } from "@/lib/markets";
 import { savePrivatePosition, type PrivatePosition } from "@/lib/positions";
@@ -197,7 +198,7 @@ export function PrivateOrderPanel({ market }: { market: Market }) {
           </div>
           <div className="consensus-note">Displayed cents are the TxLINE consensus reference, not an executable order-book quote.</div>
           <div className="ticket-field-row"><span>Ticket amount</span><small>Fixed pool entry</small></div>
-          <div className="amount-field"><b>1.00</b><span>USDC</span></div>
+          <div className="amount-field"><b>1.00</b><span><UsdcTokenIcon size={16} />USDC</span></div>
           <div className="ticket-breakdown">
             <div><span>Position</span><strong>{side.toUpperCase()} - 1 ticket</strong></div>
             <div><span>Pool payout</span><strong>Known after private batch</strong></div>

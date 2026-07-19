@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Search, SlidersHorizontal } from "lucide-react";
 import { MarketCard } from "@/components/market-card";
+import { MarketCategoryIcon } from "@/components/market-icons";
 import { canPlaceOrder, markets, type Market } from "@/lib/markets";
 
 const filters = ["All", "Open", "Resolved"] as const;
@@ -39,7 +40,7 @@ export function HomeMarkets({ initialMarkets = markets }: { initialMarkets?: Mar
         <span>{visible.length} markets</span>
       </div>
       <div className="category-row" aria-label="Market categories">
-        {categories.map((item) => <button type="button" key={item} className={item === category ? "category-filter active" : "category-filter"} onClick={() => setCategory(item)}>{item}</button>)}
+        {categories.map((item) => <button type="button" key={item} className={item === category ? "category-filter active" : "category-filter"} onClick={() => setCategory(item)} aria-pressed={item === category}><MarketCategoryIcon category={item} size={13} /><span>{item}</span></button>)}
       </div>
       {visible.length > 0 ? (
         <div className="market-grid">{visible.map((market) => <MarketCard market={market} key={market.id} />)}</div>

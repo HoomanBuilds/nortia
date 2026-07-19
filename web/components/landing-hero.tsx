@@ -6,6 +6,7 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { AnimatedNoise } from "@/components/animated-noise";
 import { BitmapChevron } from "@/components/bitmap-chevron";
+import { SolanaNetworkIcon, UsdcTokenIcon } from "@/components/market-icons";
 import { ScrambleTextOnHover } from "@/components/scramble-text";
 import { SplitFlapAudioProvider, SplitFlapMuteToggle, SplitFlapText } from "@/components/split-flap-text";
 
@@ -34,7 +35,7 @@ export function LandingHero() {
         <span className="block origin-left -rotate-90 whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground">NORTIA / SOLANA</span>
       </div>
       <div className="absolute right-6 top-6 z-20 flex items-center gap-3 md:right-12 md:top-10">
-        <span className="hidden font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground sm:block"><i className="landing-live-dot" />Devnet oracles ready</span>
+        <span className="landing-network-status hidden font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground sm:flex"><SolanaNetworkIcon size={15} />Devnet oracles ready</span>
         <Link href="/markets" className="landing-top-cta">Open markets <BitmapChevron /></Link>
       </div>
       <div ref={contentRef} className="w-full flex-1">
@@ -62,7 +63,7 @@ export function LandingHero() {
         <div className="border border-border px-4 py-2 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">NORTIA / DEVNET BUILD</div>
       </div>
       <div className="hero-readout absolute bottom-8 left-6 hidden gap-8 md:left-28 md:flex">
-        <span><b>USDC</b> collateral</span><span><b>LMSR</b> live pricing</span><span><b>4</b> resolver paths</span>
+        <span><UsdcTokenIcon size={14} /><b>USDC</b> collateral</span><span><b>LMSR</b> live pricing</span><span><b>4</b> resolver paths</span>
       </div>
     </section>
   );

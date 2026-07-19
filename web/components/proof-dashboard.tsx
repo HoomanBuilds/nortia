@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Check, CircleDollarSign, Code2, Database, ExternalLink, FileCheck2, Fingerprint, Radio, ShieldCheck } from "lucide-react";
+import { Check, Database, ExternalLink, FileCheck2, Fingerprint, Radio, ShieldCheck } from "lucide-react";
+import { ResolverIcon, SolanaNetworkIcon, UsdcTokenIcon } from "@/components/market-icons";
 import { NORTIA_PROGRAM_ADDRESS, TXLINE_PROGRAM_ADDRESS } from "@/lib/solana/constants";
 import { useProtocolStatus } from "@/lib/solana/use-nortia-program";
 
@@ -9,7 +10,7 @@ const stages = [
   { icon: Database, label: "Source record", title: "TxLINE final score", detail: "Fixture 18222446, final period 100, participant totals 3 and 1." },
   { icon: Radio, label: "Oracle validation", title: "Merkle proof and CPI", detail: "The score payload is checked against TxLINE's daily score root on Solana." },
   { icon: ShieldCheck, label: "Market rule", title: "Binary outcome", detail: "Participant one goals plus participant two goals is greater than 2." },
-  { icon: CircleDollarSign, label: "Pool accounting", title: "USDC settlement", detail: "3.00 gross, 0.027 treasury, 0.003 keeper, and 2.97 distributable." },
+  { icon: UsdcTokenIcon, label: "Pool accounting", title: "USDC settlement", detail: "3.00 gross, 0.027 treasury, 0.003 keeper, and 2.97 distributable." },
 ];
 
 export function ProofDashboard() {
@@ -35,8 +36,8 @@ export function ProofDashboard() {
           <p>The score and fixture are from TxLINE's covered World Cup schedule. Event sequencing is a clearly labeled deterministic replay until an authenticated TxLINE API token is configured.</p>
         </section>
         <section className="program-health-card">
-          <span className="eyebrow"><Code2 size={12} />Program health</span><h2>Trust assumptions, visible.</h2>
-          <div className="health-row"><div><Radio size={15} /><span>TxLINE validator</span></div><b className={status.txline ? "ready" : "blocked"}>{status.loading ? "Checking" : status.txline ? "Executable" : "Unavailable"}</b></div>
+          <span className="eyebrow"><SolanaNetworkIcon size={13} />Program health</span><h2>Trust assumptions, visible.</h2>
+          <div className="health-row"><div><ResolverIcon resolver="TxLINE" size={15} /><span>TxLINE validator</span></div><b className={status.txline ? "ready" : "blocked"}>{status.loading ? "Checking" : status.txline ? "Executable" : "Unavailable"}</b></div>
           <code>{TXLINE_PROGRAM_ADDRESS}</code>
           <div className="health-row"><div><Fingerprint size={15} /><span>Nortia core</span></div><b className={status.program ? "ready" : "blocked"}>{status.loading ? "Checking" : status.program ? "Executable" : "Awaiting deploy"}</b></div>
           <code>{NORTIA_PROGRAM_ADDRESS}</code>
@@ -46,7 +47,7 @@ export function ProofDashboard() {
 
       <section className="resolver-registry">
         <div><span className="eyebrow">Resolver registry</span><h2>General markets need specific evidence.</h2><p>Nortia's core is category-neutral. Every new category still needs an adapter with explicit finality, freshness, dispute, and refund rules.</p></div>
-        <div className="resolver-table"><div><span>Sports statistics</span><b className="ready">TxLINE connected</b></div><div><span>Financial prices</span><b className="ready">Pyth push + pull</b></div><div><span>Custom numeric facts</span><b className="ready">Switchboard managed</b></div><div><span>Additional price assets</span><b>Stork key required</b></div><div><span>Long-tail public facts</span><b className="ready">Bonded assertions</b></div></div>
+        <div className="resolver-table"><div><span><ResolverIcon resolver="TxLINE" size={14} />Sports statistics</span><b className="ready">TxLINE connected</b></div><div><span><ResolverIcon resolver="Pyth" size={14} />Financial prices</span><b className="ready">Pyth push + pull</b></div><div><span><ResolverIcon resolver="Switchboard" size={14} />Custom numeric facts</span><b className="ready">Switchboard managed</b></div><div><span><ResolverIcon resolver="Stork" size={14} />Additional price assets</span><b>Stork key required</b></div><div><span><ResolverIcon resolver="Bonded optimistic" size={14} />Long-tail public facts</span><b className="ready">Bonded assertions</b></div></div>
       </section>
     </>
   );

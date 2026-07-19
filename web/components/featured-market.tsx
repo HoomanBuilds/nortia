@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ArrowUpRight, CheckCircle2, CircleDollarSign, Radio, ShieldCheck } from "lucide-react";
+import { ArrowUpRight, CheckCircle2, Radio, ShieldCheck } from "lucide-react";
+import { UsdcTokenIcon } from "@/components/market-icons";
 import { featuredMarket, formatCompactUsd } from "@/lib/markets";
 import { Sparkline } from "@/components/sparkline";
 import { TeamMark } from "@/components/team-mark";
@@ -35,7 +36,7 @@ export function FeaturedMarket() {
       <aside className="featured-rail">
         <div className="rail-header"><span className="eyebrow">Why Nortia</span><strong>Settlement you can inspect.</strong></div>
         <div className="rail-item"><span><ShieldCheck size={17} /></span><div><strong>TxLINE-covered result</strong><p>The final score uses covered fixture data. Event timing remains a labeled replay.</p></div></div>
-        <div className="rail-item"><span><CircleDollarSign size={17} /></span><div><strong>USDC native</strong><p>Escrow and payouts use stable, six-decimal collateral.</p></div></div>
+        <div className="rail-item"><span><UsdcTokenIcon size={17} /></span><div><strong>USDC native</strong><p>Escrow and payouts use stable, six-decimal collateral.</p></div></div>
         <div className="rail-item"><span><CheckCircle2 size={17} /></span><div><strong>Private positions</strong><p>Noir commitments hide individual sides until aggregation.</p></div></div>
         <div className="rail-settlement"><span>Settlement receipt</span><div><b>2.970</b><small>USDC net pool</small></div><p>1% success fee funds Nortia and the resolving keeper.</p></div>
       </aside>

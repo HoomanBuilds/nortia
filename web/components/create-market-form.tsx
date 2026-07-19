@@ -26,18 +26,17 @@ import {
 import {
   AlertTriangle,
   Check,
-  CircleDollarSign,
   Clock3,
-  Database,
   ExternalLink,
   KeyRound,
-  Radio,
   Search,
   ShieldCheck,
   Wallet,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { MarketCategoryIcon, ResolverIcon, UsdcTokenIcon } from "@/components/market-icons";
+import type { MarketCategory } from "@/lib/markets";
 import {
   DEVNET_USDC_MINT_KEY,
   NORTIA_PROGRAM_KEY,
@@ -55,7 +54,7 @@ const fixtures = [
   { id: 18_218_149, label: "Spain vs Belgium", group: "Quarter-final replay", start: "2026-07-10T19:00:00Z" },
 ] as const;
 
-const categories: Array<{ id: OracleMarketCategory; label: string; detail: string }> = [
+const categories: Array<{ id: OracleMarketCategory; label: MarketCategory; detail: string }> = [
   { id: "sports", label: "Sports", detail: "TxLINE match facts" },
   { id: "crypto", label: "Crypto", detail: "Tokens, NAV, rates" },
   { id: "economics", label: "Economics", detail: "Equities, FX, commodities" },
@@ -594,8 +593,8 @@ export function CreateMarketForm() {
         <div className="form-section-heading"><span>01</span><div><strong>Market category</strong><p>Category determines which evidence systems the contract will accept.</p></div></div>
         <div className="category-choice-grid">
           {categories.map((item) => (
-            <button type="button" className={category === item.id ? "category-choice active" : "category-choice"} onClick={() => selectCategory(item.id)} key={item.id}>
-              <strong>{item.label}</strong><span>{item.detail}</span>
+            <button type="button" className={category === item.id ? "category-choice active" : "category-choice"} onClick={() => selectCategory(item.id)} key={item.id} aria-pressed={category === item.id}>
+              <i><MarketCategoryIcon category={item.label} size={17} /></i><strong>{item.label}</strong><span>{item.detail}</span>
             </button>
           ))}
         </div>
@@ -605,8 +604,8 @@ export function CreateMarketForm() {
           {resolverChoices(category).map((choice) => {
             const blocked = choice === "stork" && readiness !== null && !readiness.stork.available;
             return (
-              <button type="button" disabled={blocked} className={resolver === choice ? "resolver-choice active" : "resolver-choice"} onClick={() => setResolver(choice)} key={choice}>
-                <span>{choice === "optimistic" ? <ShieldCheck size={18} /> : choice === "stork" ? <KeyRound size={18} /> : <Radio size={18} />}</span>
+              <button type="button" disabled={blocked} className={resolver === choice ? "resolver-choice active" : "resolver-choice"} onClick={() => setResolver(choice)} key={choice} aria-pressed={resolver === choice}>
+                <span><ResolverIcon resolver={resolverLabel(choice)} size={18} /></span>
                 <div><strong>{resolverLabel(choice)}</strong><p>{choice === "pyth" ? "Prices across crypto, equities, FX, commodities, metals, and rates." : choice === "switchboard" ? "Canonical custom numeric feeds with multi-oracle signatures." : choice === "stork" ? "Token-gated coverage for 500+ price assets." : choice === "optimistic" ? "Long-tail facts with USDC bonds and challenge arbitration." : "Cryptographically validated World Cup replay data."}</p></div>
                 <b>{blocked ? "API KEY NEEDED" : choice === "stork" ? "CONFIGURED KEY" : "AVAILABLE"}</b>
               </button>
@@ -660,7 +659,7 @@ export function CreateMarketForm() {
 
         <div className="form-section-heading"><span>04</span><div><strong>Economics and confirmation</strong><p>Market creators fund the deterministic LMSR loss bound before trading opens.</p></div></div>
         <div className="create-review">
-          <div><span>Collateral</span><b>Devnet USDC</b></div>
+          <div><span>Collateral</span><b className="asset-value"><UsdcTokenIcon size={15} />Devnet USDC</b></div>
           <div><span>Pricing</span><b>{usesMarketEngine ? "LMSR" : "Private pool"}</b></div>
           <div><span>Creator funding</span><b>{usesMarketEngine ? `${formatUsdc(INITIAL_SUBSIDY)} USDC` : "Account rent"}</b></div>
           <div><span>Trading fee</span><b>{usesMarketEngine ? "Up to 1% curve fee" : "1% on settlement"}</b></div>
@@ -679,11 +678,11 @@ export function CreateMarketForm() {
         <h2>Every dependency is explicit.</h2>
         <div className="readiness-list">
           <div className={protocolStatus.program ? "ready" : "blocked"}><ShieldCheck size={15} /><span>Nortia program</span><b>{protocolStatus.loading ? "Checking" : protocolStatus.program ? "Ready" : "Not deployed"}</b></div>
-          <div className={protocolStatus.engine ? "ready" : "blocked"}><CircleDollarSign size={15} /><span>LMSR market engine</span><b>{protocolStatus.loading ? "Checking" : protocolStatus.engine ? "Ready" : "Deployment required"}</b></div>
-          <div className={resolverReady ? "ready" : "blocked"}><Database size={15} /><span>{resolverLabel(resolver)}</span><b>{resolverReady ? "Verified" : "Unavailable"}</b></div>
+          <div className={protocolStatus.engine ? "ready" : "blocked"}><ResolverIcon resolver="Market engine" size={15} /><span>LMSR market engine</span><b>{protocolStatus.loading ? "Checking" : protocolStatus.engine ? "Ready" : "Deployment required"}</b></div>
+          <div className={resolverReady ? "ready" : "blocked"}><ResolverIcon resolver={resolverLabel(resolver)} size={15} /><span>{resolverLabel(resolver)}</span><b>{resolverReady ? "Verified" : "Unavailable"}</b></div>
         </div>
         <div className="creation-rule"><Clock3 size={16} /><p>Trading closes five minutes before the observation. Resolver evidence must land inside its immutable time window.</p></div>
-        <div className="creation-rule"><CircleDollarSign size={16} /><p>The default 25 USDC liquidity parameter requires {formatUsdc(INITIAL_SUBSIDY)} USDC of creator subsidy and funds the LMSR worst-case loss bound.</p></div>
+        <div className="creation-rule"><UsdcTokenIcon size={16} /><p>The default 25 USDC liquidity parameter requires {formatUsdc(INITIAL_SUBSIDY)} USDC of creator subsidy and funds the LMSR worst-case loss bound.</p></div>
         <div className="creation-rule"><AlertTriangle size={16} /><p>If valid evidence does not arrive before the hard deadline, any keeper can invalidate the market and open the neutral refund path.</p></div>
         <div className="creation-rule"><KeyRound size={16} /><p>Pyth sponsored push and public Switchboard need no API key. Pyth pull requires a key from August 18, 2026. Stork requires `STORK_API_TOKEN` now.</p></div>
       </aside>

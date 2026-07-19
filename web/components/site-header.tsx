@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { useState } from "react";
+import { SolanaNetworkIcon } from "@/components/market-icons";
 import { WalletControl } from "@/components/wallet-control";
 
 const links = [
@@ -35,7 +36,7 @@ export function SiteHeader() {
         </nav>
 
         <div className="header-actions">
-          <span className="source-pill"><i />TxLINE replay</span>
+          <span className="source-pill"><SolanaNetworkIcon size={14} />Solana devnet</span>
           <WalletControl />
           <button className="mobile-menu-button" type="button" onClick={() => setOpen((value) => !value)} aria-label="Toggle menu">
             {open ? <X size={20} /> : <Menu size={20} />}
@@ -47,7 +48,7 @@ export function SiteHeader() {
       {open && (
         <nav className="mobile-nav" aria-label="Mobile navigation">
           {links.map((link) => <Link key={link.href} href={link.href} onClick={() => setOpen(false)}>{link.label}</Link>)}
-          <span className="mobile-source"><i /> Solana devnet replay</span>
+          <span className="mobile-source"><SolanaNetworkIcon size={15} />Solana devnet</span>
         </nav>
       )}
     </header>

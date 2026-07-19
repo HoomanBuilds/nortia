@@ -21,13 +21,13 @@ import { hybridVaultPda, positionPda } from "nortia-client/market-engine";
 import {
   AlertTriangle,
   Check,
-  CircleDollarSign,
   Info,
   LockKeyhole,
   RefreshCw,
   Wallet,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { UsdcTokenIcon } from "@/components/market-icons";
 import type { Market } from "@/lib/markets";
 import { translateNortiaError } from "@/lib/solana/errors";
 import { useNortiaProgram } from "@/lib/solana/use-nortia-program";
@@ -266,7 +266,7 @@ export function HybridTradingPanel({ market }: { market: Market }) {
         </div>
         {!connected
           ? <button type="button" className="primary-order-button" onClick={() => setVisible(true)}><Wallet size={16} />Connect wallet</button>
-          : <button type="button" className="primary-order-button" disabled={!quote || busy || insufficientBalance || insufficientPosition || !account} onClick={() => void submit()}><CircleDollarSign size={16} />{stage === "signing" ? "Confirm in wallet" : stage === "confirming" ? "Confirming on devnet" : insufficientBalance ? "Insufficient devnet USDC" : insufficientPosition ? "Insufficient shares" : `${direction === "buy" ? "Buy" : "Sell"} ${side.toUpperCase()}`}</button>}
+          : <button type="button" className="primary-order-button" disabled={!quote || busy || insufficientBalance || insufficientPosition || !account} onClick={() => void submit()}><UsdcTokenIcon size={16} />{stage === "signing" ? "Confirm in wallet" : stage === "confirming" ? "Confirming on devnet" : insufficientBalance ? "Insufficient devnet USDC" : insufficientPosition ? "Insufficient shares" : `${direction === "buy" ? "Buy" : "Sell"} ${side.toUpperCase()}`}</button>}
         {error && <small className="order-error"><AlertTriangle size={10} />{error}</small>}
         {signature && <a className="order-signature" href={`https://explorer.solana.com/tx/${signature}?cluster=devnet`} target="_blank" rel="noreferrer"><Check size={12} />View confirmed trade</a>}
         <a className="faucet-link" href="https://faucet.circle.com/" target="_blank" rel="noreferrer">Need test collateral? Get Circle devnet USDC</a>
