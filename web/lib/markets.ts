@@ -2,6 +2,48 @@ export type MarketStatus = "live" | "upcoming" | "settled";
 export type TradingState = "open" | "locked" | "batched" | "resolving" | "disputed" | "resolved" | "refunding" | "closed";
 export type MarketCategory = "Sports" | "Crypto" | "Economics" | "Politics" | "Technology" | "Culture" | "Science" | "Other";
 
+export type MarketActivity = {
+  signature: string;
+  slot: number;
+  timestamp: number | null;
+  kind: "trade" | "lifecycle" | "resolution" | "settlement" | "liquidity";
+  title: string;
+  detail: string;
+  account: string | null;
+  yesProbability: number | null;
+};
+
+export type HybridOracleDetails = {
+  sourceProgram: string;
+  sourceQueue: string;
+  sourceId: string;
+  comparator: "greater-than" | "greater-than-or-equal" | "less-than" | "less-than-or-equal" | "equal";
+  threshold: string;
+  thresholdExponent: number;
+  observationAt: string;
+  observationWindowSecs: number;
+  maxStalenessSecs: number;
+  maxStalenessSlots: string;
+  maxConfidenceBps: number;
+  minSamples: number;
+  challengePeriodSecs: number;
+  bondAmount: string;
+  consumed: boolean;
+};
+
+export type HybridResolutionReceipt = {
+  outcome: "no" | "yes" | "invalid";
+  observationValue: string;
+  observationExponent: number;
+  observationAt: string;
+  observationSlot: string;
+  confidence: string;
+  sampleCount: number;
+  sourceAccount: string;
+  evidenceHash: string;
+  finalizedAt: string;
+};
+
 export type HybridMarketDetails = {
   creator: string;
   liquidityOwner: string;
@@ -22,8 +64,13 @@ export type HybridMarketDetails = {
   maxTradeShares: string;
   tradeFeeBps: number;
   treasuryFeeShareBps: number;
+  openAt: string;
+  resolveNotBefore: string;
   resolutionDeadline: string;
+  settlementEvidenceHash: string;
   outcome: "no" | "yes" | "invalid" | "unset";
+  oracle: HybridOracleDetails;
+  receipt: HybridResolutionReceipt | null;
 };
 
 export type Market = {
@@ -54,6 +101,7 @@ export type Market = {
   replay: boolean;
   points: number[];
   hybrid?: HybridMarketDetails;
+  activity?: MarketActivity[];
 };
 
 export type ReplayEvent = {

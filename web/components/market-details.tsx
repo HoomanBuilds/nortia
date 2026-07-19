@@ -7,7 +7,7 @@ import { demoPool, NORTIA_PROGRAM_ID, replayEvents, TXLINE_PROGRAM_ID } from "@/
 
 const tabs = ["Overview", "Settlement", "Activity"] as const;
 
-function ShortId({ value }: { value: string }) {
+export function ShortId({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     await navigator.clipboard?.writeText(value);

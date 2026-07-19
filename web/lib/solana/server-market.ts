@@ -1,31 +1,39 @@
 import "server-only";
 import { createHash } from "node:crypto";
-import { BorshAccountsCoder, type Idl } from "@anchor-lang/core";
-import { Connection, PublicKey } from "@solana/web3.js";
+import { BorshAccountsCoder, BorshEventCoder, type Idl } from "@anchor-lang/core";
+import { AccountLayout } from "@solana/spl-token";
+import { Connection, PublicKey, type AccountInfo } from "@solana/web3.js";
+import { formatUsdc } from "nortia-client/economics";
 import { lmsrYesProbability } from "nortia-client/lmsr";
-import { hybridMetadataPda, hybridVaultPda } from "nortia-client/market-engine";
+import {
+  hybridMetadataPda,
+  hybridVaultPda,
+  resolutionReceiptPda,
+} from "nortia-client/market-engine";
 import idl from "@/lib/solana/idl/nortia.json";
 import { NORTIA_PROGRAM_KEY } from "@/lib/solana/constants";
 import {
   markets,
   type HybridMarketDetails,
   type Market,
+  type MarketActivity,
   type MarketCategory,
   type TradingState,
 } from "@/lib/markets";
 
-type IntegerLike = { toString(): string; toNumber(): number };
+type IntegerLike = number | bigint | { toString(): string };
+type EnumLike = Record<string, unknown>;
 
 type MarketAccount = {
   market_id: IntegerLike;
   authority: PublicKey;
   fixture_id: IntegerLike;
-  market_mode: Record<string, unknown>;
+  market_mode: EnumLike;
   fixture_start_ts: IntegerLike;
   total_goals_threshold: number;
   ticket_amount: IntegerLike;
   lock_ts: IntegerLike;
-  phase: Record<string, unknown>;
+  phase: EnumLike;
   order_count: number;
   outcome: number;
   gross_pool: IntegerLike;
@@ -38,7 +46,7 @@ type HybridMarketAccount = {
   market_id: IntegerLike;
   creator: PublicKey;
   liquidity_owner: PublicKey;
-  category: Record<string, unknown>;
+  category: EnumLike;
   question_hash: number[];
   rules_hash: number[];
   outcome_labels_hash: number[];
@@ -55,15 +63,31 @@ type HybridMarketAccount = {
   lock_ts: IntegerLike;
   resolve_not_before_ts: IntegerLike;
   resolution_deadline_ts: IntegerLike;
-  phase: Record<string, unknown>;
+  phase: EnumLike;
   outcome: number;
   trade_count: IntegerLike;
   volume: IntegerLike;
+  settlement_evidence_hash: number[];
 };
 
 type OracleConfigAccount = {
   market: PublicKey;
-  resolver: Record<string, unknown>;
+  resolver: EnumLike;
+  source_program: PublicKey;
+  source_queue: PublicKey;
+  source_id: number[];
+  comparator: EnumLike;
+  threshold: IntegerLike;
+  threshold_exponent: number;
+  observation_ts: IntegerLike;
+  observation_window_secs: number;
+  max_staleness_secs: number;
+  max_staleness_slots: IntegerLike;
+  max_confidence_bps: number;
+  min_samples: number;
+  challenge_period_secs: number;
+  bond_amount: IntegerLike;
+  consumed: boolean;
 };
 
 type HybridMetadataAccount = {
@@ -76,21 +100,78 @@ type HybridMetadataAccount = {
   reference_url: string;
 };
 
-function enumKey(value: Record<string, unknown>): string {
+type ResolutionReceiptAccount = {
+  market: PublicKey;
+  outcome: number;
+  observation_value: IntegerLike;
+  observation_exponent: number;
+  observation_ts: IntegerLike;
+  observation_slot: IntegerLike;
+  confidence: IntegerLike;
+  sample_count: number;
+  source_account: PublicKey;
+  evidence_hash: number[];
+  finalized_at: IntegerLike;
+};
+
+type PositionAccount = {
+  market: PublicKey;
+  owner: PublicKey;
+};
+
+type HybridSupportAccounts = {
+  oracle: AccountInfo<Buffer> | null;
+  metadata: AccountInfo<Buffer> | null;
+  receipt: AccountInfo<Buffer> | null;
+  vault: AccountInfo<Buffer> | null;
+};
+
+const ZERO_ADDRESS = PublicKey.default.toBase58();
+
+function connection(): Connection {
+  return new Connection(
+    process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? "https://api.devnet.solana.com",
+    "confirmed",
+  );
+}
+
+function integer(value: IntegerLike): bigint {
+  return BigInt(value.toString());
+}
+
+function safeNumber(value: IntegerLike, label: string): number {
+  const parsed = Number(integer(value));
+  if (!Number.isSafeInteger(parsed)) throw new Error(`${label} exceeds the safe integer range`);
+  return parsed;
+}
+
+function tokenNumber(value: IntegerLike): number {
+  return Number(integer(value)) / 1_000_000;
+}
+
+function dateFromSeconds(value: IntegerLike): string {
+  return new Date(safeNumber(value, "timestamp") * 1_000).toISOString();
+}
+
+function bytesHex(value: number[]): string {
+  return Buffer.from(value).toString("hex");
+}
+
+function enumKey(value: EnumLike): string {
   return (Object.keys(value)[0] ?? "").replaceAll("_", "").toLowerCase();
 }
 
-function privatePoolPhase(value: Record<string, unknown>): TradingState | null {
+function privatePoolPhase(value: EnumLike): TradingState | null {
   const name = enumKey(value);
   return name === "open" || name === "batched" || name === "resolved" || name === "refunding" || name === "closed" ? name : null;
 }
 
-function hybridPhase(value: Record<string, unknown>): TradingState | null {
+function hybridPhase(value: EnumLike): TradingState | null {
   const name = enumKey(value);
   return name === "open" || name === "locked" || name === "resolving" || name === "disputed" || name === "resolved" || name === "closed" ? name : null;
 }
 
-function categoryName(value: Record<string, unknown>): MarketCategory | null {
+function categoryName(value: EnumLike): MarketCategory | null {
   const names: Readonly<Record<string, MarketCategory>> = {
     sports: "Sports",
     crypto: "Crypto",
@@ -104,7 +185,7 @@ function categoryName(value: Record<string, unknown>): MarketCategory | null {
   return names[enumKey(value)] ?? null;
 }
 
-function resolverName(value: Record<string, unknown>): Pick<HybridMarketDetails, "resolverId"> & { label: string } | null {
+function resolverName(value: EnumLike): Pick<HybridMarketDetails, "resolverId"> & { label: string } | null {
   const names: Readonly<Record<string, Pick<HybridMarketDetails, "resolverId"> & { label: string }>> = {
     txlinestat: { resolverId: "txline-stat", label: "TxLINE" },
     pythprice: { resolverId: "pyth-price", label: "Pyth" },
@@ -115,6 +196,17 @@ function resolverName(value: Record<string, unknown>): Pick<HybridMarketDetails,
     chainlinkreport: { resolverId: "chainlink-report", label: "Chainlink" },
   };
   return names[enumKey(value)] ?? null;
+}
+
+function comparatorName(value: EnumLike): HybridMarketDetails["oracle"]["comparator"] | null {
+  const names = {
+    greaterthan: "greater-than",
+    greaterthanorequal: "greater-than-or-equal",
+    lessthan: "less-than",
+    lessthanorequal: "less-than-or-equal",
+    equal: "equal",
+  } as const;
+  return names[enumKey(value) as keyof typeof names] ?? null;
 }
 
 function verifiedQuestion(candidate: string | undefined, hash: number[]): string | null {
@@ -159,17 +251,40 @@ function categoryCode(category: MarketCategory): string {
   return codes[category];
 }
 
+function decodeAccount<T>(
+  coder: BorshAccountsCoder,
+  name: string,
+  info: AccountInfo<Buffer> | null,
+): T | null {
+  if (!info?.owner.equals(NORTIA_PROGRAM_KEY)) return null;
+  try {
+    return coder.decode(name, info.data) as T;
+  } catch {
+    return null;
+  }
+}
+
+function vaultBalance(info: AccountInfo<Buffer> | null): bigint {
+  if (!info || info.data.length < AccountLayout.span) return 0n;
+  try {
+    return BigInt(AccountLayout.decode(info.data).amount.toString());
+  } catch {
+    return 0n;
+  }
+}
+
 function buildPrivateMarket(value: string, account: MarketAccount): Market | null {
   const tradingState = privatePoolPhase(account.phase);
   if (!tradingState) return null;
-  const fixtureId = account.fixture_id.toNumber();
+  const fixtureId = safeNumber(account.fixture_id, "fixture ID");
   const template = markets.find((market) => market.fixtureId === fixtureId);
   const threshold = account.total_goals_threshold + 0.5;
   const resolved = tradingState === "resolved" || tradingState === "closed";
   const replay = enumKey(account.market_mode) === "replay";
   const home = template?.home ?? "Participant one";
   const away = template?.away ?? "Participant two";
-  const lockAt = new Date(account.lock_ts.toNumber() * 1_000).toISOString();
+  const lockAt = dateFromSeconds(account.lock_ts);
+  const grossPool = integer(account.gross_pool);
   return {
     id: value,
     address: value,
@@ -184,73 +299,68 @@ function buildPrivateMarket(value: string, account: MarketAccount): Market | nul
     homeCode: template?.homeCode ?? "ONE",
     away,
     awayCode: template?.awayCode ?? "TWO",
-    kickoff: template?.kickoff ?? new Date(account.fixture_start_ts.toNumber() * 1_000).toLocaleString("en-US", { timeZone: "UTC" }),
+    kickoff: template?.kickoff ?? new Date(safeNumber(account.fixture_start_ts, "fixture start") * 1_000).toLocaleString("en-US", { timeZone: "UTC" }),
     lockAt,
-    status: resolved ? "settled" : Date.now() < account.lock_ts.toNumber() * 1_000 ? "upcoming" : "live",
+    status: resolved ? "settled" : Date.now() < Date.parse(lockAt) ? "upcoming" : "live",
     tradingState,
     score: resolved ? [account.score_a, account.score_b] : undefined,
     yes: resolved ? account.outcome * 100 : 50,
-    volume: account.gross_pool.toNumber() > 0 ? account.gross_pool.toNumber() / 1_000_000 : account.order_count * account.ticket_amount.toNumber() / 1_000_000,
-    liquidity: account.net_pool.toNumber() / 1_000_000,
+    volume: grossPool > 0n ? tokenNumber(grossPool) : account.order_count * tokenNumber(account.ticket_amount),
+    liquidity: tokenNumber(account.net_pool),
     traders: account.order_count,
     replay,
     points: [50, 50],
   };
 }
 
-async function buildHybridMarket(
-  connection: Connection,
-  coder: BorshAccountsCoder,
-  address: PublicKey,
-  account: HybridMarketAccount,
-  questionCandidate?: string,
-): Promise<Market | null> {
+function buildHybridMarket(input: {
+  coder: BorshAccountsCoder;
+  address: PublicKey;
+  account: HybridMarketAccount;
+  support: HybridSupportAccounts;
+  traderCount: number;
+  questionCandidate?: string;
+}): Market | null {
+  const { coder, address, account, support, traderCount, questionCandidate } = input;
   const tradingState = hybridPhase(account.phase);
   const category = categoryName(account.category);
   const outcome = outcomeName(account.outcome);
   if (!tradingState || !category || !outcome) return null;
-  const vault = hybridVaultPda(address);
-  const metadataAddress = hybridMetadataPda(address);
-  const [oracleInfo, metadataInfo, vaultBalance] = await Promise.all([
-    connection.getAccountInfo(account.oracle_config, "confirmed"),
-    connection.getAccountInfo(metadataAddress, "confirmed"),
-    connection.getTokenAccountBalance(vault, "confirmed").catch(() => null),
-  ]);
-  if (!oracleInfo || !oracleInfo.owner.equals(NORTIA_PROGRAM_KEY)) return null;
-  let oracle: OracleConfigAccount;
-  try {
-    oracle = coder.decode("OracleConfig", oracleInfo.data) as OracleConfigAccount;
-  } catch {
-    return null;
-  }
-  if (!oracle.market.equals(address)) return null;
+  const oracle = decodeAccount<OracleConfigAccount>(coder, "OracleConfig", support.oracle);
+  if (!oracle?.market.equals(address)) return null;
   const resolver = resolverName(oracle.resolver);
-  if (!resolver) return null;
-  let metadata: HybridMetadataAccount | null = null;
-  if (metadataInfo?.owner.equals(NORTIA_PROGRAM_KEY)) {
-    try {
-      metadata = verifiedMetadata(
-        coder.decode("HybridMarketMetadata", metadataInfo.data) as HybridMetadataAccount,
-        account,
-        address,
-      );
-    } catch {
-      metadata = null;
-    }
-  }
-  const yesQuantity = BigInt(account.yes_quantity.toString());
-  const noQuantity = BigInt(account.no_quantity.toString());
-  const liquidityParameter = BigInt(account.liquidity_parameter.toString());
+  const comparator = comparatorName(oracle.comparator);
+  if (!resolver || !comparator) return null;
+
+  const decodedMetadata = decodeAccount<HybridMetadataAccount>(
+    coder,
+    "HybridMarketMetadata",
+    support.metadata,
+  );
+  const metadata = decodedMetadata
+    ? verifiedMetadata(decodedMetadata, account, address)
+    : null;
+  const decodedReceipt = decodeAccount<ResolutionReceiptAccount>(
+    coder,
+    "ResolutionReceipt",
+    support.receipt,
+  );
+  const receipt = decodedReceipt?.market.equals(address) ? decodedReceipt : null;
+  const receiptOutcome = receipt ? outcomeName(receipt.outcome) : null;
+
+  const yesQuantity = integer(account.yes_quantity);
+  const noQuantity = integer(account.no_quantity);
+  const liquidityParameter = integer(account.liquidity_parameter);
   const probability = lmsrYesProbability(
     { yes: yesQuantity, no: noQuantity },
     liquidityParameter,
   );
-  const questionHash = Buffer.from(account.question_hash).toString("hex");
+  const questionHash = bytesHex(account.question_hash);
   const question = metadata?.question
     ?? verifiedQuestion(questionCandidate, account.question_hash)
     ?? `Verified market ${questionHash.slice(0, 8)}`;
   const yes = Math.round(Number(probability) / 10_000);
-  const lockAt = new Date(account.lock_ts.toNumber() * 1_000).toISOString();
+  const lockAt = dateFromSeconds(account.lock_ts);
   const resolved = tradingState === "resolved" || tradingState === "closed";
   const details: HybridMarketDetails = {
     creator: account.creator.toBase58(),
@@ -265,15 +375,47 @@ async function buildHybridMarket(
     noLabel: metadata?.no_label ?? "NO",
     referenceUrl: metadata?.reference_url || null,
     questionHash,
-    rulesHash: Buffer.from(account.rules_hash).toString("hex"),
+    rulesHash: bytesHex(account.rules_hash),
     liquidityParameter: liquidityParameter.toString(),
     yesQuantity: yesQuantity.toString(),
     noQuantity: noQuantity.toString(),
     maxTradeShares: account.max_trade_shares.toString(),
     tradeFeeBps: account.trade_fee_bps,
     treasuryFeeShareBps: account.treasury_fee_share_bps,
-    resolutionDeadline: new Date(account.resolution_deadline_ts.toNumber() * 1_000).toISOString(),
+    openAt: dateFromSeconds(account.open_ts),
+    resolveNotBefore: dateFromSeconds(account.resolve_not_before_ts),
+    resolutionDeadline: dateFromSeconds(account.resolution_deadline_ts),
+    settlementEvidenceHash: bytesHex(account.settlement_evidence_hash),
     outcome,
+    oracle: {
+      sourceProgram: oracle.source_program.toBase58(),
+      sourceQueue: oracle.source_queue.toBase58(),
+      sourceId: bytesHex(oracle.source_id),
+      comparator,
+      threshold: oracle.threshold.toString(),
+      thresholdExponent: oracle.threshold_exponent,
+      observationAt: dateFromSeconds(oracle.observation_ts),
+      observationWindowSecs: oracle.observation_window_secs,
+      maxStalenessSecs: oracle.max_staleness_secs,
+      maxStalenessSlots: oracle.max_staleness_slots.toString(),
+      maxConfidenceBps: oracle.max_confidence_bps,
+      minSamples: oracle.min_samples,
+      challengePeriodSecs: oracle.challenge_period_secs,
+      bondAmount: oracle.bond_amount.toString(),
+      consumed: oracle.consumed,
+    },
+    receipt: receipt && receiptOutcome && receiptOutcome !== "unset" ? {
+      outcome: receiptOutcome,
+      observationValue: receipt.observation_value.toString(),
+      observationExponent: receipt.observation_exponent,
+      observationAt: dateFromSeconds(receipt.observation_ts),
+      observationSlot: receipt.observation_slot.toString(),
+      confidence: receipt.confidence.toString(),
+      sampleCount: receipt.sample_count,
+      sourceAccount: receipt.source_account.toBase58(),
+      evidenceHash: bytesHex(receipt.evidence_hash),
+      finalizedAt: dateFromSeconds(receipt.finalized_at),
+    } : null,
   };
   return {
     id: address.toBase58(),
@@ -289,18 +431,163 @@ async function buildHybridMarket(
     homeCode: categoryCode(category),
     away: resolver.label,
     awayCode: resolver.label.slice(0, 3).toUpperCase(),
-    kickoff: `Resolves ${new Date(account.resolve_not_before_ts.toNumber() * 1_000).toLocaleString("en-US", { timeZone: "UTC", timeZoneName: "short" })}`,
+    kickoff: `Resolves ${new Date(details.resolveNotBefore).toLocaleString("en-US", { timeZone: "UTC", timeZoneName: "short" })}`,
     lockAt,
-    status: resolved ? "settled" : Date.now() < account.open_ts.toNumber() * 1_000 ? "upcoming" : "live",
+    status: resolved ? "settled" : Date.now() < Date.parse(details.openAt) ? "upcoming" : "live",
     tradingState,
     yes,
-    volume: account.volume.toNumber() / 1_000_000,
-    liquidity: Number(vaultBalance?.value.amount ?? "0") / 1_000_000,
-    traders: account.trade_count.toNumber(),
+    volume: tokenNumber(account.volume),
+    liquidity: tokenNumber(vaultBalance(support.vault)),
+    traders: traderCount,
     replay: false,
     points: yes === 50 ? [50, 50] : [50, yes],
     hybrid: details,
   };
+}
+
+async function getAccountMap(
+  rpc: Connection,
+  addresses: PublicKey[],
+): Promise<Map<string, AccountInfo<Buffer> | null>> {
+  const unique = [...new Map(addresses.map((address) => [address.toBase58(), address])).values()];
+  const result = new Map<string, AccountInfo<Buffer> | null>();
+  for (let offset = 0; offset < unique.length; offset += 100) {
+    const batch = unique.slice(offset, offset + 100);
+    const infos = await rpc.getMultipleAccountsInfo(batch, "confirmed");
+    batch.forEach((address, index) => result.set(address.toBase58(), infos[index] ?? null));
+  }
+  return result;
+}
+
+function supportFromMap(
+  accountMap: Map<string, AccountInfo<Buffer> | null>,
+  address: PublicKey,
+  oracle: PublicKey,
+): HybridSupportAccounts {
+  return {
+    oracle: accountMap.get(oracle.toBase58()) ?? null,
+    metadata: accountMap.get(hybridMetadataPda(address).toBase58()) ?? null,
+    receipt: accountMap.get(resolutionReceiptPda(address).toBase58()) ?? null,
+    vault: accountMap.get(hybridVaultPda(address).toBase58()) ?? null,
+  };
+}
+
+export async function getOnchainMarkets(): Promise<Market[]> {
+  const rpc = connection();
+  const coder = new BorshAccountsCoder(idl as Idl);
+  const [privateRows, hybridRows, positionRows] = await Promise.all([
+    rpc.getProgramAccounts(NORTIA_PROGRAM_KEY, {
+      commitment: "confirmed",
+      filters: [coder.memcmp("Market")],
+    }),
+    rpc.getProgramAccounts(NORTIA_PROGRAM_KEY, {
+      commitment: "confirmed",
+      filters: [coder.memcmp("HybridMarket")],
+    }),
+    rpc.getProgramAccounts(NORTIA_PROGRAM_KEY, {
+      commitment: "confirmed",
+      filters: [coder.memcmp("Position")],
+    }),
+  ]);
+
+  const decodedHybrid = hybridRows.flatMap(({ pubkey, account }) => {
+    try {
+      return [{ address: pubkey, account: coder.decode("HybridMarket", account.data) as HybridMarketAccount }];
+    } catch {
+      return [];
+    }
+  });
+  const supportAddresses = decodedHybrid.flatMap(({ address, account }) => [
+    account.oracle_config,
+    hybridMetadataPda(address),
+    resolutionReceiptPda(address),
+    hybridVaultPda(address),
+  ]);
+  const accountMap = await getAccountMap(rpc, supportAddresses);
+  const traderCounts = new Map<string, Set<string>>();
+  for (const { account } of positionRows) {
+    try {
+      const position = coder.decode("Position", account.data) as PositionAccount;
+      const key = position.market.toBase58();
+      const owners = traderCounts.get(key) ?? new Set<string>();
+      owners.add(position.owner.toBase58());
+      traderCounts.set(key, owners);
+    } catch {
+      continue;
+    }
+  }
+
+  const publicMarkets = decodedHybrid.flatMap(({ address, account }) => {
+    const market = buildHybridMarket({
+      coder,
+      address,
+      account,
+      support: supportFromMap(accountMap, address, account.oracle_config),
+      traderCount: traderCounts.get(address.toBase58())?.size ?? 0,
+    });
+    return market ? [market] : [];
+  });
+  const privateMarkets = privateRows.flatMap(({ pubkey, account }) => {
+    try {
+      const market = buildPrivateMarket(
+        pubkey.toBase58(),
+        coder.decode("Market", account.data) as MarketAccount,
+      );
+      return market ? [market] : [];
+    } catch {
+      return [];
+    }
+  });
+  const phaseRank: Readonly<Record<TradingState, number>> = {
+    open: 0,
+    locked: 1,
+    resolving: 2,
+    disputed: 3,
+    batched: 4,
+    refunding: 5,
+    resolved: 6,
+    closed: 7,
+  };
+  return [...publicMarkets, ...privateMarkets].sort((left, right) =>
+    phaseRank[left.tradingState] - phaseRank[right.tradingState]
+      || right.volume - left.volume,
+  );
+}
+
+async function getHybridSupport(
+  rpc: Connection,
+  address: PublicKey,
+  oracle: PublicKey,
+): Promise<HybridSupportAccounts> {
+  const addresses = [
+    oracle,
+    hybridMetadataPda(address),
+    resolutionReceiptPda(address),
+    hybridVaultPda(address),
+  ];
+  const infos = await rpc.getMultipleAccountsInfo(addresses, "confirmed");
+  return {
+    oracle: infos[0] ?? null,
+    metadata: infos[1] ?? null,
+    receipt: infos[2] ?? null,
+    vault: infos[3] ?? null,
+  };
+}
+
+async function hybridTraderCount(
+  rpc: Connection,
+  coder: BorshAccountsCoder,
+  address: PublicKey,
+): Promise<number> {
+  const accounts = await rpc.getProgramAccounts(NORTIA_PROGRAM_KEY, {
+    commitment: "confirmed",
+    dataSlice: { offset: 0, length: 0 },
+    filters: [
+      coder.memcmp("Position"),
+      { memcmp: { offset: 10, bytes: address.toBase58() } },
+    ],
+  });
+  return accounts.length;
 }
 
 export async function getOnchainMarket(value: string, questionCandidate?: string): Promise<Market | null> {
@@ -310,21 +597,215 @@ export async function getOnchainMarket(value: string, questionCandidate?: string
   } catch {
     return null;
   }
-  const connection = new Connection(
-    process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? "https://api.devnet.solana.com",
-    "confirmed",
-  );
-  const info = await connection.getAccountInfo(address, "confirmed");
-  if (!info || !info.owner.equals(NORTIA_PROGRAM_KEY)) return null;
+  const rpc = connection();
+  const info = await rpc.getAccountInfo(address, "confirmed");
+  if (!info?.owner.equals(NORTIA_PROGRAM_KEY)) return null;
   const coder = new BorshAccountsCoder(idl as Idl);
   try {
     return buildPrivateMarket(value, coder.decode("Market", info.data) as MarketAccount);
   } catch {
     try {
       const account = coder.decode("HybridMarket", info.data) as HybridMarketAccount;
-      return await buildHybridMarket(connection, coder, address, account, questionCandidate);
+      const [support, traderCount] = await Promise.all([
+        getHybridSupport(rpc, address, account.oracle_config),
+        hybridTraderCount(rpc, coder, address),
+      ]);
+      return buildHybridMarket({
+        coder,
+        address,
+        account,
+        support,
+        traderCount,
+        questionCandidate,
+      });
     } catch {
       return null;
     }
   }
+}
+
+function eventField(data: Record<string, unknown>, name: string): unknown {
+  const camel = name.replace(/_([a-z])/g, (_, character: string) => character.toUpperCase());
+  return data[name] ?? data[camel];
+}
+
+function eventInteger(data: Record<string, unknown>, name: string): bigint {
+  const value = eventField(data, name);
+  if (typeof value !== "number" && typeof value !== "bigint" && (typeof value !== "object" || value === null || !("toString" in value))) {
+    throw new Error(`Missing integer event field ${name}`);
+  }
+  return BigInt(value.toString());
+}
+
+function eventAddress(data: Record<string, unknown>, name: string): string | null {
+  const value = eventField(data, name);
+  return value && typeof value === "object" && "toBase58" in value
+    ? (value as { toBase58(): string }).toBase58()
+    : null;
+}
+
+function eventMatchesMarket(data: Record<string, unknown>, market: PublicKey): boolean {
+  return eventAddress(data, "market") === market.toBase58();
+}
+
+function outcomeLabel(value: bigint): string {
+  return value === 1n ? "YES" : value === 0n ? "NO" : "INVALID";
+}
+
+function activityFromEvent(input: {
+  name: string;
+  data: Record<string, unknown>;
+  signature: string;
+  slot: number;
+  timestamp: number | null;
+}): MarketActivity | null {
+  const { name, data, signature, slot, timestamp } = input;
+  const base = { signature, slot, timestamp, account: null, yesProbability: null };
+  if (name === "HybridTradeExecuted") {
+    const direction = eventInteger(data, "direction") === 0n ? "Bought" : "Sold";
+    const side = eventInteger(data, "side") === 1n ? "YES" : "NO";
+    const shares = eventInteger(data, "shares");
+    const total = eventInteger(data, "total_amount");
+    const fee = eventInteger(data, "fee_amount");
+    return {
+      ...base,
+      kind: "trade",
+      title: `${direction} ${side}`,
+      detail: `${formatUsdc(shares)} shares for ${formatUsdc(total)} USDC, ${formatUsdc(fee)} fee`,
+      account: eventAddress(data, "owner"),
+      yesProbability: Number(eventInteger(data, "after_yes_probability")) / 10_000,
+    };
+  }
+  if (name === "HybridMarketCreated") {
+    return {
+      ...base,
+      kind: "lifecycle",
+      title: "Market opened",
+      detail: `${formatUsdc(eventInteger(data, "initial_subsidy"))} USDC maker subsidy funded`,
+      account: eventAddress(data, "creator"),
+      yesProbability: 50,
+    };
+  }
+  if (name === "HybridMarketLocked") {
+    return { ...base, kind: "lifecycle", title: "Trading locked", detail: "No further trades can execute", yesProbability: null };
+  }
+  if (name === "OptimisticResolutionProposed") {
+    return {
+      ...base,
+      kind: "resolution",
+      title: `${outcomeLabel(eventInteger(data, "outcome"))} proposed`,
+      detail: `${formatUsdc(eventInteger(data, "bond_amount"))} USDC assertion bond`,
+      account: eventAddress(data, "proposer"),
+    };
+  }
+  if (name === "OptimisticResolutionChallenged") {
+    return {
+      ...base,
+      kind: "resolution",
+      title: "Resolution challenged",
+      detail: `${outcomeLabel(eventInteger(data, "outcome"))} submitted with a matching bond`,
+      account: eventAddress(data, "challenger"),
+    };
+  }
+  if (name === "HybridMarketResolved") {
+    return {
+      ...base,
+      kind: "resolution",
+      title: `${outcomeLabel(eventInteger(data, "outcome"))} finalized`,
+      detail: `${formatUsdc(eventInteger(data, "outstanding_liability"))} USDC claim liability recorded`,
+    };
+  }
+  if (name === "HybridPositionSettled") {
+    return {
+      ...base,
+      kind: "settlement",
+      title: "Position claimed",
+      detail: `${formatUsdc(eventInteger(data, "amount"))} USDC paid`,
+      account: eventAddress(data, "owner"),
+    };
+  }
+  if (name === "HybridLiquidityWithdrawn") {
+    return {
+      ...base,
+      kind: "liquidity",
+      title: "Maker surplus withdrawn",
+      detail: `${formatUsdc(eventInteger(data, "amount"))} USDC withdrawn above liability`,
+      account: eventAddress(data, "liquidity_owner"),
+    };
+  }
+  if (name === "HybridMarketClosed") {
+    return { ...base, kind: "lifecycle", title: "Market closed", detail: "Vault and trader liabilities are fully drained" };
+  }
+  return null;
+}
+
+export async function getOnchainMarketActivity(
+  value: string,
+  limit = 100,
+): Promise<MarketActivity[]> {
+  let market: PublicKey;
+  try {
+    market = new PublicKey(value);
+  } catch {
+    return [];
+  }
+  const rpc = connection();
+  const signatures = await rpc.getSignaturesForAddress(
+    market,
+    { limit: Math.min(Math.max(limit, 1), 200) },
+    "confirmed",
+  );
+  if (signatures.length === 0) return [];
+  const transactions = await rpc.getTransactions(
+    signatures.map(({ signature }) => signature),
+    { commitment: "confirmed", maxSupportedTransactionVersion: 0 },
+  );
+  const eventCoder = new BorshEventCoder(idl as Idl);
+  const activity: MarketActivity[] = [];
+  transactions.forEach((transaction, index) => {
+    if (!transaction?.meta || transaction.meta.err) return;
+    const signature = signatures[index];
+    if (!signature) return;
+    for (const log of transaction.meta.logMessages ?? []) {
+      const prefix = log.startsWith("Program data: ")
+        ? "Program data: "
+        : log.startsWith("Program log: ")
+          ? "Program log: "
+          : null;
+      if (!prefix) continue;
+      const decoded = eventCoder.decode(log.slice(prefix.length));
+      if (!decoded || !eventMatchesMarket(decoded.data as Record<string, unknown>, market)) continue;
+      try {
+        const item = activityFromEvent({
+          name: decoded.name,
+          data: decoded.data as Record<string, unknown>,
+          signature: signature.signature,
+          slot: signature.slot,
+          timestamp: transaction.blockTime ?? signature.blockTime ?? null,
+        });
+        if (item) activity.push(item);
+      } catch {
+        continue;
+      }
+    }
+  });
+  return activity.sort((left, right) =>
+    (right.timestamp ?? 0) - (left.timestamp ?? 0) || right.slot - left.slot,
+  );
+}
+
+export function withMarketActivity(market: Market, activity: MarketActivity[]): Market {
+  const history = activity
+    .filter((item): item is MarketActivity & { yesProbability: number } => item.yesProbability !== null)
+    .sort((left, right) => (left.timestamp ?? left.slot) - (right.timestamp ?? right.slot))
+    .map((item) => item.yesProbability);
+  return {
+    ...market,
+    activity,
+    points: history.length === 0 ? market.points : history,
+  };
+}
+
+export function isDefaultAddress(value: string): boolean {
+  return value === ZERO_ADDRESS;
 }
