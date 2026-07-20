@@ -284,6 +284,9 @@ function buildPrivateMarket(value: string, account: MarketAccount): Market | nul
   const home = template?.home ?? "Participant one";
   const away = template?.away ?? "Participant two";
   const lockAt = dateFromSeconds(account.lock_ts);
+  const effectiveTradingState = tradingState === "open" && Date.now() >= Date.parse(lockAt)
+    ? "locked"
+    : tradingState;
   const grossPool = integer(account.gross_pool);
   return {
     id: value,
@@ -302,7 +305,7 @@ function buildPrivateMarket(value: string, account: MarketAccount): Market | nul
     kickoff: template?.kickoff ?? new Date(safeNumber(account.fixture_start_ts, "fixture start") * 1_000).toLocaleString("en-US", { timeZone: "UTC" }),
     lockAt,
     status: resolved ? "settled" : Date.now() < Date.parse(lockAt) ? "upcoming" : "live",
-    tradingState,
+    tradingState: effectiveTradingState,
     score: resolved ? [account.score_a, account.score_b] : undefined,
     yes: resolved ? account.outcome * 100 : 50,
     volume: grossPool > 0n ? tokenNumber(grossPool) : account.order_count * tokenNumber(account.ticket_amount),
@@ -361,6 +364,9 @@ function buildHybridMarket(input: {
     ?? `Verified market ${questionHash.slice(0, 8)}`;
   const yes = Math.round(Number(probability) / 10_000);
   const lockAt = dateFromSeconds(account.lock_ts);
+  const effectiveTradingState = tradingState === "open" && Date.now() >= Date.parse(lockAt)
+    ? "locked"
+    : tradingState;
   const resolved = tradingState === "resolved" || tradingState === "closed";
   const details: HybridMarketDetails = {
     creator: account.creator.toBase58(),
@@ -434,7 +440,7 @@ function buildHybridMarket(input: {
     kickoff: `Resolves ${new Date(details.resolveNotBefore).toLocaleString("en-US", { timeZone: "UTC", timeZoneName: "short" })}`,
     lockAt,
     status: resolved ? "settled" : Date.now() < Date.parse(details.openAt) ? "upcoming" : "live",
-    tradingState,
+    tradingState: effectiveTradingState,
     yes,
     volume: tokenNumber(account.volume),
     liquidity: tokenNumber(vaultBalance(support.vault)),
