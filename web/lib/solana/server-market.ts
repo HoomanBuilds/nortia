@@ -475,46 +475,42 @@ function supportFromMap(
 export async function getOnchainMarkets(): Promise<Market[]> {
   const rpc = connection();
   const coder = new BorshAccountsCoder(idl as Idl);
-  const [privateRows, hybridRows, positionRows] = await Promise.all([
-    rpc.getProgramAccounts(NORTIA_PROGRAM_KEY, {
-      commitment: "confirmed",
-      filters: [{ memcmp: coder.memcmp("Market") }],
-    }),
-    rpc.getProgramAccounts(NORTIA_PROGRAM_KEY, {
-      commitment: "confirmed",
-      filters: [{ memcmp: coder.memcmp("HybridMarket") }],
-    }),
-    rpc.getProgramAccounts(NORTIA_PROGRAM_KEY, {
-      commitment: "confirmed",
-      filters: [{ memcmp: coder.memcmp("Position") }],
-    }),
-  ]);
-
-  const decodedHybrid = hybridRows.flatMap(({ pubkey, account }) => {
+  const programRows = await rpc.getProgramAccounts(NORTIA_PROGRAM_KEY, {
+    commitment: "confirmed",
+  });
+  const decodedPrivate = programRows.flatMap(({ pubkey, account }) => {
+    try {
+      return [{ address: pubkey, account: coder.decode("Market", account.data) as MarketAccount }];
+    } catch {
+      return [];
+    }
+  });
+  const decodedHybrid = programRows.flatMap(({ pubkey, account }) => {
     try {
       return [{ address: pubkey, account: coder.decode("HybridMarket", account.data) as HybridMarketAccount }];
     } catch {
       return [];
     }
   });
-  const supportAddresses = decodedHybrid.flatMap(({ address, account }) => [
-    account.oracle_config,
-    hybridMetadataPda(address),
-    resolutionReceiptPda(address),
-    hybridVaultPda(address),
-  ]);
-  const accountMap = await getAccountMap(rpc, supportAddresses);
-  const traderCounts = new Map<string, Set<string>>();
-  for (const { account } of positionRows) {
+  const decodedPositions = programRows.flatMap(({ account }) => {
     try {
-      const position = coder.decode("Position", account.data) as PositionAccount;
-      const key = position.market.toBase58();
-      const owners = traderCounts.get(key) ?? new Set<string>();
-      owners.add(position.owner.toBase58());
-      traderCounts.set(key, owners);
+      return [coder.decode("Position", account.data) as PositionAccount];
     } catch {
-      continue;
+      return [];
     }
+  });
+  const accountMap = new Map<string, AccountInfo<Buffer> | null>(
+    programRows.map(({ pubkey, account }) => [pubkey.toBase58(), account]),
+  );
+  const vaults = decodedHybrid.map(({ address }) => hybridVaultPda(address));
+  const vaultMap = await getAccountMap(rpc, vaults);
+  for (const [address, account] of vaultMap) accountMap.set(address, account);
+  const traderCounts = new Map<string, Set<string>>();
+  for (const position of decodedPositions) {
+    const key = position.market.toBase58();
+    const owners = traderCounts.get(key) ?? new Set<string>();
+    owners.add(position.owner.toBase58());
+    traderCounts.set(key, owners);
   }
 
   const publicMarkets = decodedHybrid.flatMap(({ address, account }) => {
@@ -527,16 +523,9 @@ export async function getOnchainMarkets(): Promise<Market[]> {
     });
     return market ? [market] : [];
   });
-  const privateMarkets = privateRows.flatMap(({ pubkey, account }) => {
-    try {
-      const market = buildPrivateMarket(
-        pubkey.toBase58(),
-        coder.decode("Market", account.data) as MarketAccount,
-      );
-      return market ? [market] : [];
-    } catch {
-      return [];
-    }
+  const privateMarkets = decodedPrivate.flatMap(({ address, account }) => {
+    const market = buildPrivateMarket(address.toBase58(), account);
+    return market ? [market] : [];
   });
   const phaseRank: Readonly<Record<TradingState, number>> = {
     open: 0,
