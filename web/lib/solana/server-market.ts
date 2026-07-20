@@ -755,12 +755,16 @@ export async function getOnchainMarketActivity(
     signatures.map(({ signature }) => signature),
     { commitment: "confirmed", maxSupportedTransactionVersion: 0 },
   );
+  const signatureMetadata = new Map(
+    signatures.map((signature) => [signature.signature, signature]),
+  );
   const eventCoder = new BorshEventCoder(idl as Idl);
   const activity: MarketActivity[] = [];
-  transactions.forEach((transaction, index) => {
+  transactions.forEach((transaction) => {
     if (!transaction?.meta || transaction.meta.err) return;
-    const signature = signatures[index];
-    if (!signature) return;
+    const transactionSignature = transaction.transaction.signatures[0];
+    if (!transactionSignature) return;
+    const signature = signatureMetadata.get(transactionSignature);
     for (const log of transaction.meta.logMessages ?? []) {
       const prefix = log.startsWith("Program data: ")
         ? "Program data: "
@@ -774,9 +778,9 @@ export async function getOnchainMarketActivity(
         const item = activityFromEvent({
           name: decoded.name,
           data: decoded.data as Record<string, unknown>,
-          signature: signature.signature,
-          slot: signature.slot,
-          timestamp: transaction.blockTime ?? signature.blockTime ?? null,
+          signature: transactionSignature,
+          slot: transaction.slot,
+          timestamp: transaction.blockTime ?? signature?.blockTime ?? null,
         });
         if (item) activity.push(item);
       } catch {
