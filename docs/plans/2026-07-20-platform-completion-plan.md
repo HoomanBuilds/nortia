@@ -99,3 +99,13 @@ Nortia should match those product properties while remaining honest about its di
 - No invented keeper reward for public LMSR settlement. Position owners, creators, and the operated keeper currently supply the incentive.
 - No silent fallback from a failed oracle to another oracle.
 - No CLOB implementation before the live data and lifecycle product is complete.
+
+## Completion evidence
+
+- Program commit `91366c0` was built and upgraded on devnet at slot `477624404`.
+- Pyth market `Gwg5Q44JVakT3JdNtpJQPeSCCDas4VFJpeY2zmzXQ34h` was created with verified metadata and 6.931474 USDC subsidy.
+- A 2 NO-share buy and 0.5 NO-share sell moved the YES probability from 50% to 45.02% and then 46.26%.
+- A post-expiry trade was rejected and the keeper confirmed the lock transition.
+- Free public Hermes evidence resolved the market NO at the exact `2026-07-20T13:42:00Z` observation.
+- The wallet claimed 1.5 USDC, the liquidity owner withdrew 6.209573 USDC, and the market reached `Closed` with zero vault balance.
+- The live catalog, detail page, price history, activity ledger, resolution receipt, and explorer signatures reflect the confirmed devnet state.

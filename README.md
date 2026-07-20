@@ -22,6 +22,7 @@ All current deployment work is pinned to Solana devnet and Circle devnet USDC. N
 | Switchboard canonical quote resolver | Built and tested, curated feed provisioning required |
 | Bonded optimistic resolver | Built and tested |
 | Devnet market engine | Live and verified |
+| Canonical Pyth market | Complete devnet create, trade, resolve, claim, and close flow |
 | UMA over Wormhole and Chainlink report adapters | Disabled until exact verifiers are deployed and tested |
 
 The private-pool demo and canonical market engine are live together under the same devnet program. The deployment script checks authority, cluster identity, binary capacity, rent, and resumable buffer funding before spending any SOL.
@@ -230,6 +231,7 @@ npm --prefix services run keeper
 ```
 
 The keeper defaults to dry-run. Set `KEEPER_DRY_RUN=false` only for an explicitly funded devnet keeper.
+Use `npm --prefix services run keeper:once` for one operational pass. The same market address works with `market:trade` and `market:settle` through `NORTIA_HYBRID_MARKET`.
 
 ## Verification
 
@@ -248,9 +250,9 @@ npm --prefix web run build
 
 Current verified results:
 
-- 68 Rust tests pass.
-- 40 client assertions across 8 test files pass.
-- 41 service assertions across 12 test files pass.
+- 70 Rust tests pass.
+- 42 client assertions pass.
+- 43 service assertions pass.
 - Clippy passes with warnings denied.
 - Anchor produces a valid SBF artifact.
 - Next.js typecheck and optimized production build pass.
@@ -267,10 +269,12 @@ The private TxLINE stack is live on Solana devnet. Public evidence is stored in 
 | Redeem verifier | `7PQFWh8XRoGya1fJSM69Rpjcec8cqKJi3e3gVYwwk3YW` |
 | Protocol PDA | `CJi67t1hHprwceArXdPyw6xLrN1Y3QbcvSC4R2SXoKZR` |
 | Market engine PDA | `EWgvZgWZNc1m2yunKonZwavnPgY6n6T2BbwXFC6kdRpf` |
+| Canonical Pyth market | `Gwg5Q44JVakT3JdNtpJQPeSCCDas4VFJpeY2zmzXQ34h` |
+| Canonical Pyth USDC vault | `3A3sQJ1V5g1tX5xy2P6zh72qXjPVH7T6Wupb74siEvGy` |
 | Judge replay market | `44cD1kbvuheo5wSM4gxEZvAfitAXbC25f2u4Mzs48qix` |
 | Replay USDC vault | `EqjB6nuMcvhtTw9Cngs2EgSNjthC6VrxFDthZnoYxtyM` |
 
-The market engine upgrade finalized at slot `477612502`, and its canonical engine PDA initialized at slot `477612604`. The decoded engine is unpaused, pins Circle devnet USDC plus the reviewed Pyth and Switchboard programs, and stores the intended 70/30 fee split.
+The latest market engine upgrade finalized at slot `477624404`, and its canonical engine PDA remains at `EWgvZgWZNc1m2yunKonZwavnPgY6n6T2BbwXFC6kdRpf`. The decoded engine is unpaused, pins Circle devnet USDC plus the reviewed Pyth and Switchboard programs, and stores the intended 70/30 fee split.
 
 The devnet script calculates ProgramData growth rent, resumable upload-buffer rent, fee reserve, payer balance, and upgrade authority before attempting a transaction. It extends ProgramData in loader-safe increments and uses QUIC for large program writes:
 
@@ -292,6 +296,25 @@ Create or verify the canonical private replay:
 
 ```bash
 NORTIA_KEYPAIR_PATH=/path/to/authority.json npm --prefix services run deploy:replay-market
+```
+
+Execute and settle a public LMSR market on devnet:
+
+```bash
+NORTIA_KEYPAIR_PATH=/path/to/authority.json \
+NORTIA_HYBRID_MARKET=market-address \
+NORTIA_TRADE_DIRECTION=buy \
+NORTIA_TRADE_SIDE=yes \
+NORTIA_TRADE_SHARES=1 \
+npm --prefix services run market:trade
+
+NORTIA_KEYPAIR_PATH=/path/to/authority.json \
+KEEPER_DRY_RUN=false \
+npm --prefix services run keeper:once
+
+NORTIA_KEYPAIR_PATH=/path/to/authority.json \
+NORTIA_HYBRID_MARKET=market-address \
+npm --prefix services run market:settle
 ```
 
 ## Safety

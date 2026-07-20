@@ -9,7 +9,7 @@
 
 The current source, generated IDL, service adapters, client math, wallet flows, category-aware oracle creation, and web build pass their local release gates. The private-pool demo and canonical market engine are live together on devnet.
 
-The finalized upgrade uses source commit `d3d1f31` and artifact SHA-256 `7ee32050810420b26bf005fab725d5f82892457a20f0cd8dd0b1a191840c8b8f`. The deployment script exits before spending funds when the cluster, authority, artifact, capacity, rent, or transient balance gate fails.
+The latest finalized upgrade uses source commit `91366c0` and artifact SHA-256 `1987e44288bb40700fd8ebcafb1da1ade821480697075acc354fefce958228b6`. The deployment script exits before spending funds when the cluster, authority, artifact, capacity, rent, or transient balance gate fails.
 
 ## Verified gates
 
@@ -17,9 +17,9 @@ The finalized upgrade uses source commit `d3d1f31` and artifact SHA-256 `7ee3205
 | --- | --- |
 | Rust formatting | Pass |
 | Clippy with warnings denied | Pass |
-| Rust unit and randomized tests | 68 pass |
-| Client tests | 40 pass |
-| Service tests | 41 pass |
+| Rust unit and randomized tests | 70 pass |
+| Client tests | 42 pass |
+| Service tests | 43 pass |
 | Client and service TypeScript checks | Pass |
 | Anchor SBF build | Pass |
 | Next.js TypeScript check | Pass |
@@ -28,8 +28,9 @@ The finalized upgrade uses source commit `d3d1f31` and artifact SHA-256 `7ee3205
 | True 390px device emulation | Pass, no page-level horizontal overflow |
 | Private-pool program and PDA decoding | Pass against current devnet accounts |
 | Oracle API smoke tests | Pass for Pyth Crypto, Pyth Economics, readiness, and fail-closed Stork access |
-| Market engine deployment transaction | Pass, finalized at slot 477612502 |
+| Latest program upgrade transaction | Pass, finalized at slot 477624404 |
 | Engine account initialization and decode | Pass, finalized at slot 477612604 |
+| Canonical Pyth lifecycle | Pass for create, buy, sell, lock, resolve, claim, withdraw, and close |
 
 ## Protocol properties reviewed
 
@@ -86,6 +87,8 @@ The finalized upgrade uses source commit `d3d1f31` and artifact SHA-256 `7ee3205
 8. Hermes catalog results were trusted as typed objects and an empty Economics search could retain a Crypto selection. Catalog parsing now rejects malformed values and market creation fails closed when no category-compatible feed is selected.
 9. The deployment command could not grow the existing ProgramData account by the full artifact delta in one transaction. The script now extends it in loader-safe 10,240-byte increments.
 10. Large writes through the public RPC hit HTTP 429 limits and left an incomplete but funded buffer. The deployment path now uses a named resumable buffer and QUIC writes, then activates the verified buffer separately.
+11. Anchor rejected a legitimate trade when the trader, treasury owner, and liquidity owner shared one USDC associated token account. The trade context now permits constrained duplicate accounts, coalesces shared fee destinations, and treats self-transfers as no-ops. Regression tests cover identical, distinct, and overflowing fee destinations.
+12. The public RPC returned a batched transaction response in a different order than requested, which attached correct events to incorrect explorer signatures. The activity index now binds each event to the signature embedded in its transaction and uses the transaction slot directly.
 
 ## Residual risks and release blockers
 
@@ -99,7 +102,6 @@ The finalized upgrade uses source commit `d3d1f31` and artifact SHA-256 `7ee3205
 
 ### Devnet integration gaps
 
-- A canonical Pyth market still needs one full devnet create, trade, resolve, claim, and liquidity-withdraw receipt sequence.
 - Switchboard feed definitions and managed update instructions must be provisioned externally before a canonical quote market can be demonstrated.
 - Stork requires a `STORK_API_TOKEN` plus its external Solana pusher. Nortia does not claim this path is free without access credentials.
 - TxLINE access still requires valid hackathon credentials for live API retrieval.
@@ -121,7 +123,7 @@ The devnet upgrade was sent only after all of the following were true:
 4. All gates in this review pass on the exact deployment commit.
 5. A post-upgrade read confirmed that private-pool accounts still decode and the market engine contains the intended 70/30 fee split.
 
-The user-authorized 10 SOL transfer finalized at slot `477608167`. The program upgrade signature `fbLhJNSLXgngf3J5n8toXJCYFTaYygNk9UeL7LoLSJXW9fGCrTESthV3ssqnCfVVPVNSeYAuNERHvkinWFDh5TL` finalized at slot `477612502`. The temporary buffer closed during activation and returned its rent.
+The user-authorized 10 SOL transfer finalized at slot `477608167`. The latest program upgrade signature `2taWSxrXxaCUssn4S9KaouXF5GdVTDoq6d68QrTVhZUGYedLt7oAvBYoSBkh6NM2bLJqcYmzxYxyR58ooNGMVmor` finalized at slot `477624404`. The temporary buffer closed during activation and returned its rent.
 
 Engine initialization signature `44cfsahbGDwyusRJbu1WCx3fUEFBpmRzuka4oUpN2NrmEavtiwdB3KZWDrGWgtGwEbyBtUnSFjmsBqcGixsVLZUm` finalized at slot `477612604`. Independent IDL decoding confirms:
 
@@ -132,4 +134,4 @@ Engine initialization signature `44cfsahbGDwyusRJbu1WCx3fUEFBpmRzuka4oUpN2NrmEav
 - Switchboard quote program `orac1eFjzWL5R3RbbdMV68K9H6TaCVVcL6LjvQQWAbz`.
 - Version `1`, unpaused state, and treasury fee share `7000` basis points.
 
-The canonical machine-readable evidence is stored in `deployments/devnet.json`. A complete Pyth create, trade, resolve, claim, and liquidity-withdraw sequence remains a devnet integration gate rather than a program-deployment blocker.
+The canonical machine-readable evidence is stored in `deployments/devnet.json`. Market `Gwg5Q44JVakT3JdNtpJQPeSCCDas4VFJpeY2zmzXQ34h` completed create, buy, sell, lock, Pyth resolution, 1.5 USDC position claim, 6.209573 USDC surplus withdrawal, and terminal close on devnet.

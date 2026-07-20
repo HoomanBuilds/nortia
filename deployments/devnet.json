@@ -1,7 +1,7 @@
 {
   "network": "solana-devnet",
-  "checkedAt": "2026-07-20T12:14:37Z",
-  "status": "private-pool-and-market-engine-deployed",
+  "checkedAt": "2026-07-20T13:43:00Z",
+  "status": "deployed-and-pyth-lifecycle-verified",
   "programs": {
     "nortia": {
       "programId": "4S2EvdGrbKJ9zazvB4gtR83crTrVJWqqwoVVvEQy8VE9",
@@ -58,13 +58,13 @@
   },
   "programUpgrade": {
     "status": "confirmed",
-    "commit": "d3d1f31",
-    "artifactSha256": "7ee32050810420b26bf005fab725d5f82892457a20f0cd8dd0b1a191840c8b8f",
-    "artifactLengthBytes": 1080016,
+    "commit": "91366c0",
+    "artifactSha256": "1987e44288bb40700fd8ebcafb1da1ade821480697075acc354fefce958228b6",
+    "artifactLengthBytes": 1081344,
     "programDataLengthBytes": 1087656,
-    "upgradeSignature": "fbLhJNSLXgngf3J5n8toXJCYFTaYygNk9UeL7LoLSJXW9fGCrTESthV3ssqnCfVVPVNSeYAuNERHvkinWFDh5TL",
-    "upgradeSlot": 477612502,
-    "uploadBuffer": "hSAj4czxLYGs2yrBdPmWcjJhNGZKA4B3vjXCnJ1RMJR",
+    "upgradeSignature": "2taWSxrXxaCUssn4S9KaouXF5GdVTDoq6d68QrTVhZUGYedLt7oAvBYoSBkh6NM2bLJqcYmzxYxyR58ooNGMVmor",
+    "upgradeSlot": 477624404,
+    "uploadBuffer": "26YYabsWGQb4M6kkzwy9SXEa1knX2cnK1yiAkEgG9EBv",
     "uploadBufferClosed": true,
     "engineAddress": "EWgvZgWZNc1m2yunKonZwavnPgY6n6T2BbwXFC6kdRpf",
     "engineInitializeSignature": "44cfsahbGDwyusRJbu1WCx3fUEFBpmRzuka4oUpN2NrmEavtiwdB3KZWDrGWgtGwEbyBtUnSFjmsBqcGixsVLZUm",
@@ -74,6 +74,38 @@
     "paused": false,
     "oracleProviderProfile": "free",
     "authorityBalanceLamportsAfterInitialization": 16225521462
+  },
+  "canonicalPythMarket": {
+    "status": "closed",
+    "address": "Gwg5Q44JVakT3JdNtpJQPeSCCDas4VFJpeY2zmzXQ34h",
+    "marketId": "2001784554920",
+    "vault": "3A3sQJ1V5g1tX5xy2P6zh72qXjPVH7T6Wupb74siEvGy",
+    "metadata": "CCdJbeh9Nvi2o6ABVtyx8skTbuquutvYkxvdxnxi7kMj",
+    "position": "NcoYT5cVAVMe4NmAEZs8ehhTMaeUfsZCEJo5LuUbvmc",
+    "question": "Will BTC/USD be at or above $200000.00 at 2026-07-20T13:42:00.000Z?",
+    "lockAt": "2026-07-20T13:37:00Z",
+    "resolveNotBefore": "2026-07-20T13:42:00Z",
+    "resolutionDeadline": "2026-07-20T14:12:00Z",
+    "subsidyUsdc": "6.931474",
+    "createSignature": "1eeEELfR3WdUEtDHA9HjdWwm4ANVVvLA3GRKc4VZgR4iWEVk3KUkf21uX32WTyrXDk5EuS4FXRPoHyikBSehXf4",
+    "metadataSignature": "4JofkVssbPnNF7m4De1zJpFnM4BCz6hNGUbu5NwZkDkUdVryK9Mo58Nh7HAAdqJQ8CX9RberMbxvVbjPZresbnT6",
+    "buySignature": "t5LpKF4YVNauZ7CzM2gZnwj5y2qa9Mt1kmJeJsx1iGzWdjYTPhbJqUz3CnTxY9vACUGecvYx6JVnn9kwgukszFU",
+    "sellSignature": "4oX5dHv8fD7JDgamkyTmRyb6xSz4mMBgR4CB9ywe4FM2nJ11noS8gw6S5fK6UNvZt9NFWYCuXZPMLDJd2rjKRLeQ",
+    "lockSignature": "29aNAhM7szBr23cZS26QKfXBho8z43wUpn4sfh6PcwxYqq511oXAYq3pMhHxnUXqpBGRJDfFCftYcHWWYrQLVE3M",
+    "resolutionSignatures": [
+      "4QRdzhiFzNGWqUM93S2Gzxv8cZrhfsoBrDpx3hTWi74zs5PtUMtCJvgonA388BH4hScE98PvuwUYCXEbcKAeifBG",
+      "3yDW2AVG1DaueiSdQFwFymj6ZgMYtEfNUZSLUqtFwefnuhRTix94mweaBbxCwrQndB1xqMiSQ2K6erRYk9MdJaD",
+      "2Ca3Gn2fdsr7wvfZuEKcw5S64gxWLJbPTs2pjRECQ3z2wmG3ZB2KpEkBeJfCgwc3ohFVu7kdAh2wHo2nwNHtz3VM"
+    ],
+    "outcome": "no",
+    "observationValue": "6458921067020",
+    "observationExponent": -8,
+    "observationAt": "2026-07-20T13:42:00Z",
+    "evidenceHash": "6c7cbac611fd2402ec533308e5b94192ae87f05a79e9da4a2eff525cf0b1de90",
+    "claimAmountUsdc": "1.5",
+    "claimSignature": "5TTydUJS4omzqB4xVAgiDqYXLdW5HBgEGmJ3f7dD8qpgZbwd47nwRVHSGXPfHTaMCqwxpXUbEihaydkFeBmzPz3L",
+    "liquidityWithdrawalUsdc": "6.209573",
+    "liquidityWithdrawalSignature": "54sqWrMVbJgqTUK76kkNx8qqUSWVAtpY5ufMVmsu2vWKJnddkRfPdBNHQUoN94LYSpaAPEz8vmnmopENGMC9DXcZ"
   },
   "deploymentFunding": {
     "source": "C9q8YptFdiv2bkQXtRzeJKQWgfBwa3gZKWhVF8g7KVNZ",
