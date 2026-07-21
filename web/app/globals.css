@@ -7,7 +7,7 @@
   --panel-soft: #151913;
   --text: #f1f3e9;
   --muted: #92998a;
-  --muted-2: #656c60;
+  --muted-2: #7b8375;
   --line: rgba(240, 244, 225, 0.09);
   --line-strong: rgba(240, 244, 225, 0.16);
   --lime: #f97316;
@@ -20,6 +20,9 @@
   --mono: "IBM Plex Mono", monospace;
   --font-bebas: "Bebas Neue", Impact, sans-serif;
   --app-shell: 1440px;
+  --text-caption: 12px;
+  --text-control: 13px;
+  --text-body: 14px;
 }
 
 @theme inline {
@@ -358,10 +361,11 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .history-chart-heading > div:first-child small { color: var(--muted); font-size: 20px; }
 .history-chart-heading > div:last-child { display: grid; justify-items: end; gap: 3px; }
 .history-chart-heading > div:last-child b { font-family: var(--mono); font-size: 15px; }
+.history-plot { position: relative; }
 .market-history-chart svg { display: block; width: 100%; height: 385px; overflow: visible; }
 .market-history-chart svg line { stroke: rgba(240,244,225,.07); stroke-width: 1; vector-effect: non-scaling-stroke; }
-.market-history-chart svg text { fill: var(--muted-2); font-family: var(--mono); font-size: 8px; }
-.market-history-chart .history-time { font-size: 7px; letter-spacing: .04em; }
+.history-y-axis { position: absolute; top: 6%; bottom: 10%; left: 8px; display: flex; flex-direction: column; justify-content: space-between; color: var(--muted-2); font-family: var(--mono); font-size: var(--text-caption); pointer-events: none; }
+.history-x-axis { position: absolute; right: 2%; bottom: 4px; left: 5.4%; display: flex; justify-content: space-between; color: var(--muted-2); font-family: var(--mono); font-size: var(--text-caption); letter-spacing: .04em; text-transform: uppercase; pointer-events: none; }
 .history-line { fill: none; stroke: currentColor; stroke-width: 2.2; vector-effect: non-scaling-stroke; }
 .history-area { color: var(--lime); }
 .market-history-chart circle { fill: var(--panel); stroke: currentColor; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
@@ -538,4 +542,298 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
   .optimistic-heading { min-height: 0; padding: 20px 15px; }.optimistic-heading h2 { font-size: 27px; }.optimistic-heading > button { width: 100%; }.optimistic-state-grid > div { padding: 12px; }.evidence-ledger article { padding: 18px 15px; }.optimistic-action { padding: 18px 15px; grid-template-columns: 1fr; }.optimistic-submit { grid-column: 1; }.permissionless-finalize { padding: 16px 15px; align-items: flex-start; flex-direction: column; }.permissionless-finalize > button { width: 100%; }.dispute-banner { align-items: flex-start; flex-direction: column; }.dispute-banner > button { width: 100%; margin-left: 0; }.no-assertion { padding-inline: 15px; }
   .create-market-layout, .create-form-card, .create-side-card, .resolver-grid, .resolver-choice, .category-choice-grid { width: 100%; max-width: calc(100vw - 30px); min-width: 0; }.create-form-card, .create-side-card, .receipt-detail-card, .program-health-card { padding: 20px 15px; overflow: hidden; }.create-field-grid, .create-review, .oracle-feed-summary { grid-template-columns: minmax(0, 1fr); }.create-review > div, .oracle-feed-summary > div { min-width: 0; border-right: 0; }.create-review > div:last-child { grid-column: 1; }.oracle-feed-summary p { grid-column: 1; }.feed-validation { grid-template-columns: 1fr; }.feed-validation button { min-height: 40px; }.resolver-choice { grid-template-columns: auto minmax(0, 1fr); }.resolver-choice > b { grid-column: 2; }.resolver-choice p { overflow-wrap: anywhere; }
   .proof-stage-grid { grid-template-columns: 1fr; }.proof-stage-grid article { min-height: 220px; border-right: 0; border-bottom: 1px solid var(--line); }.proof-stage-grid article:last-child { border-bottom: 0; }.proof-surface-heading { align-items: flex-start; flex-direction: column; }.receipt-detail-card dl { grid-template-columns: 1fr; }.receipt-detail-card dl div:nth-child(odd), .receipt-detail-card dl div:nth-child(even) { padding-inline: 0; border-left: 0; }.receipt-card-title { align-items: flex-start; flex-wrap: wrap; }.receipt-card-title > b { width: 100%; margin-left: 54px; }.resolver-registry { padding: 20px 15px; gap: 25px; }
+}
+
+/* App data and instructions must remain readable without relying on browser zoom. */
+.eyebrow,
+.source-pill,
+.popover-label,
+.intro-stats span,
+.intro-stats small,
+.trust-strip span,
+.trust-strip b,
+.featured-kicker,
+.featured-probability span,
+.featured-probability > b,
+.chart-time-axis,
+.featured-outcome span,
+.featured-outcome small,
+.featured-footer > div,
+.rail-settlement > span,
+.rail-settlement small,
+.filter-row > span,
+.category-filter,
+.market-card-topline,
+.card-probability span,
+.market-card-footer {
+  font-size: var(--text-caption);
+}
+
+.wallet-popover-actions a,
+.wallet-popover-actions button,
+.featured-footer a,
+.rail-item p,
+.rail-settlement p,
+.market-teams p,
+.empty-catalog span {
+  font-size: var(--text-control);
+}
+
+.market-label-row,
+.market-header-main p,
+.header-score span,
+.market-header-stats span,
+.panel-source-row,
+.chart-tabs button,
+.chart-range button,
+.chart-legend,
+.chart-summary > div:first-child span,
+.chart-delta span,
+.chart-delta b,
+.verified-event,
+.scrubber-step span,
+.scrubber-step small,
+.source-verified,
+.zk-badge,
+.field-label,
+.outcome-toggle button span,
+.ticket-field-row,
+.ticket-field-row small,
+.amount-field span,
+.ticket-breakdown > div,
+.ticket-breakdown strong,
+.ticket-breakdown strong small,
+.faucet-link,
+.simulation-note,
+.preview-title strong,
+.preview-title span,
+.commitment-preview code,
+.preview-step,
+.commitment-preview > small,
+.order-signature,
+.consensus-note,
+.detail-tabs button,
+.rules-card dt,
+.rules-card dd,
+.proof-route strong,
+.proof-route small,
+.receipt-heading small,
+.receipt-heading > b,
+.receipt-score span,
+.receipt-rows div,
+.program-card > div,
+.program-card b,
+.short-id,
+.program-card a,
+.activity-table,
+.activity-head,
+.generic-chart-heading span,
+.generic-chart-heading > b,
+.generic-axis,
+.generic-chart > p,
+.history-chart-heading > div:first-child span,
+.history-chart-heading > div:last-child span,
+.market-history-chart > p,
+.hybrid-ledger-heading > a,
+.hybrid-ledger-grid dt,
+.resolution-receipt-grid span,
+.hybrid-ledger-grid dd,
+.ledger-reference,
+.resolution-receipt-grid strong,
+.activity-ledger-heading > span,
+.market-activity-head,
+.market-activity-row,
+.market-activity-row b,
+.market-activity-row small,
+.activity-empty,
+.hybrid-ledger-footer,
+.optimistic-heading > button,
+.optimistic-state-grid span,
+.optimistic-state-grid strong,
+.evidence-role,
+.evidence-ledger a,
+.evidence-ledger code,
+.evidence-ledger small,
+.no-assertion strong,
+.no-assertion p,
+.optimistic-outcomes button,
+.optimistic-outcomes > span,
+.optimistic-action label span,
+.optimistic-action input,
+.optimistic-submit,
+.permissionless-finalize strong,
+.dispute-banner strong,
+.permissionless-finalize small,
+.dispute-banner p,
+.permissionless-finalize > button,
+.dispute-banner > button,
+.optimistic-signature {
+  font-size: var(--text-caption);
+}
+
+.privacy-callout p,
+.market-closed-state p,
+.rules-card > p,
+.program-card p,
+.generic-disclosure p,
+.hybrid-ledger-heading p,
+.ledger-rules > p,
+.receipt-pending-copy p,
+.optimistic-heading p {
+  font-size: var(--text-body);
+  line-height: 1.6;
+}
+
+.play-button,
+.primary-order-button,
+.commitment-preview button,
+.market-closed-state a,
+.generic-disclosure a {
+  min-height: 40px;
+  font-size: var(--text-control);
+}
+
+.portfolio-stats span,
+.portfolio-stats strong small,
+.privacy-illustration > small,
+.hybrid-position-head,
+.hybrid-position-row strong,
+.hybrid-position-row small,
+.position-status,
+.settled-check,
+.liquidity-console article small,
+.liquidity-console article > strong,
+.portfolio-signature,
+.recovery-card-heading small,
+.recovery-card label > span,
+.local-only,
+.recovery-result strong,
+.recovery-result span,
+.empty-positions > div:first-child {
+  font-size: var(--text-caption);
+}
+
+.portfolio-stats strong {
+  font-size: 18px;
+}
+
+.wallet-gate strong,
+.hybrid-position-row a,
+.portfolio-info-card strong {
+  font-size: var(--text-body);
+}
+
+.wallet-gate p,
+.portfolio-section-heading p,
+.recovery-card > p,
+.portfolio-info-card p,
+.empty-position-state p,
+.position-list article,
+.portfolio-action-error {
+  font-size: var(--text-control);
+  line-height: 1.55;
+}
+
+.wallet-gate button,
+.portfolio-section-heading > button,
+.portfolio-row-action button,
+.liquidity-console article > button,
+.recovery-card > button,
+.empty-position-state a,
+.position-list em button {
+  min-height: 40px;
+  font-size: var(--text-control);
+}
+
+.portfolio-loading,
+.liquidity-console article a,
+.recovery-card input {
+  font-size: var(--text-control);
+}
+
+.category-choice strong,
+.category-choice span,
+.form-section-heading > span,
+.form-section-heading p,
+.resolver-choice strong,
+.resolver-choice p,
+.resolver-choice b,
+.create-field > span,
+.feed-validation button,
+.oracle-feed-summary span,
+.oracle-feed-summary b,
+.oracle-feed-summary code,
+.create-review span,
+.create-review b,
+.create-review code,
+.readiness-list > div,
+.readiness-list b,
+.direction-toggle button,
+.trade-size-presets button,
+.slippage-control,
+.slippage-control button,
+.order-panel > .order-error,
+.generic-disclosure code {
+  font-size: var(--text-caption);
+}
+
+.create-field input,
+.create-field select,
+.create-submit,
+.transaction-message,
+.creation-rule p,
+.order-panel > .order-signature {
+  font-size: var(--text-control);
+}
+
+.oracle-feed-summary p,
+.oracle-key-notice {
+  font-size: var(--text-body);
+}
+
+.feed-validation button,
+.create-submit,
+.direction-toggle button,
+.trade-size-presets button,
+.slippage-control button {
+  min-height: 40px;
+}
+
+.proof-status-grid span,
+.proof-status-grid small,
+.proof-stage-number,
+.proof-stage-grid small,
+.receipt-card-title small,
+.receipt-card-title > b,
+.receipt-detail-card dt,
+.receipt-detail-card dd,
+.health-row b,
+.program-health-card code,
+.resolver-table b {
+  font-size: var(--text-caption);
+}
+
+.proof-surface-heading a,
+.health-row > div,
+.program-health-card > a,
+.resolver-table > div {
+  font-size: var(--text-control);
+}
+
+.proof-stage-grid p,
+.receipt-detail-card > p,
+.resolver-registry p {
+  font-size: var(--text-body);
+  line-height: 1.6;
+}
+
+.proof-surface-heading a {
+  min-height: 40px;
+}
+
+.axis-label,
+.time-label,
+.history-y-axis,
+.history-x-axis {
+  font-size: var(--text-caption);
 }

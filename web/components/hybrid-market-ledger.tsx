@@ -51,18 +51,20 @@ export function HybridMarketChart({ market }: { market: Market }) {
         <div><span>YES implied probability</span><strong>{market.yes}<small>%</small></strong></div>
         <div><b>{tradeCount}</b><span>confirmed trades loaded</span></div>
       </div>
-      <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" role="img" aria-label={`YES probability history ending at ${market.yes} percent`}>
-        <defs><linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="currentColor" stopOpacity=".24" /><stop offset="100%" stopColor="currentColor" stopOpacity="0" /></linearGradient></defs>
-        {[0, 25, 50, 75, 100].map((value) => {
-          const y = top + ((100 - value) / 100) * chartHeight;
-          return <g key={value}><line x1={left} x2={width - right} y1={y} y2={y} /><text x={8} y={y + 3}>{value}%</text></g>;
-        })}
-        <path className="history-area" d={area} fill={`url(#${gradientId})`} />
-        <path className="history-line" d={line} />
-        {coordinates.map((point, index) => <circle key={`${point.x}-${index}`} cx={point.x} cy={point.y} r={index === coordinates.length - 1 ? 4 : 2.5} />)}
-        <text className="history-time" x={left} y={height - 8}>MARKET OPEN</text>
-        <text className="history-time" x={width - right} y={height - 8} textAnchor="end">LATEST CONFIRMED STATE</text>
-      </svg>
+      <div className="history-plot">
+        <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" role="img" aria-label={`YES probability history ending at ${market.yes} percent`}>
+          <defs><linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="currentColor" stopOpacity=".24" /><stop offset="100%" stopColor="currentColor" stopOpacity="0" /></linearGradient></defs>
+          {[0, 25, 50, 75, 100].map((value) => {
+            const y = top + ((100 - value) / 100) * chartHeight;
+            return <line key={value} x1={left} x2={width - right} y1={y} y2={y} />;
+          })}
+          <path className="history-area" d={area} fill={`url(#${gradientId})`} />
+          <path className="history-line" d={line} />
+          {coordinates.map((point, index) => <circle key={`${point.x}-${index}`} cx={point.x} cy={point.y} r={index === coordinates.length - 1 ? 4 : 2.5} />)}
+        </svg>
+        <div className="history-y-axis" aria-hidden="true">{[100, 75, 50, 25, 0].map((value) => <span key={value}>{value}%</span>)}</div>
+        <div className="history-x-axis" aria-hidden="true"><span>Market open</span><span>Latest confirmed state</span></div>
+      </div>
       <p>{tradeCount > 0 ? "History is reconstructed from confirmed HybridTradeExecuted events." : "No trades have executed yet. The initial LMSR probability is 50%."}</p>
     </div>
   );
