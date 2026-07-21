@@ -1,13 +1,13 @@
 {
   "network": "solana-devnet",
-  "checkedAt": "2026-07-21T16:11:45Z",
+  "checkedAt": "2026-07-21T16:35:50Z",
   "status": "deployed-with-live-private-prover",
   "programs": {
     "nortia": {
       "programId": "4S2EvdGrbKJ9zazvB4gtR83crTrVJWqqwoVVvEQy8VE9",
       "programData": "38zjkVVYSt6A2ZA5vN4grWH4kwY6GUGM4uzhaugNdZWS",
-      "deploySignature": "4eaLGCBnJNsmi4JioVLRjv7mzmyGDhAhnkuv73NXVzmqdg4KZv3ma2uz3d6AC9vLLf8wXvZyZJXmQozQQhEtboVK",
-      "deploySlot": 477886458,
+      "deploySignature": "4mySwWKMgxi7N2b9obVVLdjkDWqz4A2WgLUDv49PQuVSZFULH8ehppQWPbYk4mBeYjVFdpr7v94BM3SA4jAZYUbG",
+      "deploySlot": 477890681,
       "dataLengthBytes": 1108136,
       "lamports": 7713830640,
       "upgradeAuthority": "5yFHYFS1y8hVuVte6F3ae9NMh3i4F1ZGyTynwb8onb5S"
@@ -93,12 +93,12 @@
   },
   "programUpgrade": {
     "status": "confirmed",
-    "commit": "11193b3",
-    "artifactSha256": "4a80bed3d8da58c6227ad137a8787849cae61d0c5217d6adf19635c6d15f3b1c",
-    "artifactLengthBytes": 1106168,
+    "commit": "baa6a04",
+    "artifactSha256": "71c287c59b292f89a6a2bd89b4d4d5204b7f33a54433367e0b418d99467dce5b",
+    "artifactLengthBytes": 1106320,
     "programDataLengthBytes": 1108136,
-    "upgradeSignature": "4eaLGCBnJNsmi4JioVLRjv7mzmyGDhAhnkuv73NXVzmqdg4KZv3ma2uz3d6AC9vLLf8wXvZyZJXmQozQQhEtboVK",
-    "upgradeSlot": 477886458,
+    "upgradeSignature": "4mySwWKMgxi7N2b9obVVLdjkDWqz4A2WgLUDv49PQuVSZFULH8ehppQWPbYk4mBeYjVFdpr7v94BM3SA4jAZYUbG",
+    "upgradeSlot": 477890681,
     "uploadBuffer": "2UpmDJNsJ2828YooM6kHaYDNB7ujRA81HY9iWdbxN3xp",
     "uploadBufferClosed": true,
     "engineAddress": "EWgvZgWZNc1m2yunKonZwavnPgY6n6T2BbwXFC6kdRpf",
@@ -109,7 +109,17 @@
     "paused": false,
     "oracleProviderProfile": "free",
     "authorityBalanceLamportsAfterInitialization": 16225521462,
-    "authorityBalanceLamportsAfterUpgrade": 14822910021
+    "authorityBalanceLamportsAfterUpgrade": 14817425021,
+    "privatePlacementSimulation": {
+      "status": "passed",
+      "computeUnitLimit": 300000,
+      "computeUnitsConsumed": 215237
+    },
+    "redeemVerifierSimulation": {
+      "status": "passed",
+      "computeUnitLimit": 300000,
+      "computeUnitsConsumed": 190485
+    }
   },
   "canonicalPythMarket": {
     "status": "closed",
