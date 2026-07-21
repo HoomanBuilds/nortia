@@ -1,6 +1,6 @@
 {
   "network": "solana-devnet",
-  "checkedAt": "2026-07-20T13:43:00Z",
+  "checkedAt": "2026-07-20T14:25:00Z",
   "status": "deployed-and-pyth-lifecycle-verified",
   "programs": {
     "nortia": {
@@ -54,6 +54,33 @@
       "9LxudrHenxBM1xeqB3c1Avqc5qEAWzE9twM6KbNyEAcE",
       "7nenWjHQkdBfuYvpoPBFmgB2Yvkw4Y1a2YdksmeU8Nbv",
       "GL1retjPLC2jij2Cyy8BP65CR99mT4RtVWaFgA3jGiSs"
+    ]
+  },
+  "txlineFreeTier": {
+    "status": "authenticated-and-verified",
+    "wallet": "5yFHYFS1y8hVuVte6F3ae9NMh3i4F1ZGyTynwb8onb5S",
+    "programId": "6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J",
+    "tokenMint": "4Zao8ocPhmMgq7PdsYWyxvqySMGx7xb9cMftPMkEokRG",
+    "serviceLevel": 1,
+    "durationWeeks": 4,
+    "tokenCostPerWeek": 0,
+    "samplingIntervalSecs": 0,
+    "subscriptionSignature": "GfrbfAdAybMBnNaSfSBGYgFxFwk8rvkUhZEkZgVMa3TU2zqDaZ7cXHeRLvxHxbap2aTZQt6aZkchJhwo6pzstba",
+    "accessExpiresAt": "2026-08-19T14:18:10Z",
+    "historicalFixtureId": 18222446,
+    "historicalRecordCount": 1307,
+    "finalSequence": 1306,
+    "validationStats": [
+      {
+        "key": 1,
+        "value": 3,
+        "period": 100
+      },
+      {
+        "key": 2,
+        "value": 1,
+        "period": 100
+      }
     ]
   },
   "programUpgrade": {

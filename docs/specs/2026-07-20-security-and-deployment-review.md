@@ -18,7 +18,7 @@ The latest finalized upgrade uses source commit `91366c0` and artifact SHA-256 `
 | Rust formatting | Pass |
 | Clippy with warnings denied | Pass |
 | Rust unit and randomized tests | 70 pass |
-| Client tests | 42 pass |
+| Client tests | 45 pass |
 | Service tests | 43 pass |
 | Client and service TypeScript checks | Pass |
 | Anchor SBF build | Pass |
@@ -28,6 +28,7 @@ The latest finalized upgrade uses source commit `91366c0` and artifact SHA-256 `
 | True 390px device emulation | Pass, no page-level horizontal overflow |
 | Private-pool program and PDA decoding | Pass against current devnet accounts |
 | Oracle API smoke tests | Pass for Pyth Crypto, Pyth Economics, readiness, and fail-closed Stork access |
+| Authenticated TxLINE free tier | Pass for subscription, historical replay, final-record selection, and two-stat validation proof |
 | Latest program upgrade transaction | Pass, finalized at slot 477624404 |
 | Engine account initialization and decode | Pass, finalized at slot 477612604 |
 | Canonical Pyth lifecycle | Pass for create, buy, sell, lock, resolve, claim, withdraw, and close |
@@ -89,6 +90,7 @@ The latest finalized upgrade uses source commit `91366c0` and artifact SHA-256 `
 10. Large writes through the public RPC hit HTTP 429 limits and left an incomplete but funded buffer. The deployment path now uses a named resumable buffer and QUIC writes, then activates the verified buffer separately.
 11. Anchor rejected a legitimate trade when the trader, treasury owner, and liquidity owner shared one USDC associated token account. The trade context now permits constrained duplicate accounts, coalesces shared fee destinations, and treats self-transfers as no-ops. Regression tests cover identical, distinct, and overflowing fee destinations.
 12. The public RPC returned a batched transaction response in a different order than requested, which attached correct events to incorrect explorer signatures. The activity index now binds each event to the signature embedded in its transaction and uses the transaction slot directly.
+13. Authenticated TxLINE historical responses use SSE framing instead of plain JSON, and the observed final record omits its top-level period. The shared parser now supports JSON and SSE, the selector supports the observed final-record shape, and the validation proof still requires period `100` for both score leaves.
 
 ## Residual risks and release blockers
 
@@ -104,7 +106,6 @@ The latest finalized upgrade uses source commit `91366c0` and artifact SHA-256 `
 
 - Switchboard feed definitions and managed update instructions must be provisioned externally before a canonical quote market can be demonstrated.
 - Stork requires a `STORK_API_TOKEN` plus its external Solana pusher. Nortia does not claim this path is free without access credentials.
-- TxLINE access still requires valid hackathon credentials for live API retrieval.
 - Public oracle and RPC endpoints are rate-limited testing infrastructure, not a production service-level agreement.
 
 ### Dependency advisories
@@ -135,3 +136,5 @@ Engine initialization signature `44cfsahbGDwyusRJbu1WCx3fUEFBpmRzuka4oUpN2NrmEav
 - Version `1`, unpaused state, and treasury fee share `7000` basis points.
 
 The canonical machine-readable evidence is stored in `deployments/devnet.json`. Market `Gwg5Q44JVakT3JdNtpJQPeSCCDas4VFJpeY2zmzXQ34h` completed create, buy, sell, lock, Pyth resolution, 1.5 USDC position claim, 6.209573 USDC surplus withdrawal, and terminal close on devnet.
+
+TxLINE service level `1` is active for four weeks at zero TxL per week. Authenticated fixture `18222446` returned 1307 historical records, selected final sequence `1306`, and returned validation stats `1 = 3` and `2 = 1`, both bound to period `100`. The access transaction is recorded in `deployments/devnet.json`; credentials remain only in ignored local environment files with mode `600`.

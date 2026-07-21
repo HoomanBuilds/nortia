@@ -16,7 +16,7 @@ All current deployment work is pinned to Solana devnet and Circle devnet USDC. N
 | Next.js landing page and market application | Working |
 | Wallet connection, market creation, trading, portfolio, and claims | Working against the current Nortia IDL |
 | Integer-only binary LMSR program | Built and tested |
-| TxLINE private replay | Live on devnet |
+| TxLINE private replay | Authenticated free tier and validation proof verified |
 | TxLINE stat resolver | Built and tested |
 | Pyth timestamped price resolver | Built and tested |
 | Switchboard canonical quote resolver | Built and tested, curated feed provisioning required |
@@ -187,6 +187,8 @@ Friction encountered:
 
 - Finality still requires application code to select the right observed sequence before requesting a proof.
 - Response casing can vary between `Seq` and `seq`, so the adapter normalizes both.
+- Authenticated historical replays arrive as SSE records even when requested with an application JSON accept header.
+- The final historical record can omit its top-level period while the validation proof correctly binds both goal stats to period `100`.
 - JWT, API token, host, IDL, and program identity require several coordinated network checks.
 
 ## Local setup
@@ -212,6 +214,12 @@ Configure local environments:
 ```bash
 cp web/.env.example web/.env.local
 cp services/.env.example services/.env
+```
+
+Generate and synchronize local Nortia-only secrets without changing existing TxLINE credentials:
+
+```bash
+NORTIA_KEYPAIR_PATH=/absolute/path/to/devnet-keypair.json node scripts/bootstrap-local-env.mjs
 ```
 
 Start the application:
@@ -251,7 +259,7 @@ npm --prefix web run build
 Current verified results:
 
 - 70 Rust tests pass.
-- 42 client assertions pass.
+- 45 client assertions pass.
 - 43 service assertions pass.
 - Clippy passes with warnings denied.
 - Anchor produces a valid SBF artifact.
