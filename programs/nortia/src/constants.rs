@@ -17,6 +17,7 @@ pub const HYBRID_METADATA_SEED: &[u8] = b"hybrid-metadata";
 pub const DAILY_SCORES_ROOT_SEED: &[u8] = b"daily_scores_roots";
 pub const COMMITTEE_SIZE: usize = 3;
 pub const COMMITTEE_THRESHOLD: usize = 2;
+pub const MIN_PRIVATE_BATCH_ORDERS: u32 = 4;
 pub const USDC_DECIMALS: u8 = 6;
 pub const TICKET_AMOUNT: u64 = 1_000_000;
 pub const MAX_PROTOCOL_FEE_BPS: u16 = 300;

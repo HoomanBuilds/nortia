@@ -24,6 +24,10 @@ pub enum NortiaError {
     BatchCountMismatch,
     #[msg("The market has no accepted orders")]
     NoOrders,
+    #[msg("The private batch does not meet the minimum anonymity set")]
+    InsufficientPrivacySet,
+    #[msg("A one-sided private batch must use the refund path")]
+    OneSidedPrivateBatch,
     #[msg("A zero commitment or root is not allowed")]
     ZeroCommitment,
     #[msg("The public witness has an invalid length")]

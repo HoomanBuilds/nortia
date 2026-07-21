@@ -287,29 +287,31 @@ pub mod nortia {
         require!(args.commitment_root != [0; 32], NortiaError::ZeroCommitment);
         require!(market.order_count > 0, NortiaError::NoOrders);
         require!(
+            has_min_private_set(market.order_count),
+            NortiaError::InsufficientPrivacySet
+        );
+        require!(
             args.yes_count.checked_add(args.no_count) == Some(market.order_count),
             NortiaError::BatchCountMismatch
+        );
+        require!(
+            has_two_private_sides(args.yes_count, args.no_count),
+            NortiaError::OneSidedPrivateBatch
         );
         verify_committee_quorum(&market.committee, ctx.remaining_accounts)?;
 
         market.commitment_root = args.commitment_root;
         market.yes_count = args.yes_count;
         market.no_count = args.no_count;
-        market.phase = batch_phase(args.yes_count, args.no_count);
-        let refunding = market.phase == MarketPhase::Refunding;
+        market.phase = MarketPhase::Batched;
 
         emit!(BatchSubmitted {
             market: market.key(),
             commitment_root: market.commitment_root,
             yes_count: market.yes_count,
             no_count: market.no_count,
-            refunding,
+            refunding: false,
         });
-        if refunding {
-            emit!(RefundsOpened {
-                market: market.key(),
-            });
-        }
         Ok(())
     }
 
@@ -3545,12 +3547,12 @@ fn verify_committee_quorum(
     Ok(())
 }
 
-fn batch_phase(yes_count: u32, no_count: u32) -> MarketPhase {
-    if yes_count == 0 || no_count == 0 {
-        MarketPhase::Refunding
-    } else {
-        MarketPhase::Batched
-    }
+fn has_min_private_set(order_count: u32) -> bool {
+    order_count >= MIN_PRIVATE_BATCH_ORDERS
+}
+
+fn has_two_private_sides(yes_count: u32, no_count: u32) -> bool {
+    yes_count > 0 && no_count > 0
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -3972,10 +3974,14 @@ mod tests {
     }
 
     #[test]
-    fn one_sided_batch_refunds_before_resolution() {
-        assert_eq!(batch_phase(3, 0), MarketPhase::Refunding);
-        assert_eq!(batch_phase(0, 3), MarketPhase::Refunding);
-        assert_eq!(batch_phase(2, 1), MarketPhase::Batched);
+    fn private_batch_requires_anonymity_and_two_sides() {
+        assert!(!has_min_private_set(0));
+        assert!(!has_min_private_set(3));
+        assert!(has_min_private_set(4));
+        assert!(has_min_private_set(5));
+        assert!(!has_two_private_sides(0, 4));
+        assert!(!has_two_private_sides(4, 0));
+        assert!(has_two_private_sides(3, 1));
     }
 
     #[test]

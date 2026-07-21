@@ -3,9 +3,11 @@ import test from "node:test";
 
 import {
   CommitteeMember,
+  MIN_PRIVATE_BATCH_ORDERS,
   commitmentRoot,
   createShamirShare,
   finalizeCommitteeBatch,
+  finalizeCommitteeAggregates,
   reconstructIntercept,
 } from "./committee.js";
 import {
@@ -42,7 +44,7 @@ test("a single share changes when the random coefficient changes", () => {
 
 test("committee finalizes ordered commitments and aggregate counts", () => {
   const members = [new CommitteeMember(1), new CommitteeMember(2), new CommitteeMember(3)];
-  const sides = [true, false, true];
+  const sides = [true, false, true, false];
 
   sides.forEach((side, orderIndex) => {
     const coefficient = BigInt(100 + orderIndex);
@@ -66,10 +68,62 @@ test("committee finalizes ordered commitments and aggregate counts", () => {
   });
 
   const batch = finalizeCommitteeBatch("market-1", members[0]!, members[2]!);
-  assert.equal(batch.orderCount, 3);
+  assert.equal(batch.orderCount, 4);
   assert.equal(batch.yesCount, 2);
-  assert.equal(batch.noCount, 1);
+  assert.equal(batch.noCount, 2);
   assert.deepEqual(batch.memberIndices, [1, 3]);
+});
+
+test("aggregate summaries do not expose individual shares", () => {
+  const member = new CommitteeMember(1);
+  for (let orderIndex = 0; orderIndex < MIN_PRIVATE_BATCH_ORDERS; orderIndex += 1) {
+    const share = createShamirShare(orderIndex % 2 === 0, BigInt(50 + orderIndex), 1);
+    member.submit({
+      market: "market-1",
+      orderIndex,
+      orderCommitment: BigInt(100 + orderIndex),
+      memberIndex: 1,
+      share,
+      salt: BigInt(200 + orderIndex),
+      expectedShareCommitment: shareCommitment(share, BigInt(200 + orderIndex)),
+      placementSignature: `signature-${orderIndex}`,
+    });
+  }
+  const aggregate = member.aggregate("market-1");
+  assert.equal(aggregate.orderCount, MIN_PRIVATE_BATCH_ORDERS);
+  assert.equal("shares" in aggregate, false);
+  assert.equal("salts" in aggregate, false);
+  assert.equal(aggregate.orderCommitments.length, MIN_PRIVATE_BATCH_ORDERS);
+  assert.equal(member.clearMarket("market-1"), true);
+  assert.deepEqual(member.snapshot("market-1"), []);
+});
+
+test("small and one-sided batches are refused", () => {
+  const small = new CommitteeMember(1);
+  assert.throws(() => small.aggregate("market-1"), /at least 4/);
+
+  const first = new CommitteeMember(1);
+  const second = new CommitteeMember(2);
+  for (let orderIndex = 0; orderIndex < MIN_PRIVATE_BATCH_ORDERS; orderIndex += 1) {
+    for (const member of [first, second]) {
+      const share = createShamirShare(true, BigInt(60 + orderIndex), member.memberIndex);
+      const salt = BigInt(300 + orderIndex + member.memberIndex);
+      member.submit({
+        market: "market-1",
+        orderIndex,
+        orderCommitment: BigInt(500 + orderIndex),
+        memberIndex: member.memberIndex,
+        share,
+        salt,
+        expectedShareCommitment: shareCommitment(share, salt),
+        placementSignature: `signature-${orderIndex}`,
+      });
+    }
+  }
+  assert.throws(
+    () => finalizeCommitteeAggregates("market-1", first.aggregate("market-1"), second.aggregate("market-1")),
+    /one-sided/,
+  );
 });
 
 test("single-leaf tree matches the redeem circuit path convention", () => {
@@ -142,5 +196,5 @@ test("finalization rejects gaps and mismatched snapshots", () => {
     placementSignature: "signature-1",
   });
 
-  assert.throws(() => finalizeCommitteeBatch("market-1", first, second), /same ordered commitments/);
+  assert.throws(() => finalizeCommitteeBatch("market-1", first, second), /at least 4/);
 });

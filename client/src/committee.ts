@@ -2,6 +2,7 @@ import { poseidonHash, shareCommitment, TREE_DEPTH } from "./commitments.js";
 
 export const BN254_SCALAR_MODULUS =
   21888242871839275222246405745257275088548364400416034343698204186575808495617n;
+export const MIN_PRIVATE_BATCH_ORDERS = 4;
 
 export type CommitteeShare = {
   market: string;
@@ -21,6 +22,14 @@ export type CommitteeBatch = {
   noCount: number;
   commitmentRoot: bigint;
   memberIndices: readonly [number, number];
+};
+
+export type CommitteeAggregate = {
+  market: string;
+  memberIndex: 1 | 2 | 3;
+  orderCount: number;
+  aggregateShare: bigint;
+  orderCommitments: readonly bigint[];
 };
 
 function mod(value: bigint): bigint {
@@ -159,6 +168,86 @@ export class CommitteeMember {
       (left, right) => left.orderIndex - right.orderIndex,
     );
   }
+
+  clearMarket(market: string) {
+    return this.#shares.delete(market);
+  }
+
+  aggregate(market: string): CommitteeAggregate {
+    const shares = this.snapshot(market);
+    if (shares.length < MIN_PRIVATE_BATCH_ORDERS) {
+      throw new Error(`private batches require at least ${MIN_PRIVATE_BATCH_ORDERS} orders`);
+    }
+    let aggregateShare = 0n;
+    const orderCommitments: bigint[] = [];
+    shares.forEach((share, orderIndex) => {
+      if (share.orderIndex !== orderIndex) throw new Error("committee orders must be contiguous from zero");
+      aggregateShare = mod(aggregateShare + share.share);
+      orderCommitments.push(share.orderCommitment);
+    });
+    return {
+      market,
+      memberIndex: this.memberIndex,
+      orderCount: shares.length,
+      aggregateShare,
+      orderCommitments,
+    };
+  }
+}
+
+export function finalizeCommitteeAggregates(
+  market: string,
+  first: CommitteeAggregate,
+  second: CommitteeAggregate,
+): CommitteeBatch {
+  if (first.memberIndex === second.memberIndex) {
+    throw new Error("two distinct committee members are required");
+  }
+  if (first.market !== market || second.market !== market) {
+    throw new Error("committee aggregates belong to a different market");
+  }
+  if (
+    first.orderCount < MIN_PRIVATE_BATCH_ORDERS
+    || first.orderCount !== second.orderCount
+    || first.orderCommitments.length !== first.orderCount
+    || second.orderCommitments.length !== second.orderCount
+  ) {
+    throw new Error("committee aggregates must contain the same eligible order count");
+  }
+
+  const leaves: bigint[] = [];
+  for (let orderIndex = 0; orderIndex < first.orderCount; orderIndex += 1) {
+    const firstCommitment = first.orderCommitments[orderIndex];
+    const secondCommitment = second.orderCommitments[orderIndex];
+    if (firstCommitment === undefined || firstCommitment !== secondCommitment) {
+      throw new Error("committee aggregates do not describe the same ordered commitments");
+    }
+    leaves.push(firstCommitment);
+  }
+
+  const reconstructed = reconstructIntercept(
+    first.memberIndex,
+    first.aggregateShare,
+    second.memberIndex,
+    second.aggregateShare,
+  );
+  if (reconstructed > BigInt(first.orderCount)) {
+    throw new Error("reconstructed YES count is outside the order range");
+  }
+
+  const yesCount = Number(reconstructed);
+  const noCount = first.orderCount - yesCount;
+  if (yesCount === 0 || noCount === 0) {
+    throw new Error("one-sided private batches must wait for permissionless refunds");
+  }
+  return {
+    market,
+    orderCount: first.orderCount,
+    yesCount,
+    noCount,
+    commitmentRoot: commitmentRoot(leaves),
+    memberIndices: [first.memberIndex, second.memberIndex],
+  };
 }
 
 export function finalizeCommitteeBatch(
@@ -166,56 +255,5 @@ export function finalizeCommitteeBatch(
   first: CommitteeMember,
   second: CommitteeMember,
 ): CommitteeBatch {
-  if (first.memberIndex === second.memberIndex) {
-    throw new Error("two distinct committee members are required");
-  }
-
-  const firstShares = first.snapshot(market);
-  const secondShares = second.snapshot(market);
-  if (firstShares.length === 0 || firstShares.length !== secondShares.length) {
-    throw new Error("committee snapshots must contain the same non-zero order count");
-  }
-
-  let firstAggregate = 0n;
-  let secondAggregate = 0n;
-  const leaves: bigint[] = [];
-
-  for (let orderIndex = 0; orderIndex < firstShares.length; orderIndex += 1) {
-    const firstShare = firstShares[orderIndex];
-    const secondShare = secondShares[orderIndex];
-    if (!firstShare || !secondShare) {
-      throw new Error("missing committee share");
-    }
-    if (
-      firstShare.orderIndex !== orderIndex ||
-      secondShare.orderIndex !== orderIndex ||
-      firstShare.orderCommitment !== secondShare.orderCommitment ||
-      firstShare.placementSignature !== secondShare.placementSignature
-    ) {
-      throw new Error("committee snapshots do not describe the same ordered commitments");
-    }
-    firstAggregate = mod(firstAggregate + firstShare.share);
-    secondAggregate = mod(secondAggregate + secondShare.share);
-    leaves.push(firstShare.orderCommitment);
-  }
-
-  const reconstructed = reconstructIntercept(
-    first.memberIndex,
-    firstAggregate,
-    second.memberIndex,
-    secondAggregate,
-  );
-  if (reconstructed > BigInt(firstShares.length)) {
-    throw new Error("reconstructed YES count is outside the order range");
-  }
-
-  const yesCount = Number(reconstructed);
-  return {
-    market,
-    orderCount: firstShares.length,
-    yesCount,
-    noCount: firstShares.length - yesCount,
-    commitmentRoot: commitmentRoot(leaves),
-    memberIndices: [first.memberIndex, second.memberIndex],
-  };
+  return finalizeCommitteeAggregates(market, first.aggregate(market), second.aggregate(market));
 }
