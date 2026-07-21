@@ -4,6 +4,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { PublicKey, SystemProgram } from "@solana/web3.js";
+import { Buffer } from "buffer";
 import { AlertTriangle, Check, EyeOff, Info, LockKeyhole, ShieldCheck, Sparkles, Wallet } from "lucide-react";
 import { useState } from "react";
 import { UsdcTokenIcon } from "@/components/market-icons";
@@ -38,8 +39,7 @@ function fieldBytes(value: string) {
 }
 
 function base64Bytes(value: string) {
-  const decoded = window.atob(value);
-  return Array.from(Uint8Array.from(decoded, (character) => character.charCodeAt(0)));
+  return Buffer.from(value, "base64");
 }
 
 function decimalField(value: string) {

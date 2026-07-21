@@ -10,6 +10,7 @@ import {
   getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
 import { PublicKey, SystemProgram } from "@solana/web3.js";
+import { Buffer } from "buffer";
 import { formatUsdc } from "nortia-client/economics";
 import { AlertTriangle, ArrowUpRight, Clock3, EyeOff, ReceiptText, Wallet } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -29,8 +30,7 @@ function bytes32(value: string) {
 }
 
 function base64Bytes(value: string) {
-  const decoded = window.atob(value);
-  return Array.from(Uint8Array.from(decoded, (character) => character.charCodeAt(0)));
+  return Buffer.from(value, "base64");
 }
 
 export function PortfolioDashboard() {
