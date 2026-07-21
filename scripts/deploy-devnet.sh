@@ -20,7 +20,7 @@ placement_so="$repo_root/circuits/target/place_order.so"
 placement_keypair="$repo_root/circuits/target/place_order-keypair.json"
 redeem_so="$repo_root/circuits/target/redeem.so"
 redeem_keypair="$repo_root/circuits/target/redeem-keypair.json"
-program_so="$repo_root/target/deploy/nortia.so"
+program_so="${NORTIA_PROGRAM_SO_PATH:-$repo_root/target/deploy/nortia.so}"
 program_id="4S2EvdGrbKJ9zazvB4gtR83crTrVJWqqwoVVvEQy8VE9"
 program_keypair="$repo_root/target/deploy/nortia-keypair.json"
 buffer_keypair="${NORTIA_BUFFER_KEYPAIR_PATH:-$repo_root/target/deploy/nortia-buffer-keypair.json}"
@@ -37,8 +37,15 @@ export NORTIA_REDEEM_VERIFIER="$(solana address -k "$redeem_keypair")"
 export NORTIA_KEYPAIR_PATH="$deployer_keypair"
 export SOLANA_RPC_URL="$rpc_url"
 
-anchor build --ignore-keys
-node scripts/sync-idl.mjs
+if [[ "${NORTIA_SKIP_PROGRAM_BUILD:-false}" == true ]]; then
+  if [[ ! -f "$program_so" ]]; then
+    printf 'Missing staged Nortia program artifact: %s\n' "$program_so" >&2
+    exit 1
+  fi
+else
+  anchor build --ignore-keys
+  node scripts/sync-idl.mjs
+fi
 
 if [[ ! -f "$buffer_keypair" ]]; then
   solana-keygen new --no-bip39-passphrase --silent --outfile "$buffer_keypair"
