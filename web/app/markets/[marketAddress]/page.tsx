@@ -9,6 +9,7 @@ import { PrivateOrderPanel } from "@/components/private-order-panel";
 import { ReplayChart } from "@/components/replay-chart";
 import { TeamMark } from "@/components/team-mark";
 import { MarketCategoryIcon, ResolverIcon, UsdcTokenIcon } from "@/components/market-icons";
+import { NortiaMark } from "@/components/nortia-mark";
 import { formatCompactUsd, getMarket, tradingStateLabel } from "@/lib/markets";
 import { getOnchainMarket, getOnchainMarketActivity, withMarketActivity } from "@/lib/solana/server-market";
 
@@ -36,7 +37,7 @@ export default async function MarketPage({ params, searchParams }: { params: Pro
         <section className="market-header">
           <div className="market-header-main">
             {isHybrid ? <div className="market-header-category"><MarketCategoryIcon category={market.category} size={28} /></div> : <div className="market-header-marks"><TeamMark code={market.homeCode} size="lg" /><TeamMark code={market.awayCode} size="lg" /></div>}
-            <div><div className="market-label-row"><span><MarketCategoryIcon category={market.category} size={12} />{market.competition}</span><i />{tradingStateLabel(market)}<b><ResolverIcon resolver={market.resolver} size={12} />{market.resolver} resolver</b></div><h1>{market.question}</h1><p>{isHybrid ? `${market.category} market - ${market.kickoff}` : `${market.home} vs ${market.away} - Fixture ${market.fixtureId} - ${market.kickoff}`}</p></div>
+            <div><div className="market-label-row"><span className="market-brand-label"><NortiaMark size={12} />Nortia</span><span><MarketCategoryIcon category={market.category} size={12} />{market.competition}</span><i />{tradingStateLabel(market)}<b><ResolverIcon resolver={market.resolver} size={12} />{market.resolver} resolver</b></div><h1>{market.question}</h1><p>{isHybrid ? `${market.category} market - ${market.kickoff}` : `${market.home} vs ${market.away} - Fixture ${market.fixtureId} - ${market.kickoff}`}</p></div>
           </div>
           {market.score && <div className="header-score"><span>{market.homeCode}</span><strong>{market.score[0]} <i>:</i> {market.score[1]}</strong><span>{market.awayCode}</span></div>}
           <div className="market-header-stats">

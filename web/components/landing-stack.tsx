@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { BitmapChevron } from "@/components/bitmap-chevron";
+import { NortiaMark } from "@/components/nortia-mark";
 import { ScrambleTextOnHover } from "@/components/scramble-text";
 
 gsap.registerPlugin(ScrollTrigger);
@@ -36,7 +36,7 @@ export function LandingStack() {
       <div ref={gridRef} className="grid grid-cols-2 gap-8 md:grid-cols-3 md:gap-12 lg:grid-cols-6">
         {columns.map((column) => <div key={column.label}><h4 className="mb-4 font-mono text-[9px] uppercase tracking-[0.3em] text-muted-foreground">{column.label}</h4><ul className="space-y-2">{column.values.map((value) => <li key={value} className="font-mono text-xs text-foreground/80">{value}</li>)}</ul></div>)}
       </div>
-      <div className="landing-final-cta mt-24 border-t border-border/20 pt-12"><div><span className="font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground">The market is open</span><h3 className="mt-4 font-[var(--font-bebas)] text-5xl leading-none md:text-8xl">PREDICT. VERIFY. SETTLE.</h3></div><Link href="/markets" className="group inline-flex items-center gap-3 border border-foreground/30 px-6 py-4 font-mono text-xs uppercase tracking-widest transition-colors hover:border-accent hover:text-accent"><ScrambleTextOnHover text="Explore Nortia" as="span" duration={0.55} /><BitmapChevron className="transition-transform duration-[400ms] group-hover:rotate-45" /></Link></div>
+      <div className="landing-final-cta mt-24 border-t border-border/20 pt-12"><div><span className="font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground">The market is open</span><h3 className="mt-4 font-[var(--font-bebas)] text-5xl leading-none md:text-8xl">PREDICT. VERIFY. SETTLE.</h3></div><Link href="/markets" className="group inline-flex items-center gap-3 border border-foreground/30 px-6 py-4 font-mono text-xs uppercase tracking-widest transition-colors hover:border-accent hover:text-accent"><ScrambleTextOnHover text="Explore Nortia" as="span" duration={0.55} /><NortiaMark className="transition-transform duration-[400ms] group-hover:rotate-45" /></Link></div>
       <footer className="mt-24 flex flex-col gap-4 border-t border-border/20 pt-8 font-mono text-[10px] uppercase tracking-widest text-muted-foreground md:flex-row md:items-center md:justify-between"><p>2026 Nortia / general prediction markets</p><p><span className="landing-live-dot" />TxLINE sports / Solana devnet</p></footer>
     </section>
   );

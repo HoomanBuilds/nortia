@@ -1,4 +1,8 @@
-# Nortia
+<p align="center">
+  <img src="web/public/nortia-mark.svg" alt="Nortia mark" width="72" height="72" />
+</p>
+
+<h1 align="center">Nortia</h1>
 
 Nortia is a general prediction market protocol on Solana. It combines continuous, collateralized LMSR pricing with category-specific settlement adapters and immutable public resolution receipts.
 

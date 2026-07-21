@@ -11,8 +11,14 @@ import { SiteHeader } from "@/components/site-header";
 import { SolanaProvider } from "@/components/solana-provider";
 
 export const metadata: Metadata = {
+  applicationName: "Nortia",
   title: "Nortia | Verifiable Prediction Markets",
   description: "USDC prediction markets with LMSR trading, private pools, and verifiable multi-oracle settlement on Solana.",
+  icons: {
+    icon: [{ url: "/nortia-mark.svg", type: "image/svg+xml" }],
+    shortcut: "/nortia-mark.svg",
+  },
+  manifest: "/manifest.webmanifest",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

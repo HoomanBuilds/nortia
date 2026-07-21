@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { useState } from "react";
 import { SolanaNetworkIcon } from "@/components/market-icons";
+import { NortiaMark } from "@/components/nortia-mark";
 import { WalletControl } from "@/components/wallet-control";
 
 const links = [
@@ -24,7 +25,7 @@ export function SiteHeader() {
     <header className="site-header">
       <div className="site-header-inner">
         <Link href="/" className="wordmark" aria-label="Nortia home">
-          <span className="wordmark-glyph">N</span>
+          <span className="wordmark-glyph"><NortiaMark size={27} /></span>
           <span>Nortia</span>
         </Link>
 
