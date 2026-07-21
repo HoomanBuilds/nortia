@@ -6,6 +6,7 @@ target
 node_modules
 .next
 inspiration
+docs/
 services/state
 .env
 .env.local
