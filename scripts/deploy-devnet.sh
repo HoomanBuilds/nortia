@@ -21,6 +21,7 @@ placement_keypair="$repo_root/circuits/target/place_order-keypair.json"
 redeem_so="$repo_root/circuits/target/redeem.so"
 redeem_keypair="$repo_root/circuits/target/redeem-keypair.json"
 program_so="$repo_root/target/deploy/nortia.so"
+program_id="4S2EvdGrbKJ9zazvB4gtR83crTrVJWqqwoVVvEQy8VE9"
 program_keypair="$repo_root/target/deploy/nortia-keypair.json"
 buffer_keypair="${NORTIA_BUFFER_KEYPAIR_PATH:-$repo_root/target/deploy/nortia-buffer-keypair.json}"
 
@@ -36,19 +37,20 @@ export NORTIA_REDEEM_VERIFIER="$(solana address -k "$redeem_keypair")"
 export NORTIA_KEYPAIR_PATH="$deployer_keypair"
 export SOLANA_RPC_URL="$rpc_url"
 
-anchor build
+anchor build --ignore-keys
+node scripts/sync-idl.mjs
 
 if [[ ! -f "$buffer_keypair" ]]; then
   solana-keygen new --no-bip39-passphrase --silent --outfile "$buffer_keypair"
 fi
 
-program_id="$(solana address -k "$program_keypair")"
 deployer_pubkey="$(solana address -k "$deployer_keypair")"
 buffer_pubkey="$(solana address -k "$buffer_keypair")"
 binary_size="$(wc -c < "$program_so")"
 buffer_data_size=$((binary_size + 37))
 buffer_rent="$(solana rent "$buffer_data_size" --lamports --url "$rpc_url" | awk '{ print $3 }')"
 fee_reserve="${NORTIA_DEPLOY_FEE_RESERVE_LAMPORTS:-100000000}"
+verifier_deploy_rent=0
 existing_program_lamports=0
 current_program_capacity=0
 target_program_capacity="$binary_size"
@@ -71,6 +73,17 @@ if program_json="$(solana program show "$program_id" --url "$rpc_url" --output j
   fi
 fi
 
+program_account_rent="$(solana rent 36 --lamports --url "$rpc_url" | awk '{ print $3 }')"
+for verifier_artifact in "$placement_so:$NORTIA_PLACEMENT_VERIFIER" "$redeem_so:$NORTIA_REDEEM_VERIFIER"; do
+  verifier_so="${verifier_artifact%%:*}"
+  verifier_address="${verifier_artifact##*:}"
+  if ! solana program show "$verifier_address" --url "$rpc_url" >/dev/null 2>&1; then
+    verifier_data_size=$(( $(wc -c < "$verifier_so") + 45 ))
+    verifier_data_rent="$(solana rent "$verifier_data_size" --lamports --url "$rpc_url" | awk '{ print $3 }')"
+    verifier_deploy_rent=$((verifier_deploy_rent + program_account_rent + verifier_data_rent))
+  fi
+done
+
 program_data_size=$((target_program_capacity + 45))
 program_rent="$(solana rent "$program_data_size" --lamports --url "$rpc_url" | awk '{ print $3 }')"
 additional_program_rent=$((program_rent - existing_program_lamports))
@@ -83,7 +96,7 @@ additional_buffer_rent=$((buffer_rent - existing_buffer_lamports))
 if (( additional_buffer_rent < 0 )); then
   additional_buffer_rent=0
 fi
-required_lamports=$((additional_program_rent + additional_buffer_rent + fee_reserve))
+required_lamports=$((additional_program_rent + additional_buffer_rent + verifier_deploy_rent + fee_reserve))
 available_lamports="$(solana balance "$deployer_pubkey" --lamports --url "$rpc_url" | awk '{ print $1 }')"
 if (( available_lamports < required_lamports )); then
   shortfall_lamports=$((required_lamports - available_lamports))
@@ -111,7 +124,12 @@ solana program write-buffer "$program_so" --buffer "$buffer_keypair" --buffer-au
 
 activation_program_id="$program_id"
 if [[ "$program_exists" == false ]]; then
+  if [[ ! -f "$program_keypair" || "$(solana address -k "$program_keypair")" != "$program_id" ]]; then
+    printf 'A matching Nortia program keypair is required for first deployment.\n' >&2
+    exit 1
+  fi
   activation_program_id="$program_keypair"
 fi
 solana program deploy --program-id "$activation_program_id" --buffer "$buffer_keypair" --upgrade-authority "$deployer_keypair" --keypair "$deployer_keypair" --url "$rpc_url" --commitment confirmed --use-quic --max-sign-attempts 15
 npm --prefix services run deploy:initialize
+npm --prefix services run deploy:rotate-verifiers

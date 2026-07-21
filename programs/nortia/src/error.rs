@@ -4,6 +4,8 @@ use anchor_lang::prelude::*;
 pub enum NortiaError {
     #[msg("Protocol configuration is invalid")]
     InvalidProtocolConfiguration,
+    #[msg("The signer is not the protocol authority")]
+    UnauthorizedProtocolAuthority,
     #[msg("Market configuration is invalid")]
     InvalidMarketConfiguration,
     #[msg("Market phase does not allow this instruction")]
@@ -32,6 +34,8 @@ pub enum NortiaError {
     InvalidProofLength,
     #[msg("The verifier program is invalid")]
     InvalidVerifierProgram,
+    #[msg("Market verifiers cannot change after funds or commitments exist")]
+    MarketVerifierRotationLocked,
     #[msg("Poseidon hashing failed")]
     PoseidonHashFailed,
     #[msg("Arithmetic overflow")]

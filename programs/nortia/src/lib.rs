@@ -9,6 +9,7 @@ pub mod txline;
 pub mod zk;
 
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::bpf_loader_upgradeable;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, TransferChecked};
 use core::cmp::max;
 use solana_sha256_hasher::hashv;
@@ -35,9 +36,7 @@ pub mod nortia {
                 && args.fee_bps <= MAX_PROTOCOL_FEE_BPS
                 && args.keeper_reward_bps <= MAX_KEEPER_REWARD_BPS
                 && valid_committee(&args.committee)
-                && args.placement_verifier != Pubkey::default()
-                && args.redeem_verifier != Pubkey::default()
-                && args.placement_verifier != args.redeem_verifier
+                && valid_verifier_pair(args.placement_verifier, args.redeem_verifier)
                 && ctx.accounts.collateral_mint.decimals == USDC_DECIMALS,
             NortiaError::InvalidProtocolConfiguration
         );
@@ -65,6 +64,61 @@ pub mod nortia {
             committee: protocol.committee,
             placement_verifier: protocol.placement_verifier,
             redeem_verifier: protocol.redeem_verifier,
+        });
+        Ok(())
+    }
+
+    pub fn rotate_verifiers(ctx: Context<RotateVerifiers>) -> Result<()> {
+        let placement_verifier = ctx.accounts.placement_verifier.key();
+        let redeem_verifier = ctx.accounts.redeem_verifier.key();
+        require!(
+            valid_verifier_pair(placement_verifier, redeem_verifier),
+            NortiaError::InvalidProtocolConfiguration
+        );
+        require!(
+            valid_verifier_program(&ctx.accounts.placement_verifier)
+                && valid_verifier_program(&ctx.accounts.redeem_verifier),
+            NortiaError::InvalidVerifierProgram
+        );
+
+        let protocol = &mut ctx.accounts.protocol;
+        let previous_placement_verifier = protocol.placement_verifier;
+        let previous_redeem_verifier = protocol.redeem_verifier;
+        protocol.placement_verifier = placement_verifier;
+        protocol.redeem_verifier = redeem_verifier;
+
+        emit!(VerifiersRotated {
+            protocol: protocol.key(),
+            authority: ctx.accounts.authority.key(),
+            previous_placement_verifier,
+            previous_redeem_verifier,
+            placement_verifier,
+            redeem_verifier,
+        });
+        Ok(())
+    }
+
+    pub fn sync_market_verifiers(ctx: Context<SyncMarketVerifiers>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        require!(now < ctx.accounts.market.lock_ts, NortiaError::MarketLocked);
+        require!(
+            market_verifiers_can_sync(&ctx.accounts.market, ctx.accounts.vault.amount),
+            NortiaError::MarketVerifierRotationLocked
+        );
+
+        let market = &mut ctx.accounts.market;
+        let previous_placement_verifier = market.placement_verifier;
+        let previous_redeem_verifier = market.redeem_verifier;
+        market.placement_verifier = ctx.accounts.protocol.placement_verifier;
+        market.redeem_verifier = ctx.accounts.protocol.redeem_verifier;
+
+        emit!(MarketVerifiersSynced {
+            market: market.key(),
+            authority: ctx.accounts.authority.key(),
+            previous_placement_verifier,
+            previous_redeem_verifier,
+            placement_verifier: market.placement_verifier,
+            redeem_verifier: market.redeem_verifier,
         });
         Ok(())
     }
@@ -1563,6 +1617,52 @@ pub struct InitializeProtocol<'info> {
     pub collateral_mint: Account<'info, Mint>,
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct RotateVerifiers<'info> {
+    #[account(
+        address = protocol.authority @ NortiaError::UnauthorizedProtocolAuthority
+    )]
+    pub authority: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [PROTOCOL_SEED],
+        bump = protocol.bump
+    )]
+    pub protocol: Account<'info, ProtocolConfig>,
+    /// CHECK: The instruction requires this account to be an upgradeable BPF program.
+    pub placement_verifier: UncheckedAccount<'info>,
+    /// CHECK: The instruction requires this account to be a distinct upgradeable BPF program.
+    pub redeem_verifier: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+pub struct SyncMarketVerifiers<'info> {
+    #[account(
+        address = protocol.authority @ NortiaError::UnauthorizedProtocolAuthority
+    )]
+    pub authority: Signer<'info>,
+    #[account(
+        seeds = [PROTOCOL_SEED],
+        bump = protocol.bump
+    )]
+    pub protocol: Account<'info, ProtocolConfig>,
+    #[account(
+        mut,
+        seeds = [MARKET_SEED, market.authority.as_ref(), &market.market_id.to_le_bytes()],
+        bump = market.bump,
+        constraint = market.collateral_mint == protocol.collateral_mint
+            @ NortiaError::InvalidCollateralMint
+    )]
+    pub market: Box<Account<'info, Market>>,
+    #[account(
+        seeds = [VAULT_SEED, market.key().as_ref()],
+        bump = market.vault_bump,
+        token::mint = protocol.collateral_mint,
+        token::authority = market
+    )]
+    pub vault: Account<'info, TokenAccount>,
 }
 
 #[derive(Accounts)]
@@ -3387,6 +3487,36 @@ fn valid_committee(committee: &[Pubkey; COMMITTEE_SIZE]) -> bool {
         && committee[1] != committee[2]
 }
 
+fn valid_verifier_pair(placement_verifier: Pubkey, redeem_verifier: Pubkey) -> bool {
+    placement_verifier != Pubkey::default()
+        && redeem_verifier != Pubkey::default()
+        && placement_verifier != redeem_verifier
+}
+
+fn valid_verifier_program(verifier: &AccountInfo) -> bool {
+    verifier.executable && *verifier.owner == bpf_loader_upgradeable::ID
+}
+
+fn market_verifiers_can_sync(market: &Market, vault_amount: u64) -> bool {
+    market.phase == MarketPhase::Open
+        && market.order_count == 0
+        && market.yes_count == 0
+        && market.no_count == 0
+        && market.commitment_root == [0; 32]
+        && market.outcome == Market::OUTCOME_UNSET
+        && market.gross_pool == 0
+        && market.protocol_fee == 0
+        && market.keeper_reward == 0
+        && market.treasury_fee == 0
+        && market.net_pool == 0
+        && market.payout_amount == 0
+        && market.payout_remainder == 0
+        && market.claimed_count == 0
+        && market.refunded_count == 0
+        && market.settled_at == 0
+        && vault_amount == 0
+}
+
 fn verify_committee_quorum(
     committee: &[Pubkey; COMMITTEE_SIZE],
     accounts: &[AccountInfo],
@@ -3528,6 +3658,64 @@ fn transfer_from_vault<'info>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn syncable_private_market() -> Market {
+        Market {
+            bump: 1,
+            vault_bump: 2,
+            market_id: 9,
+            authority: Pubkey::new_unique(),
+            category: MarketCategory::Sports,
+            resolver_kind: ResolverKind::TxlineStat,
+            question_hash: [1; 32],
+            rules_hash: [2; 32],
+            fixture_id: 12,
+            market_mode: MarketMode::Replay,
+            fixture_start_ts: 1_000,
+            score_key_a: PARTICIPANT_ONE_GOALS_KEY,
+            score_key_b: PARTICIPANT_TWO_GOALS_KEY,
+            total_goals_threshold: 2,
+            collateral_mint: DEVNET_USDC_MINT,
+            token_program: anchor_spl::token::ID,
+            ticket_amount: TICKET_AMOUNT,
+            fee_bps: 100,
+            keeper_reward_bps: 1_000,
+            treasury_owner: Pubkey::new_unique(),
+            txline_program: TXLINE_PROGRAM_ID,
+            lock_ts: 2_000,
+            batch_deadline_ts: 2_100,
+            resolution_deadline_ts: 2_200,
+            phase: MarketPhase::Open,
+            order_count: 0,
+            yes_count: 0,
+            no_count: 0,
+            commitment_root: [0; 32],
+            outcome: Market::OUTCOME_UNSET,
+            committee: [
+                Pubkey::new_unique(),
+                Pubkey::new_unique(),
+                Pubkey::new_unique(),
+            ],
+            placement_verifier: Pubkey::new_unique(),
+            redeem_verifier: Pubkey::new_unique(),
+            gross_pool: 0,
+            protocol_fee: 0,
+            keeper_reward: 0,
+            treasury_fee: 0,
+            net_pool: 0,
+            payout_amount: 0,
+            payout_remainder: 0,
+            claimed_count: 0,
+            refunded_count: 0,
+            settled_at: 0,
+            txline_proof_ts: 0,
+            final_seq: 0,
+            daily_scores_root: Pubkey::default(),
+            settlement_evidence_hash: [0; 32],
+            score_a: 0,
+            score_b: 0,
+        }
+    }
 
     fn resolution_market() -> HybridMarket {
         HybridMarket {
@@ -3706,6 +3894,39 @@ mod tests {
         assert!(valid_committee(&[one, two, three]));
         assert!(!valid_committee(&[one, one, three]));
         assert!(!valid_committee(&[one, two, Pubkey::default()]));
+    }
+
+    #[test]
+    fn verifier_pair_requires_distinct_nonzero_programs() {
+        let placement = Pubkey::new_unique();
+        let redeem = Pubkey::new_unique();
+        assert!(valid_verifier_pair(placement, redeem));
+        assert!(!valid_verifier_pair(Pubkey::default(), redeem));
+        assert!(!valid_verifier_pair(placement, Pubkey::default()));
+        assert!(!valid_verifier_pair(placement, placement));
+    }
+
+    #[test]
+    fn market_verifier_sync_requires_pristine_open_state() {
+        let market = syncable_private_market();
+        assert!(market_verifiers_can_sync(&market, 0));
+        assert!(!market_verifiers_can_sync(&market, 1));
+
+        let mut ordered = syncable_private_market();
+        ordered.order_count = 1;
+        assert!(!market_verifiers_can_sync(&ordered, 0));
+
+        let mut funded = syncable_private_market();
+        funded.gross_pool = TICKET_AMOUNT;
+        assert!(!market_verifiers_can_sync(&funded, 0));
+
+        let mut locked = syncable_private_market();
+        locked.phase = MarketPhase::Batched;
+        assert!(!market_verifiers_can_sync(&locked, 0));
+
+        let mut committed = syncable_private_market();
+        committed.commitment_root = [1; 32];
+        assert!(!market_verifiers_can_sync(&committed, 0));
     }
 
     #[test]

@@ -546,6 +546,26 @@ pub struct ProtocolInitialized {
 }
 
 #[event]
+pub struct VerifiersRotated {
+    pub protocol: Pubkey,
+    pub authority: Pubkey,
+    pub previous_placement_verifier: Pubkey,
+    pub previous_redeem_verifier: Pubkey,
+    pub placement_verifier: Pubkey,
+    pub redeem_verifier: Pubkey,
+}
+
+#[event]
+pub struct MarketVerifiersSynced {
+    pub market: Pubkey,
+    pub authority: Pubkey,
+    pub previous_placement_verifier: Pubkey,
+    pub previous_redeem_verifier: Pubkey,
+    pub placement_verifier: Pubkey,
+    pub redeem_verifier: Pubkey,
+}
+
+#[event]
 pub struct MarketCreated {
     pub market: Pubkey,
     pub market_id: u64,

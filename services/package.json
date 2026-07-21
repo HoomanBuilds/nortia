@@ -7,6 +7,7 @@
     "committee": "node --env-file-if-exists=.env --import tsx src/committee/server.ts",
     "committee:batch": "node --env-file-if-exists=.env --import tsx src/committee/coordinator.ts",
     "deploy:initialize": "node --env-file-if-exists=.env --import tsx src/deploy/initialize-protocol.ts",
+    "deploy:rotate-verifiers": "node --env-file-if-exists=.env --import tsx src/deploy/rotate-verifiers.ts",
     "deploy:replay-market": "node --env-file-if-exists=.env --import tsx src/deploy/create-replay-market.ts",
     "deploy:pyth-market": "node --env-file-if-exists=.env --import tsx src/deploy/create-pyth-market.ts",
     "market:trade": "node --env-file-if-exists=.env --import tsx src/deploy/trade-hybrid-market.ts",

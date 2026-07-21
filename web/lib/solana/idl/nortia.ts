@@ -3001,6 +3001,53 @@ export type Nortia = {
       ]
     },
     {
+      "name": "rotateVerifiers",
+      "discriminator": [
+        112,
+        242,
+        42,
+        161,
+        160,
+        150,
+        212,
+        146
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "protocol",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "placementVerifier"
+        },
+        {
+          "name": "redeemVerifier"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "sellHybridShares",
       "discriminator": [
         162,
@@ -3322,6 +3369,96 @@ export type Nortia = {
           }
         }
       ]
+    },
+    {
+      "name": "syncMarketVerifiers",
+      "discriminator": [
+        14,
+        190,
+        93,
+        219,
+        178,
+        143,
+        193,
+        44
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "protocol",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  116,
+                  111,
+                  99,
+                  111,
+                  108
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "market",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  109,
+                  97,
+                  114,
+                  107,
+                  101,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market.authority",
+                "account": "market"
+              },
+              {
+                "kind": "account",
+                "path": "market.market_id",
+                "account": "market"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "market"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
     },
     {
       "name": "timeoutOptimisticDispute",
@@ -3940,6 +4077,19 @@ export type Nortia = {
       ]
     },
     {
+      "name": "marketVerifiersSynced",
+      "discriminator": [
+        135,
+        23,
+        83,
+        95,
+        31,
+        224,
+        162,
+        134
+      ]
+    },
+    {
       "name": "optimisticBondClaimed",
       "discriminator": [
         104,
@@ -4057,6 +4207,19 @@ export type Nortia = {
       ]
     },
     {
+      "name": "verifiersRotated",
+      "discriminator": [
+        19,
+        77,
+        203,
+        87,
+        168,
+        50,
+        12,
+        249
+      ]
+    },
+    {
       "name": "winningsRedeemed",
       "discriminator": [
         165,
@@ -4078,251 +4241,261 @@ export type Nortia = {
     },
     {
       "code": 6001,
+      "name": "unauthorizedProtocolAuthority",
+      "msg": "The signer is not the protocol authority"
+    },
+    {
+      "code": 6002,
       "name": "invalidMarketConfiguration",
       "msg": "Market configuration is invalid"
     },
     {
-      "code": 6002,
+      "code": 6003,
       "name": "invalidPhase",
       "msg": "Market phase does not allow this instruction"
     },
     {
-      "code": 6003,
+      "code": 6004,
       "name": "marketLocked",
       "msg": "The market is locked"
     },
     {
-      "code": 6004,
+      "code": 6005,
       "name": "tooEarly",
       "msg": "The requested transition is too early"
     },
     {
-      "code": 6005,
+      "code": 6006,
       "name": "deadlineElapsed",
       "msg": "The deadline has elapsed"
     },
     {
-      "code": 6006,
+      "code": 6007,
       "name": "committeeQuorumNotMet",
       "msg": "Committee quorum was not met"
     },
     {
-      "code": 6007,
+      "code": 6008,
       "name": "duplicateCommitteeSigner",
       "msg": "A duplicate committee signer was supplied"
     },
     {
-      "code": 6008,
+      "code": 6009,
       "name": "batchCountMismatch",
       "msg": "Batch counts do not match accepted orders"
     },
     {
-      "code": 6009,
+      "code": 6010,
       "name": "noOrders",
       "msg": "The market has no accepted orders"
     },
     {
-      "code": 6010,
+      "code": 6011,
       "name": "zeroCommitment",
       "msg": "A zero commitment or root is not allowed"
     },
     {
-      "code": 6011,
+      "code": 6012,
       "name": "invalidWitnessLength",
       "msg": "The public witness has an invalid length"
     },
     {
-      "code": 6012,
+      "code": 6013,
       "name": "publicWitnessMismatch",
       "msg": "The public witness does not match the instruction context"
     },
     {
-      "code": 6013,
+      "code": 6014,
       "name": "invalidProofLength",
       "msg": "The proof payload has an invalid length"
     },
     {
-      "code": 6014,
+      "code": 6015,
       "name": "invalidVerifierProgram",
       "msg": "The verifier program is invalid"
     },
     {
-      "code": 6015,
+      "code": 6016,
+      "name": "marketVerifierRotationLocked",
+      "msg": "Market verifiers cannot change after funds or commitments exist"
+    },
+    {
+      "code": 6017,
       "name": "poseidonHashFailed",
       "msg": "Poseidon hashing failed"
     },
     {
-      "code": 6016,
+      "code": 6018,
       "name": "arithmeticOverflow",
       "msg": "Arithmetic overflow"
     },
     {
-      "code": 6017,
+      "code": 6019,
       "name": "noWinners",
       "msg": "The resolved side has no winning tickets"
     },
     {
-      "code": 6018,
+      "code": 6020,
       "name": "alreadyRefunded",
       "msg": "The order has already been refunded"
     },
     {
-      "code": 6019,
+      "code": 6021,
       "name": "invalidOrder",
       "msg": "The order does not belong to this market or payer"
     },
     {
-      "code": 6020,
+      "code": 6022,
       "name": "invalidCollateralMint",
       "msg": "The collateral mint is invalid"
     },
     {
-      "code": 6021,
+      "code": 6023,
       "name": "invalidTokenAccount",
       "msg": "A token account does not match the required owner or mint"
     },
     {
-      "code": 6022,
+      "code": 6024,
       "name": "invalidProtocolFee",
       "msg": "The protocol fee is invalid"
     },
     {
-      "code": 6023,
+      "code": 6025,
       "name": "invalidTreasury",
       "msg": "The protocol treasury is invalid"
     },
     {
-      "code": 6024,
+      "code": 6026,
       "name": "insufficientVaultBalance",
       "msg": "The vault does not have enough ticket collateral"
     },
     {
-      "code": 6025,
+      "code": 6027,
       "name": "invalidTxlineProgram",
       "msg": "The TxLINE program is invalid"
     },
     {
-      "code": 6026,
+      "code": 6028,
       "name": "invalidTxlineRoot",
       "msg": "The TxLINE daily root account is invalid"
     },
     {
-      "code": 6027,
+      "code": 6029,
       "name": "invalidScorePayload",
       "msg": "The TxLINE score payload is invalid for this market"
     },
     {
-      "code": 6028,
+      "code": 6030,
       "name": "invalidTxlineReturn",
       "msg": "TxLINE did not return a valid boolean"
     },
     {
-      "code": 6029,
+      "code": 6031,
       "name": "invalidEngineConfiguration",
       "msg": "The market engine configuration is invalid"
     },
     {
-      "code": 6030,
+      "code": 6032,
       "name": "invalidLmsrState",
       "msg": "The LMSR quote or market state is outside protocol bounds"
     },
     {
-      "code": 6031,
+      "code": 6033,
       "name": "priceGuardExceeded",
       "msg": "The trade price guard was exceeded"
     },
     {
-      "code": 6032,
+      "code": 6034,
       "name": "tradeDeadlineElapsed",
       "msg": "The trade deadline has elapsed"
     },
     {
-      "code": 6033,
+      "code": 6035,
       "name": "invalidPosition",
       "msg": "The position is invalid for this owner or market"
     },
     {
-      "code": 6034,
+      "code": 6036,
       "name": "insufficientPosition",
       "msg": "The position does not have enough outcome shares"
     },
     {
-      "code": 6035,
+      "code": 6037,
       "name": "insolventMarket",
       "msg": "The market vault would become undercollateralized"
     },
     {
-      "code": 6036,
+      "code": 6038,
       "name": "invalidOracleConfiguration",
       "msg": "The oracle configuration is invalid for this market"
     },
     {
-      "code": 6037,
+      "code": 6039,
       "name": "resolverNotEnabled",
       "msg": "The configured resolver is not enabled"
     },
     {
-      "code": 6038,
+      "code": 6040,
       "name": "invalidObservationTime",
       "msg": "The resolution evidence is stale, early, or outside the observation window"
     },
     {
-      "code": 6039,
+      "code": 6041,
       "name": "resolutionReplay",
       "msg": "The oracle evidence has already been consumed"
     },
     {
-      "code": 6040,
+      "code": 6042,
       "name": "invalidOutcome",
       "msg": "The market outcome is invalid"
     },
     {
-      "code": 6041,
+      "code": 6043,
       "name": "positionAlreadySettled",
       "msg": "The position was already settled"
     },
     {
-      "code": 6042,
+      "code": 6044,
       "name": "marketNotReadyForResolution",
       "msg": "The market is not ready for resolution"
     },
     {
-      "code": 6043,
+      "code": 6045,
       "name": "invalidSwitchboardQuote",
       "msg": "The Switchboard quote account or payload is invalid"
     },
     {
-      "code": 6044,
+      "code": 6046,
       "name": "invalidStorkFeed",
       "msg": "The Stork feed account or payload is invalid"
     },
     {
-      "code": 6045,
+      "code": 6047,
       "name": "invalidAssertion",
       "msg": "The optimistic assertion or challenge is invalid"
     },
     {
-      "code": 6046,
+      "code": 6048,
       "name": "challengeWindowClosed",
       "msg": "The optimistic challenge window is closed"
     },
     {
-      "code": 6047,
+      "code": 6049,
       "name": "invalidDisputeDecision",
       "msg": "The optimistic dispute decision is invalid"
     },
     {
-      "code": 6048,
+      "code": 6050,
       "name": "resolverSecurityCapExceeded",
       "msg": "The trade would exceed the resolver security cap"
     },
     {
-      "code": 6049,
+      "code": 6051,
       "name": "noOptimisticBondPayout",
       "msg": "No optimistic bond payout is available for this claimant"
     },
     {
-      "code": 6050,
+      "code": 6052,
       "name": "invalidMarketMetadata",
       "msg": "The published market metadata does not match its immutable hashes"
     }
@@ -5804,6 +5977,38 @@ export type Nortia = {
       }
     },
     {
+      "name": "marketVerifiersSynced",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "market",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "previousPlacementVerifier",
+            "type": "pubkey"
+          },
+          {
+            "name": "previousRedeemVerifier",
+            "type": "pubkey"
+          },
+          {
+            "name": "placementVerifier",
+            "type": "pubkey"
+          },
+          {
+            "name": "redeemVerifier",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
       "name": "optimisticBondClaimed",
       "type": {
         "kind": "struct",
@@ -7093,6 +7298,38 @@ export type Nortia = {
           },
           {
             "name": "equal"
+          }
+        ]
+      }
+    },
+    {
+      "name": "verifiersRotated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "protocol",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "previousPlacementVerifier",
+            "type": "pubkey"
+          },
+          {
+            "name": "previousRedeemVerifier",
+            "type": "pubkey"
+          },
+          {
+            "name": "placementVerifier",
+            "type": "pubkey"
+          },
+          {
+            "name": "redeemVerifier",
+            "type": "pubkey"
           }
         ]
       }
