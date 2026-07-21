@@ -9,7 +9,7 @@ import {
   createAssociatedTokenAccountIdempotentInstruction,
   getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
-import { PublicKey, SystemProgram } from "@solana/web3.js";
+import { ComputeBudgetProgram, PublicKey, SystemProgram } from "@solana/web3.js";
 import { Buffer } from "buffer";
 import { formatUsdc } from "nortia-client/economics";
 import { AlertTriangle, ArrowUpRight, Clock3, EyeOff, ReceiptText, Wallet } from "lucide-react";
@@ -156,6 +156,7 @@ export function PortfolioDashboard() {
         tokenProgram: TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
       }).preInstructions([
+        ComputeBudgetProgram.setComputeUnitLimit({ units: 300_000 }),
         createAssociatedTokenAccountIdempotentInstruction(
           publicKey,
           recipientToken,

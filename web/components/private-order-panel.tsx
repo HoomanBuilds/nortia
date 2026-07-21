@@ -3,7 +3,7 @@
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { PublicKey, SystemProgram } from "@solana/web3.js";
+import { ComputeBudgetProgram, PublicKey, SystemProgram } from "@solana/web3.js";
 import { Buffer } from "buffer";
 import { AlertTriangle, Check, EyeOff, Info, LockKeyhole, ShieldCheck, Sparkles, Wallet } from "lucide-react";
 import { useState } from "react";
@@ -124,7 +124,9 @@ export function PrivateOrderPanel({ market }: { market: Market }) {
         shareCommitments: proof.shareCommitments.map(fieldBytes) as [number[], number[], number[]],
         proof: base64Bytes(proof.proof),
         publicWitness: base64Bytes(proof.publicWitness),
-      }).accountsPartial({
+      }).preInstructions([
+        ComputeBudgetProgram.setComputeUnitLimit({ units: 300_000 }),
+      ]).accountsPartial({
         payer: publicKey,
         market: marketAddress,
         collateralMint: account.collateralMint,
