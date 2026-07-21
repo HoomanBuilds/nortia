@@ -13,17 +13,25 @@ const WITNESS_LEN: usize = WITNESS_HEADER_LEN + PUBLIC_INPUTS * FIELD_LEN;
 const MAX_PROOF_LEN: usize = 512;
 
 pub fn pubkey_hash(key: &Pubkey) -> Result<[u8; 32]> {
-    let bytes = key.as_ref();
+    let fields = pubkey_fields(key);
     let hash = hashv(
         Parameters::Bn254X5,
         Endianness::LittleEndian,
-        &[&bytes[..16], &bytes[16..]],
+        &[&fields[0], &fields[1]],
     )
     .map_err(|_| error!(NortiaError::PoseidonHashFailed))?;
     let little_endian = hash.to_bytes();
     let mut big_endian = little_endian;
     big_endian.reverse();
     Ok(big_endian)
+}
+
+fn pubkey_fields(key: &Pubkey) -> [[u8; 32]; 2] {
+    let bytes = key.as_ref();
+    let mut fields = [[0u8; 32]; 2];
+    fields[0][..16].copy_from_slice(&bytes[..16]);
+    fields[1][..16].copy_from_slice(&bytes[16..]);
+    fields
 }
 
 pub fn field_from_u64(value: u64) -> [u8; 32] {
@@ -141,5 +149,15 @@ mod tests {
                 48, 194, 152, 111, 56, 35, 168, 165, 174, 116, 28, 33, 218, 80,
             ]
         );
+    }
+
+    #[test]
+    fn pubkey_halves_are_full_width_little_endian_fields() {
+        let key = pubkey!("4S2EvdGrbKJ9zazvB4gtR83crTrVJWqqwoVVvEQy8VE9");
+        let fields = pubkey_fields(&key);
+        assert_eq!(&fields[0][..16], &key.as_ref()[..16]);
+        assert_eq!(&fields[1][..16], &key.as_ref()[16..]);
+        assert_eq!(&fields[0][16..], &[0; 16]);
+        assert_eq!(&fields[1][16..], &[0; 16]);
     }
 }
