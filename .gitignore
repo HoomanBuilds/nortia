@@ -20,3 +20,4 @@ circuits/**/Verifier.toml
 circuits/**/*.proof
 circuits/**/*.pk
 circuits/**/*.vk
+.vercel
