@@ -11,7 +11,8 @@
     "./optimistic": "./src/optimistic.ts",
     "./oracles": "./src/oracles.ts",
     "./portfolio": "./src/portfolio.ts",
-    "./market-engine": "./src/market-engine.ts"
+    "./market-engine": "./src/market-engine.ts",
+    "./txline": "./src/txline.ts"
   },
   "scripts": {
     "proof:fixtures": "node --import tsx scripts/generate-proof-fixtures.ts",

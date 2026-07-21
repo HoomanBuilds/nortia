@@ -3,8 +3,10 @@ import test from "node:test";
 import { isFinalScore, latestFinalScore } from "./client.js";
 import { toBytes32, validationPayload } from "./validation.js";
 
-test("final score selection requires final action, status, period, and positive sequence", () => {
+test("final score selection accepts the authenticated replay shape", () => {
   assert.equal(isFinalScore({ action: "game_finalised", statusId: 100, period: 100, seq: 7 }), true);
+  assert.equal(isFinalScore({ action: "game_finalised", statusId: 100, seq: 7 }), true);
+  assert.equal(isFinalScore({ action: "game_finalised", statusId: 100, period: 2, seq: 7 }), false);
   assert.equal(isFinalScore({ action: "game_finalised", statusId: 100, period: 100, seq: 0 }), false);
   assert.equal(isFinalScore({ action: "score_update", statusId: 100, period: 100, seq: 7 }), false);
   assert.equal(latestFinalScore([

@@ -172,7 +172,7 @@ Endpoints used:
 - `GET /scores/stream` for live SSE ingestion.
 - `GET /scores/stat-validation?fixtureId=...&seq=...&statKeys=1,2` for the Merkle payload used by settlement CPI.
 
-The keeper accepts only `game_finalised`, status `100`, final period `100`, and a positive sequence. The program separately verifies the exact fixture, goal keys, timestamp bounds, daily root PDA, pinned TxLINE program, and CPI return.
+The keeper accepts only `game_finalised`, status `100`, a positive sequence, and period `100` when the historical record includes a period field. The authenticated replay omits that top-level field, so the program separately requires period `100` in the proven score leaves while verifying the exact fixture, goal keys, timestamp bounds, daily root PDA, pinned TxLINE program, and CPI return.
 
 ## TxLINE feedback
 

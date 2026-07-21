@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { parseTxlineResponse } from "nortia-client/txline";
 import { markets, replayEvents, tradingStateLabel } from "@/lib/markets";
 
 const origin = (process.env.TXLINE_API_ORIGIN ?? "https://txline-dev.txodds.com").replace(/\/$/, "");
@@ -20,7 +21,8 @@ export async function GET(request: Request) {
     if (!upstream.ok) {
       return NextResponse.json({ error: "TxLINE request failed", status: upstream.status }, { status: 502 });
     }
-    return NextResponse.json({ mode: "authenticated", source: "TxLINE devnet", fixtureId: fixture.fixtureId, records: await upstream.json() });
+    const records = parseTxlineResponse(await upstream.text());
+    return NextResponse.json({ mode: "authenticated", source: "TxLINE devnet", fixtureId: fixture.fixtureId, records });
   }
 
   return NextResponse.json({

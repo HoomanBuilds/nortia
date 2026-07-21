@@ -1,4 +1,5 @@
 import type { SseMessage, TxlineScoreRecord, TxlineValidationResponse } from "./types.js";
+import { parseTxlineResponse } from "nortia-client/txline";
 
 type Credentials = {
   origin: string;
@@ -21,7 +22,11 @@ export function isFinalScore(record: TxlineScoreRecord) {
   const statusId = record.statusId ?? record.StatusId;
   const period = record.period ?? record.Period;
   const seq = record.seq ?? record.Seq;
-  return action === "game_finalised" && statusId === 100 && period === 100 && Number.isInteger(seq) && Number(seq) >= 1;
+  return action === "game_finalised"
+    && statusId === 100
+    && (period === undefined || period === 100)
+    && Number.isInteger(seq)
+    && Number(seq) >= 1;
 }
 
 export function latestFinalScore(value: unknown) {
@@ -43,7 +48,7 @@ export class TxlineClient {
       signal: AbortSignal.timeout(30_000),
     });
     if (!response.ok) throw new Error(`TxLINE ${path} failed with ${response.status}`);
-    return response.json() as Promise<T>;
+    return parseTxlineResponse(await response.text()) as T;
   }
 
   #headers(accept: string) {
