@@ -1,0 +1,27 @@
+[Unit]
+Description=Nortia private market proof service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/nortia/current/services
+Environment=NODE_ENV=production
+Environment=PATH=/home/ubuntu/nortia/shared/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
+EnvironmentFile=/home/ubuntu/nortia/shared/env/common.env
+EnvironmentFile=/home/ubuntu/nortia/shared/env/prover.env
+ExecStart=/usr/bin/npm run prover
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=60
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+UMask=0077
+MemoryMax=4G
+TasksMax=256
+
+[Install]
+WantedBy=multi-user.target

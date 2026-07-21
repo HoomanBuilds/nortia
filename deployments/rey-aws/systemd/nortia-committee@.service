@@ -1,0 +1,26 @@
+[Unit]
+Description=Nortia devnet committee member %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/nortia/current/services
+Environment=NODE_ENV=production
+EnvironmentFile=/home/ubuntu/nortia/shared/env/common.env
+EnvironmentFile=/home/ubuntu/nortia/shared/env/committee-%i.env
+ExecStart=/usr/bin/npm run committee
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+UMask=0077
+MemoryMax=384M
+TasksMax=96
+
+[Install]
+WantedBy=multi-user.target
