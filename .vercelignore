@@ -1,0 +1,13 @@
+*
+!web/
+!web/**
+!client/
+!client/**
+web/node_modules/
+web/.next/
+web/.env
+web/.env.local
+web/*.tsbuildinfo
+client/node_modules/
+client/coverage/
+client/*.tsbuildinfo
