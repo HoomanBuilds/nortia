@@ -1,28 +1,32 @@
 {
   "network": "solana-devnet",
-  "checkedAt": "2026-07-20T14:25:00Z",
-  "status": "deployed-and-pyth-lifecycle-verified",
+  "checkedAt": "2026-07-21T16:11:45Z",
+  "status": "deployed-with-live-private-prover",
   "programs": {
     "nortia": {
       "programId": "4S2EvdGrbKJ9zazvB4gtR83crTrVJWqqwoVVvEQy8VE9",
       "programData": "38zjkVVYSt6A2ZA5vN4grWH4kwY6GUGM4uzhaugNdZWS",
-      "deploySignature": "fbLhJNSLXgngf3J5n8toXJCYFTaYygNk9UeL7LoLSJXW9fGCrTESthV3ssqnCfVVPVNSeYAuNERHvkinWFDh5TL",
-      "deploySlot": 477612502,
-      "dataLengthBytes": 1087656,
-      "lamports": 7571289840,
+      "deploySignature": "4eaLGCBnJNsmi4JioVLRjv7mzmyGDhAhnkuv73NXVzmqdg4KZv3ma2uz3d6AC9vLLf8wXvZyZJXmQozQQhEtboVK",
+      "deploySlot": 477886458,
+      "dataLengthBytes": 1108136,
+      "lamports": 7713830640,
       "upgradeAuthority": "5yFHYFS1y8hVuVte6F3ae9NMh3i4F1ZGyTynwb8onb5S"
     },
     "placementVerifier": {
-      "programId": "6Hbwzfm315jkt1xFgLMbnKxVG6wXMiJH1zTUh2ujzcAt",
-      "programData": "21HEd9PsBfbDYF6qNbSTCyMabryk5qt6e83G3Hbinz3p",
-      "deploySignature": "37g5ufReAz38NVdy9SWS6vRsQKYHpLVMujXvAyNLkioiqaf7ry6T7PYGEi9mRSZFjQwZ49LGkxdMUi9uuTj7kRXA",
-      "dataLengthBytes": 87568
+      "programId": "DgG5WEALzukX8DWwQNmWMnnpYCWZKFTU3bP8Lmh9UywC",
+      "programData": "AHP6vLAa764ksgeXYtkjaQPBGb3XoTiLJXjN4H2nKHHF",
+      "deploySignature": "7JurzHnLPmwxzj4JsoaZowUkNSPYquC2LaWHW6FMxXSUHHo4UnkNkpRfesX64NQfGWeuXK2uqXV7tkj7dTh8GvC",
+      "deploySlot": 477886349,
+      "dataLengthBytes": 87568,
+      "lamports": 610677360
     },
     "redeemVerifier": {
-      "programId": "7PQFWh8XRoGya1fJSM69Rpjcec8cqKJi3e3gVYwwk3YW",
-      "programData": "57y8SGwcTUGgTLYfqW93WsckDD5xfTkzNpfkc2hq9gJk",
-      "deploySignature": "5dYRFcS9bwzrh1M4bg6HrZGeZbF4sNi51rHbRN35LtDUntnhq5YhReFKTvGQfNKWrTGENeRCLnmU8ww7TzjZhb3A",
-      "dataLengthBytes": 87568
+      "programId": "7LT9qPkWPKaijNjfQxGdCSUtd1xVhVc1tCPyEpQrGpqJ",
+      "programData": "H2WsBbsK5aA71XAK2179SYDxX73iF3z2M3Vd13pDXD81",
+      "deploySignature": "u6UDXqCiQS7orXnFYtXy6V26s2DZ9ZAkSpJ9CV8q93R6PGiz4sLcoYxMt6G7bWowWVimPXkU4b6jF7NJZqVPguT",
+      "deploySlot": 477886368,
+      "dataLengthBytes": 87568,
+      "lamports": 610677360
     },
     "txline": {
       "programId": "6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J"
@@ -50,6 +54,10 @@
     "collateralMint": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
     "feeBps": 100,
     "keeperRewardBps": 1000,
+    "placementVerifier": "DgG5WEALzukX8DWwQNmWMnnpYCWZKFTU3bP8Lmh9UywC",
+    "redeemVerifier": "7LT9qPkWPKaijNjfQxGdCSUtd1xVhVc1tCPyEpQrGpqJ",
+    "verifierRotationSignature": "iCwskA7X3EhvpuhvSHfKwM7Gzwyxk76RPRRtBmiuyzPT6UMCbZvJXVTCNrgnyMNM4JwbpKa1KhfEwFaLNgDwSF1",
+    "verifierRotationSlot": 477886469,
     "committee": [
       "9LxudrHenxBM1xeqB3c1Avqc5qEAWzE9twM6KbNyEAcE",
       "7nenWjHQkdBfuYvpoPBFmgB2Yvkw4Y1a2YdksmeU8Nbv",
@@ -85,13 +93,13 @@
   },
   "programUpgrade": {
     "status": "confirmed",
-    "commit": "91366c0",
-    "artifactSha256": "1987e44288bb40700fd8ebcafb1da1ade821480697075acc354fefce958228b6",
-    "artifactLengthBytes": 1081344,
-    "programDataLengthBytes": 1087656,
-    "upgradeSignature": "2taWSxrXxaCUssn4S9KaouXF5GdVTDoq6d68QrTVhZUGYedLt7oAvBYoSBkh6NM2bLJqcYmzxYxyR58ooNGMVmor",
-    "upgradeSlot": 477624404,
-    "uploadBuffer": "26YYabsWGQb4M6kkzwy9SXEa1knX2cnK1yiAkEgG9EBv",
+    "commit": "11193b3",
+    "artifactSha256": "4a80bed3d8da58c6227ad137a8787849cae61d0c5217d6adf19635c6d15f3b1c",
+    "artifactLengthBytes": 1106168,
+    "programDataLengthBytes": 1108136,
+    "upgradeSignature": "4eaLGCBnJNsmi4JioVLRjv7mzmyGDhAhnkuv73NXVzmqdg4KZv3ma2uz3d6AC9vLLf8wXvZyZJXmQozQQhEtboVK",
+    "upgradeSlot": 477886458,
+    "uploadBuffer": "2UpmDJNsJ2828YooM6kHaYDNB7ujRA81HY9iWdbxN3xp",
     "uploadBufferClosed": true,
     "engineAddress": "EWgvZgWZNc1m2yunKonZwavnPgY6n6T2BbwXFC6kdRpf",
     "engineInitializeSignature": "44cfsahbGDwyusRJbu1WCx3fUEFBpmRzuka4oUpN2NrmEavtiwdB3KZWDrGWgtGwEbyBtUnSFjmsBqcGixsVLZUm",
@@ -100,7 +108,8 @@
     "treasuryFeeShareBps": 7000,
     "paused": false,
     "oracleProviderProfile": "free",
-    "authorityBalanceLamportsAfterInitialization": 16225521462
+    "authorityBalanceLamportsAfterInitialization": 16225521462,
+    "authorityBalanceLamportsAfterUpgrade": 14822910021
   },
   "canonicalPythMarket": {
     "status": "closed",
@@ -149,6 +158,22 @@
     "mode": "replay",
     "phase": "open",
     "lockAt": "2026-07-27T05:15:30Z",
-    "initializeSignature": "DUm3uXtDhfv6DqNfLDQ35cBQGFVxzUU9ajpmuLBDVymdQXoGyvcUFUmyWgfx2H92VpLWZB17zm7YC8xhieZj3Hx"
+    "initializeSignature": "DUm3uXtDhfv6DqNfLDQ35cBQGFVxzUU9ajpmuLBDVymdQXoGyvcUFUmyWgfx2H92VpLWZB17zm7YC8xhieZj3Hx",
+    "placementVerifier": "DgG5WEALzukX8DWwQNmWMnnpYCWZKFTU3bP8Lmh9UywC",
+    "redeemVerifier": "7LT9qPkWPKaijNjfQxGdCSUtd1xVhVc1tCPyEpQrGpqJ",
+    "verifierSyncSignature": "4pnhtjoR9CQUHADXmSYfsH5pbwAbKKYuUy4W37r6odRMvfy2zwyvoL8Lm1LJNG8FXdZGPRdP6dfdPeSQV2W5uW6P",
+    "verifierSyncSlot": 477886471
+  },
+  "privateProver": {
+    "status": "live",
+    "origin": "https://nortia-api.15-135-178-84.sslip.io/prover",
+    "service": "nortia-prover.service",
+    "proofBytes": 324,
+    "publicWitnessBytes": 236,
+    "vercelScopes": [
+      "production",
+      "preview",
+      "development"
+    ]
   }
 }
