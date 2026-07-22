@@ -10,9 +10,12 @@ The stack uses the following isolated units:
 - `nortia-committee@2.service`
 - `nortia-committee@3.service`
 - `nortia-prover.service`
+- `nortia-relayer.service`
 
-The committee and prover listen only on localhost. Caddy publishes narrowly scoped HTTPS paths through `nortia-api.15-135-178-84.sslip.io`.
+The committee, prover, and redemption relay listen only on localhost. Caddy publishes narrowly scoped HTTPS paths through `nortia-api.15-135-178-84.sslip.io` while preserving the VM's unrelated proxy routes.
 
-The keeper must remain in dry-run until a dedicated funded devnet signer is mounted and verified. The prover must remain disabled unless the proving keys match the verifier programs pinned by the deployed Nortia protocol.
+The keeper and relay use separate funded devnet signers. The prover runs only with proving artifacts that match the verifier programs pinned by the deployed Nortia protocol.
 
 Private proof circuit sources and generated proving artifacts live under `/home/ubuntu/nortia/shared/prover`. This persistent path keeps the prover independent from versioned application releases. All proving artifacts and the prover API token must use mode `0600` and remain outside Git.
+
+Each committee member and the relay run under separate system users with group-scoped credentials. Committee state is encrypted at rest and writable only by its owning member. This process isolation reduces accidental cross-service exposure, but the single VM root operator remains able to access all three committee identities and is therefore an explicit privacy trust boundary.

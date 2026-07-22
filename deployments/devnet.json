@@ -1,7 +1,7 @@
 {
   "network": "solana-devnet",
-  "checkedAt": "2026-07-22T07:11:49Z",
-  "status": "deployed-with-live-private-prover",
+  "checkedAt": "2026-07-22T07:19:15Z",
+  "status": "deployed-with-live-private-runtime",
   "programs": {
     "nortia": {
       "programId": "4S2EvdGrbKJ9zazvB4gtR83crTrVJWqqwoVVvEQy8VE9",
@@ -194,5 +194,20 @@
       "preview",
       "development"
     ]
+  },
+  "privateRuntime": {
+    "status": "live",
+    "releaseCommit": "d2a9162",
+    "origin": "https://nortia-api.15-135-178-84.sslip.io",
+    "committeeServices": [
+      "nortia-committee@1.service",
+      "nortia-committee@2.service",
+      "nortia-committee@3.service"
+    ],
+    "relayerService": "nortia-relayer.service",
+    "relayer": "4xSkQfpGxTb2xn8CzotkywWhB5JsEaree3LBSHvhTaSD",
+    "relayerBalanceLamports": 250000000,
+    "credentialIsolation": true,
+    "independentOperators": false
   }
 }
