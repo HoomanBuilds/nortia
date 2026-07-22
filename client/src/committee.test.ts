@@ -2,12 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  BN254_SCALAR_MODULUS,
   CommitteeMember,
   MIN_PRIVATE_BATCH_ORDERS,
   commitmentRoot,
   createShamirShare,
-  finalizeCommitteeBatch,
   finalizeCommitteeAggregates,
+  finalizeCommitteeBatch,
   reconstructIntercept,
 } from "./committee.js";
 import {
@@ -18,77 +19,78 @@ import {
   TREE_DEPTH,
 } from "./commitments.js";
 
-test("every two-member pair reconstructs the hidden side", () => {
-  for (const side of [false, true]) {
-    const coefficient = 987654321n;
-    const shares = [1, 2, 3].map((index) =>
-      createShamirShare(side, coefficient, index as 1 | 2 | 3),
-    );
+type OrderInput = { side: boolean; amount: bigint };
 
-    for (const [left, right] of [
-      [0, 1],
-      [0, 2],
-      [1, 2],
-    ] as const) {
-      assert.equal(
-        reconstructIntercept(left + 1, shares[left]!, right + 1, shares[right]!),
-        side ? 1n : 0n,
-      );
-    }
-  }
-});
-
-test("a single share changes when the random coefficient changes", () => {
-  assert.notEqual(createShamirShare(true, 10n, 1), createShamirShare(true, 11n, 1));
-});
-
-test("committee finalizes ordered commitments and aggregate counts", () => {
-  const members = [new CommitteeMember(1), new CommitteeMember(2), new CommitteeMember(3)];
-  const sides = [true, false, true, false];
-
-  sides.forEach((side, orderIndex) => {
-    const coefficient = BigInt(100 + orderIndex);
-    const order = orderCommitment(42n, 1_000_000n, side, BigInt(orderIndex + 5), BigInt(orderIndex + 9));
-    const signature = `signature-${orderIndex}`;
+function submitOrders(members: CommitteeMember[], orders: OrderInput[]) {
+  orders.forEach(({ side, amount }, orderIndex) => {
+    const sideCoefficient = BigInt(100 + orderIndex);
+    const yesAmountCoefficient = BigInt(200 + orderIndex);
+    const totalAmountCoefficient = BigInt(300 + orderIndex);
+    const order = orderCommitment(42n, 100_000_000n, amount, side, BigInt(orderIndex + 5), BigInt(orderIndex + 9));
 
     members.forEach((member) => {
-      const share = createShamirShare(side, coefficient, member.memberIndex);
-      const salt = BigInt(1000 + member.memberIndex * 10 + orderIndex);
+      const sideShare = createShamirShare(side ? 1n : 0n, sideCoefficient, member.memberIndex);
+      const yesAmountShare = createShamirShare(side ? amount : 0n, yesAmountCoefficient, member.memberIndex);
+      const totalAmountShare = createShamirShare(amount, totalAmountCoefficient, member.memberIndex);
+      const salt = BigInt(1_000 + member.memberIndex * 10 + orderIndex);
       member.submit({
         market: "market-1",
         orderIndex,
         orderCommitment: order,
         memberIndex: member.memberIndex,
-        share,
+        sideShare,
+        yesAmountShare,
+        totalAmountShare,
         salt,
-        expectedShareCommitment: shareCommitment(share, salt),
-        placementSignature: signature,
+        expectedShareCommitment: shareCommitment(sideShare, yesAmountShare, totalAmountShare, salt),
+        placementSignature: `signature-${orderIndex}`,
       });
     });
   });
+}
+
+test("every two-member pair reconstructs hidden values", () => {
+  for (const value of [0n, 1n, 37_000_000n]) {
+    const coefficient = 987_654_321n;
+    const shares = [1, 2, 3].map((index) =>
+      createShamirShare(value, coefficient, index as 1 | 2 | 3),
+    );
+    for (const [left, right] of [[0, 1], [0, 2], [1, 2]] as const) {
+      assert.equal(reconstructIntercept(left + 1, shares[left]!, right + 1, shares[right]!), value);
+    }
+  }
+});
+
+test("a single share changes when its random coefficient changes", () => {
+  assert.notEqual(createShamirShare(1n, 10n, 1), createShamirShare(1n, 11n, 1));
+});
+
+test("committee finalizes unequal private amounts", () => {
+  const members = [new CommitteeMember(1), new CommitteeMember(2), new CommitteeMember(3)];
+  submitOrders(members, [
+    { side: true, amount: 37_000_000n },
+    { side: false, amount: 12_000_000n },
+    { side: true, amount: 5_000_000n },
+    { side: false, amount: 9_000_000n },
+  ]);
 
   const batch = finalizeCommitteeBatch("market-1", members[0]!, members[2]!);
   assert.equal(batch.orderCount, 4);
   assert.equal(batch.yesCount, 2);
   assert.equal(batch.noCount, 2);
+  assert.equal(batch.yesAmount, 42_000_000n);
+  assert.equal(batch.noAmount, 21_000_000n);
   assert.deepEqual(batch.memberIndices, [1, 3]);
 });
 
-test("aggregate summaries do not expose individual shares", () => {
+test("aggregate summaries expose no individual private values", () => {
   const member = new CommitteeMember(1);
-  for (let orderIndex = 0; orderIndex < MIN_PRIVATE_BATCH_ORDERS; orderIndex += 1) {
-    const share = createShamirShare(orderIndex % 2 === 0, BigInt(50 + orderIndex), 1);
-    member.submit({
-      market: "market-1",
-      orderIndex,
-      orderCommitment: BigInt(100 + orderIndex),
-      memberIndex: 1,
-      share,
-      salt: BigInt(200 + orderIndex),
-      expectedShareCommitment: shareCommitment(share, BigInt(200 + orderIndex)),
-      placementSignature: `signature-${orderIndex}`,
-    });
-  }
+  submitOrders([member], [
+    { side: true, amount: 7_000_000n },
+    { side: false, amount: 8_000_000n },
+    { side: true, amount: 9_000_000n },
+    { side: false, amount: 10_000_000n },
+  ]);
   const aggregate = member.aggregate("market-1");
   assert.equal(aggregate.orderCount, MIN_PRIVATE_BATCH_ORDERS);
   assert.equal("shares" in aggregate, false);
@@ -104,22 +106,10 @@ test("small and one-sided batches are refused", () => {
 
   const first = new CommitteeMember(1);
   const second = new CommitteeMember(2);
-  for (let orderIndex = 0; orderIndex < MIN_PRIVATE_BATCH_ORDERS; orderIndex += 1) {
-    for (const member of [first, second]) {
-      const share = createShamirShare(true, BigInt(60 + orderIndex), member.memberIndex);
-      const salt = BigInt(300 + orderIndex + member.memberIndex);
-      member.submit({
-        market: "market-1",
-        orderIndex,
-        orderCommitment: BigInt(500 + orderIndex),
-        memberIndex: member.memberIndex,
-        share,
-        salt,
-        expectedShareCommitment: shareCommitment(share, salt),
-        placementSignature: `signature-${orderIndex}`,
-      });
-    }
-  }
+  submitOrders([first, second], Array.from({ length: MIN_PRIVATE_BATCH_ORDERS }, (_, index) => ({
+    side: true,
+    amount: BigInt(index + 1) * 1_000_000n,
+  })));
   assert.throws(
     () => finalizeCommitteeAggregates("market-1", first.aggregate("market-1"), second.aggregate("market-1")),
     /one-sided/,
@@ -134,67 +124,51 @@ test("single-leaf tree matches the redeem circuit path convention", () => {
     zeros[level] = empty;
     empty = poseidonHash(empty, empty);
   }
-  assert.equal(
-    commitmentRoot([leaf]),
-    merkleRoot(leaf, Array<boolean>(TREE_DEPTH).fill(false), zeros),
-  );
+  assert.equal(commitmentRoot([leaf]), merkleRoot(leaf, Array<boolean>(TREE_DEPTH).fill(false), zeros));
 });
 
-test("member rejects wrong, conflicting, and invalid shares", () => {
+test("member rejects conflicting and invalid share bundles", () => {
   const member = new CommitteeMember(1);
   const valid = {
     market: "market-1",
     orderIndex: 0,
     orderCommitment: 100n,
     memberIndex: 1 as const,
-    share: 9n,
-    salt: 10n,
-    expectedShareCommitment: shareCommitment(9n, 10n),
+    sideShare: 9n,
+    yesAmountShare: 10n,
+    totalAmountShare: 11n,
+    salt: 12n,
+    expectedShareCommitment: shareCommitment(9n, 10n, 11n, 12n),
     placementSignature: "signature-0",
   };
   member.submit(valid);
   member.submit(valid);
 
   assert.throws(
-    () => member.submit({ ...valid, share: 10n, expectedShareCommitment: shareCommitment(10n, 10n) }),
+    () => member.submit({ ...valid, sideShare: 10n, expectedShareCommitment: shareCommitment(10n, 10n, 11n, 12n) }),
     /conflicting/,
   );
-  assert.throws(
-    () => member.submit({ ...valid, orderIndex: 1, expectedShareCommitment: 1n }),
-    /mismatch/,
-  );
-  assert.throws(
-    () => member.submit({ ...valid, orderIndex: 1, memberIndex: 2 as const }),
-    /wrong committee member/,
-  );
+  assert.throws(() => member.submit({ ...valid, orderIndex: 1, expectedShareCommitment: 1n }), /mismatch/);
+  assert.throws(() => member.submit({ ...valid, orderIndex: 1, memberIndex: 2 as const }), /wrong committee member/);
+  assert.throws(() => member.submit({ ...valid, orderIndex: 1, totalAmountShare: BN254_SCALAR_MODULUS }), /scalar field/);
 });
 
-test("finalization rejects gaps and mismatched snapshots", () => {
-  const first = new CommitteeMember(1);
-  const second = new CommitteeMember(2);
-  const firstShare = createShamirShare(true, 4n, 1);
-  const secondShare = createShamirShare(true, 4n, 2);
-
-  first.submit({
+test("finalization rejects non-contiguous snapshots", () => {
+  const member = new CommitteeMember(1);
+  const sideShare = createShamirShare(1n, 4n, 1);
+  const yesAmountShare = createShamirShare(1_000_000n, 5n, 1);
+  const totalAmountShare = createShamirShare(1_000_000n, 6n, 1);
+  member.submit({
     market: "market-1",
     orderIndex: 1,
     orderCommitment: 20n,
     memberIndex: 1,
-    share: firstShare,
+    sideShare,
+    yesAmountShare,
+    totalAmountShare,
     salt: 7n,
-    expectedShareCommitment: shareCommitment(firstShare, 7n),
+    expectedShareCommitment: shareCommitment(sideShare, yesAmountShare, totalAmountShare, 7n),
     placementSignature: "signature-1",
   });
-  second.submit({
-    market: "market-1",
-    orderIndex: 1,
-    orderCommitment: 20n,
-    memberIndex: 2,
-    share: secondShare,
-    salt: 8n,
-    expectedShareCommitment: shareCommitment(secondShare, 8n),
-    placementSignature: "signature-1",
-  });
-
-  assert.throws(() => finalizeCommitteeBatch("market-1", first, second), /at least 4/);
+  assert.throws(() => member.aggregate("market-1"), /at least 4/);
 });

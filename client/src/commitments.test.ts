@@ -16,10 +16,12 @@ test("matches Solana's BN254 Poseidon parameters", () => {
   );
 });
 
-test("order commitments bind the side", () => {
-  const yes = orderCommitment(42n, 1_000_000n, true, 11n, 12n);
-  const no = orderCommitment(42n, 1_000_000n, false, 11n, 12n);
+test("order commitments bind the private side and amount", () => {
+  const yes = orderCommitment(42n, 100_000_000n, 37_000_000n, true, 11n, 12n);
+  const no = orderCommitment(42n, 100_000_000n, 37_000_000n, false, 11n, 12n);
+  const otherAmount = orderCommitment(42n, 100_000_000n, 38_000_000n, true, 11n, 12n);
   assert.notEqual(yes, no);
+  assert.notEqual(yes, otherAmount);
 });
 
 test("Merkle path direction changes the root", () => {

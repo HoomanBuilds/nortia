@@ -9,26 +9,16 @@ export type SettlementAmounts = {
   keeperReward: bigint;
   treasuryFee: bigint;
   netPool: bigint;
-  payoutPerWinner: bigint;
-  payoutRemainder: bigint;
 };
 
 export function calculateSettlement(
-  ticketAmount: bigint,
-  orderCount: number,
-  winnerCount: number,
+  grossPool: bigint,
+  winningAmount: bigint,
   feeBps: number,
   keeperRewardBps = 1_000,
 ): SettlementAmounts {
-  if (ticketAmount <= 0n) {
-    throw new Error("ticket amount must be positive");
-  }
-  if (!Number.isSafeInteger(orderCount) || orderCount <= 0) {
-    throw new Error("order count must be a positive safe integer");
-  }
-  if (!Number.isSafeInteger(winnerCount) || winnerCount <= 0 || winnerCount > orderCount) {
-    throw new Error("winner count must be within the order count");
-  }
+  if (grossPool <= 0n) throw new Error("gross pool must be positive");
+  if (winningAmount <= 0n || winningAmount > grossPool) throw new Error("winning amount must be within the gross pool");
   if (!Number.isSafeInteger(feeBps) || feeBps < 0 || feeBps > MAX_FEE_BPS) {
     throw new Error(`fee must be between 0 and ${MAX_FEE_BPS} basis points`);
   }
@@ -36,7 +26,6 @@ export function calculateSettlement(
     throw new Error(`keeper reward must be between 0 and ${MAX_KEEPER_REWARD_BPS} basis points`);
   }
 
-  const grossPool = ticketAmount * BigInt(orderCount);
   const protocolFee = (grossPool * BigInt(feeBps)) / 10_000n;
   const keeperReward = (protocolFee * BigInt(keeperRewardBps)) / 10_000n;
   const treasuryFee = protocolFee - keeperReward;
@@ -47,9 +36,23 @@ export function calculateSettlement(
     keeperReward,
     treasuryFee,
     netPool,
-    payoutPerWinner: netPool / BigInt(winnerCount),
-    payoutRemainder: netPool % BigInt(winnerCount),
   };
+}
+
+export function calculatePrivatePayout(
+  stakeAmount: bigint,
+  wagerAmount: bigint,
+  winner: boolean,
+  netPool: bigint,
+  winningAmount: bigint,
+) {
+  if (stakeAmount <= 0n || wagerAmount <= 0n || wagerAmount > stakeAmount) {
+    throw new Error("wager amount must be within the public stake amount");
+  }
+  if (netPool < 0n || winningAmount <= 0n) throw new Error("settlement liquidity is invalid");
+  const unusedCollateral = stakeAmount - wagerAmount;
+  const marketPayout = winner ? (wagerAmount * netPool) / winningAmount : 0n;
+  return { unusedCollateral, marketPayout, payoutAmount: unusedCollateral + marketPayout };
 }
 
 export function formatUsdc(amount: bigint, maximumFractionDigits = USDC_DECIMALS): string {

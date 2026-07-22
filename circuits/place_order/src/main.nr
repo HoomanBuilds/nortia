@@ -1,110 +1,143 @@
 use poseidon::poseidon::bn254::hash_2 as poseidon_hash;
 
+global MIN_WAGER_AMOUNT: u64 = 1000000;
+
 fn hash(left: Field, right: Field) -> Field {
     poseidon_hash([left, right])
 }
 
 fn order_commitment(
     market_id: Field,
-    ticket_amount: Field,
+    stake_amount: Field,
+    amount: Field,
     side: bool,
     secret: Field,
     nullifier: Field,
 ) -> Field {
-    let context = hash(market_id, ticket_amount);
-    let position = hash(side as Field, secret);
-    hash(context, hash(position, nullifier))
+    let context = hash(market_id, stake_amount);
+    let position = hash(amount, side as Field);
+    hash(context, hash(position, hash(secret, nullifier)))
+}
+
+fn committed_share_bundle(
+    side_share: Field,
+    yes_amount_share: Field,
+    total_amount_share: Field,
+    salt: Field,
+) -> Field {
+    hash(hash(side_share, yes_amount_share), hash(total_amount_share, salt))
 }
 
 fn main(
     market_id: pub Field,
-    ticket_amount: pub Field,
+    stake_amount: pub Field,
     payer_hash: pub Field,
     commitment: pub Field,
     share_commitment_1: pub Field,
     share_commitment_2: pub Field,
     share_commitment_3: pub Field,
+    amount: u64,
     side: bool,
     secret: Field,
     nullifier: Field,
-    coefficient: Field,
+    side_coefficient: Field,
+    yes_amount_coefficient: Field,
+    total_amount_coefficient: Field,
     salt_1: Field,
     salt_2: Field,
     salt_3: Field,
 ) {
-    let share_1 = side as Field + coefficient;
-    let share_2 = side as Field + coefficient * 2;
-    let share_3 = side as Field + coefficient * 3;
+    let stake_u64 = stake_amount as u64;
+    assert(stake_u64 as Field == stake_amount);
+    assert(amount >= MIN_WAGER_AMOUNT);
+    assert(amount <= stake_u64);
 
-    assert(commitment == order_commitment(market_id, ticket_amount, side, secret, nullifier));
-    assert(share_commitment_1 == hash(share_1, salt_1));
-    assert(share_commitment_2 == hash(share_2, salt_2));
-    assert(share_commitment_3 == hash(share_3, salt_3));
+    let amount_field = amount as Field;
+    let side_field = side as Field;
+    let yes_amount = amount_field * side_field;
+
+    let side_share_1 = side_field + side_coefficient;
+    let side_share_2 = side_field + side_coefficient * 2;
+    let side_share_3 = side_field + side_coefficient * 3;
+    let yes_amount_share_1 = yes_amount + yes_amount_coefficient;
+    let yes_amount_share_2 = yes_amount + yes_amount_coefficient * 2;
+    let yes_amount_share_3 = yes_amount + yes_amount_coefficient * 3;
+    let total_amount_share_1 = amount_field + total_amount_coefficient;
+    let total_amount_share_2 = amount_field + total_amount_coefficient * 2;
+    let total_amount_share_3 = amount_field + total_amount_coefficient * 3;
+
+    assert(commitment == order_commitment(market_id, stake_amount, amount_field, side, secret, nullifier));
+    assert(share_commitment_1 == committed_share_bundle(side_share_1, yes_amount_share_1, total_amount_share_1, salt_1));
+    assert(share_commitment_2 == committed_share_bundle(side_share_2, yes_amount_share_2, total_amount_share_2, salt_2));
+    assert(share_commitment_3 == committed_share_bundle(side_share_3, yes_amount_share_3, total_amount_share_3, salt_3));
     assert(payer_hash != 0);
     assert(secret != 0);
     assert(nullifier != 0);
-    assert(coefficient != 0);
+    assert(side_coefficient != 0);
+    assert(yes_amount_coefficient != 0);
+    assert(total_amount_coefficient != 0);
     assert(salt_1 != 0);
     assert(salt_2 != 0);
     assert(salt_3 != 0);
 }
 
 #[test]
-fn accepts_valid_yes_order() {
+fn accepts_confidential_yes_amount() {
     let market_id: Field = 42;
-    let ticket_amount: Field = 1000000;
-    let payer_hash: Field = 91;
+    let stake_amount: Field = 100000000;
+    let amount: u64 = 37000000;
     let side: bool = true;
     let secret: Field = 11;
     let nullifier: Field = 12;
-    let coefficient: Field = 13;
-    let salt_1: Field = 21;
-    let salt_2: Field = 22;
-    let salt_3: Field = 23;
-    let commitment = order_commitment(market_id, ticket_amount, side, secret, nullifier);
+    let side_coefficient: Field = 13;
+    let yes_amount_coefficient: Field = 14;
+    let total_amount_coefficient: Field = 15;
+    let amount_field = amount as Field;
+    let yes_amount = amount_field;
 
     main(
         market_id,
-        ticket_amount,
-        payer_hash,
-        commitment,
-        hash(side as Field + coefficient, salt_1),
-        hash(side as Field + coefficient * 2, salt_2),
-        hash(side as Field + coefficient * 3, salt_3),
+        stake_amount,
+        91,
+        order_commitment(market_id, stake_amount, amount_field, side, secret, nullifier),
+        committed_share_bundle(side as Field + side_coefficient, yes_amount + yes_amount_coefficient, amount_field + total_amount_coefficient, 21),
+        committed_share_bundle(side as Field + side_coefficient * 2, yes_amount + yes_amount_coefficient * 2, amount_field + total_amount_coefficient * 2, 22),
+        committed_share_bundle(side as Field + side_coefficient * 3, yes_amount + yes_amount_coefficient * 3, amount_field + total_amount_coefficient * 3, 23),
+        amount,
         side,
         secret,
         nullifier,
-        coefficient,
-        salt_1,
-        salt_2,
-        salt_3,
+        side_coefficient,
+        yes_amount_coefficient,
+        total_amount_coefficient,
+        21,
+        22,
+        23,
     );
 }
 
-#[test(should_fail)]
-fn rejects_mutated_commitment() {
-    main(42, 1000000, 91, 99, 1, 2, 3, true, 11, 12, 13, 21, 22, 23);
-}
-
-#[test(should_fail)]
-fn rejects_zero_payer_hash() {
+#[test]
+fn accepts_minimum_no_amount() {
+    let amount: u64 = MIN_WAGER_AMOUNT;
     let side: bool = false;
-    let secret: Field = 11;
-    let nullifier: Field = 12;
-    let coefficient: Field = 13;
-    let commitment = order_commitment(42, 1000000, side, secret, nullifier);
+    let side_coefficient: Field = 13;
+    let yes_amount_coefficient: Field = 14;
+    let total_amount_coefficient: Field = 15;
     main(
         42,
-        1000000,
-        0,
-        commitment,
-        hash(side as Field + coefficient, 21),
-        hash(side as Field + coefficient * 2, 22),
-        hash(side as Field + coefficient * 3, 23),
+        5000000,
+        91,
+        order_commitment(42, 5000000, amount as Field, side, 11, 12),
+        committed_share_bundle(side_coefficient, yes_amount_coefficient, amount as Field + total_amount_coefficient, 21),
+        committed_share_bundle(side_coefficient * 2, yes_amount_coefficient * 2, amount as Field + total_amount_coefficient * 2, 22),
+        committed_share_bundle(side_coefficient * 3, yes_amount_coefficient * 3, amount as Field + total_amount_coefficient * 3, 23),
+        amount,
         side,
-        secret,
-        nullifier,
-        coefficient,
+        11,
+        12,
+        side_coefficient,
+        yes_amount_coefficient,
+        total_amount_coefficient,
         21,
         22,
         23,
@@ -112,24 +145,37 @@ fn rejects_zero_payer_hash() {
 }
 
 #[test(should_fail)]
-fn rejects_zero_shamir_coefficient() {
+fn rejects_amount_below_minimum() {
+    main(42, 100000000, 91, 99, 1, 2, 3, 999999, true, 11, 12, 13, 14, 15, 21, 22, 23);
+}
+
+#[test(should_fail)]
+fn rejects_amount_above_stake() {
+    main(42, 100000000, 91, 99, 1, 2, 3, 100000001, true, 11, 12, 13, 14, 15, 21, 22, 23);
+}
+
+#[test(should_fail)]
+fn rejects_mutated_share_bundle() {
+    let amount: u64 = 37000000;
     let side: bool = true;
-    let secret: Field = 11;
-    let nullifier: Field = 12;
-    let coefficient: Field = 0;
-    let commitment = order_commitment(42, 1000000, side, secret, nullifier);
+    let side_coefficient: Field = 13;
+    let yes_amount_coefficient: Field = 14;
+    let total_amount_coefficient: Field = 15;
     main(
         42,
-        1000000,
+        100000000,
         91,
-        commitment,
-        hash(side as Field + coefficient, 21),
-        hash(side as Field + coefficient * 2, 22),
-        hash(side as Field + coefficient * 3, 23),
+        order_commitment(42, 100000000, amount as Field, side, 11, 12),
+        1,
+        committed_share_bundle(1 + side_coefficient * 2, amount as Field + yes_amount_coefficient * 2, amount as Field + total_amount_coefficient * 2, 22),
+        committed_share_bundle(1 + side_coefficient * 3, amount as Field + yes_amount_coefficient * 3, amount as Field + total_amount_coefficient * 3, 23),
+        amount,
         side,
-        secret,
-        nullifier,
-        coefficient,
+        11,
+        12,
+        side_coefficient,
+        yes_amount_coefficient,
+        total_amount_coefficient,
         21,
         22,
         23,

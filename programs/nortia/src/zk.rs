@@ -6,10 +6,10 @@ use solana_poseidon::{hashv, Endianness, Parameters};
 
 use crate::{error::NortiaError, state::Market};
 
-const PUBLIC_INPUTS: usize = 7;
+const PLACEMENT_PUBLIC_INPUTS: usize = 7;
+const REDEEM_PUBLIC_INPUTS: usize = 9;
 const WITNESS_HEADER_LEN: usize = 12;
 const FIELD_LEN: usize = 32;
-const WITNESS_LEN: usize = WITNESS_HEADER_LEN + PUBLIC_INPUTS * FIELD_LEN;
 const MAX_PROOF_LEN: usize = 512;
 
 pub fn pubkey_hash(key: &Pubkey) -> Result<[u8; 32]> {
@@ -51,14 +51,14 @@ pub fn verify_place(
 ) -> Result<()> {
     let expected = [
         field_from_u64(market.market_id),
-        field_from_u64(market.ticket_amount),
+        field_from_u64(market.stake_amount),
         pubkey_hash(payer)?,
         *commitment,
         share_commitments[0],
         share_commitments[1],
         share_commitments[2],
     ];
-    verify(
+    verify::<PLACEMENT_PUBLIC_INPUTS>(
         expected,
         proof,
         witness,
@@ -71,24 +71,27 @@ pub fn verify_redeem(
     market: &Market,
     recipient: &Pubkey,
     nullifier_hash: &[u8; 32],
+    payout_amount: u64,
     proof: &[u8],
     witness: &[u8],
     verifier: &AccountInfo,
 ) -> Result<()> {
     let expected = [
         field_from_u64(market.market_id),
-        field_from_u64(market.ticket_amount),
+        field_from_u64(market.stake_amount),
         market.commitment_root,
         field_from_u64(market.outcome as u64),
         *nullifier_hash,
         pubkey_hash(recipient)?,
-        field_from_u64(market.payout_amount),
+        field_from_u64(market.net_pool),
+        field_from_u64(market.winning_amount()),
+        field_from_u64(payout_amount),
     ];
-    verify(expected, proof, witness, verifier, &market.redeem_verifier)
+    verify::<REDEEM_PUBLIC_INPUTS>(expected, proof, witness, verifier, &market.redeem_verifier)
 }
 
-fn verify(
-    expected_fields: [[u8; 32]; PUBLIC_INPUTS],
+fn verify<const N: usize>(
+    expected_fields: [[u8; 32]; N],
     proof: &[u8],
     witness: &[u8],
     verifier: &AccountInfo,
@@ -99,7 +102,7 @@ fn verify(
         NortiaError::InvalidProofLength
     );
     require!(
-        witness.len() == WITNESS_LEN,
+        witness.len() == WITNESS_HEADER_LEN + N * FIELD_LEN,
         NortiaError::InvalidWitnessLength
     );
     require_keys_eq!(

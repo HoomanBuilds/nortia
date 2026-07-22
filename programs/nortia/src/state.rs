@@ -71,7 +71,7 @@ pub struct Market {
     pub total_goals_threshold: i32,
     pub collateral_mint: Pubkey,
     pub token_program: Pubkey,
-    pub ticket_amount: u64,
+    pub stake_amount: u64,
     pub fee_bps: u16,
     pub keeper_reward_bps: u16,
     pub treasury_owner: Pubkey,
@@ -104,13 +104,23 @@ pub struct Market {
     pub settlement_evidence_hash: [u8; 32],
     pub score_a: i32,
     pub score_b: i32,
+    pub yes_amount: u64,
+    pub no_amount: u64,
 }
 
 impl Market {
     pub const SPACE: usize = 8 + 1024;
     pub const OUTCOME_UNSET: u8 = 2;
 
-    pub fn winner_count(&self) -> u32 {
+    pub fn winning_amount(&self) -> u64 {
+        if self.outcome == 1 {
+            self.yes_amount
+        } else {
+            self.no_amount
+        }
+    }
+
+    pub fn winning_count(&self) -> u32 {
         if self.outcome == 1 {
             self.yes_count
         } else {
@@ -428,6 +438,7 @@ pub struct InitializeMarketArgs {
     pub lock_ts: i64,
     pub batch_deadline_ts: i64,
     pub resolution_deadline_ts: i64,
+    pub stake_amount: u64,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
@@ -443,11 +454,14 @@ pub struct SubmitBatchArgs {
     pub commitment_root: [u8; 32],
     pub yes_count: u32,
     pub no_count: u32,
+    pub yes_amount: u64,
+    pub no_amount: u64,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct RedeemArgs {
     pub nullifier_hash: [u8; 32],
+    pub payout_amount: u64,
     pub proof: Vec<u8>,
     pub public_witness: Vec<u8>,
 }
@@ -578,7 +592,7 @@ pub struct MarketCreated {
     pub total_goals_threshold: i32,
     pub market_mode: MarketMode,
     pub collateral_mint: Pubkey,
-    pub ticket_amount: u64,
+    pub stake_amount: u64,
     pub fee_bps: u16,
     pub lock_ts: i64,
 }
@@ -598,6 +612,8 @@ pub struct BatchSubmitted {
     pub commitment_root: [u8; 32],
     pub yes_count: u32,
     pub no_count: u32,
+    pub yes_amount: u64,
+    pub no_amount: u64,
     pub refunding: bool,
 }
 
@@ -612,8 +628,7 @@ pub struct MarketResolved {
     pub keeper_reward: u64,
     pub treasury_fee: u64,
     pub net_pool: u64,
-    pub payout_amount: u64,
-    pub payout_remainder: u64,
+    pub winning_amount: u64,
     pub settlement_evidence_hash: [u8; 32],
 }
 
@@ -643,7 +658,7 @@ pub struct OrderRefunded {
 }
 
 #[event]
-pub struct WinningsRedeemed {
+pub struct PrivatePositionSettled {
     pub market: Pubkey,
     pub nullifier_hash: [u8; 32],
     pub recipient_owner: Pubkey,

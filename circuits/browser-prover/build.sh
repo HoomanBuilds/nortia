@@ -11,7 +11,10 @@ for artifact in place_order.json place_order.ccs place_order.pk redeem.json rede
 done
 
 mkdir -p "$public_dir"
-GOOS=js GOARCH=wasm go build -trimpath -ldflags="-s -w" -o "$public_dir/sunspot-prover.wasm" .
+(
+  cd "$prover_dir"
+  GOOS=js GOARCH=wasm go build -trimpath -ldflags="-s -w" -o "$public_dir/sunspot-prover.wasm" .
+)
 chmod 0644 "$public_dir/sunspot-prover.wasm"
 cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" "$public_dir/wasm_exec.js"
 cp "$artifact_dir/place_order.json" "$artifact_dir/place_order.ccs" "$artifact_dir/place_order.pk" "$public_dir/"

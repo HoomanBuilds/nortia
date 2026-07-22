@@ -10,13 +10,13 @@ These versions are pinned together because Sunspot v1.0.0 rejects the ACIR seria
 
 ## Circuits
 
-`place_order` proves a binary hidden side, its order commitment, and a consistent two-of-three Shamir sharing without revealing the side or shares.
+`place_order` proves a binary hidden side, a bounded hidden wager amount, its order commitment, and consistent two-of-three Shamir share bundles without revealing the side, amount, or shares.
 
-`redeem` proves that a hidden winning commitment belongs to the finalized commitment root and derives a market-scoped nullifier without revealing which order is redeemed.
+`redeem` proves that a hidden position belongs to the finalized commitment root, calculates its exact winner or loser return, and derives a market-scoped nullifier without revealing which order is settled.
 
-The public ticket amount is `1_000_000` base units for one six-decimal USDC ticket. Redemption binds the exact net payout calculated after the market's immutable protocol fee.
+The public stake is a uniform per-market collateral ceiling. The hidden amount must be between `1_000_000` base units and that ceiling. Redemption returns unused collateral and, for a winner, its proportional share of the net hidden wager pool.
 
-Both circuits expose seven public inputs. Sunspot serializes them as a 12-byte header followed by seven 32-byte big-endian fields.
+Placement exposes seven public inputs. Redemption exposes nine. Sunspot serializes them as a 12-byte header followed by 32-byte big-endian fields, producing 236-byte and 300-byte public witnesses respectively.
 
 ## Local workflow
 
@@ -47,7 +47,7 @@ Sunspot setup is a development trusted setup and is not safe for production. Gen
 
 | Circuit | Constraints | Proof | Public witness | Proof plus witness |
 | --- | ---: | ---: | ---: | ---: |
-| Placement | 3,906 | 324 bytes | 236 bytes | 560 bytes |
-| Redemption | 20,733 | 324 bytes | 236 bytes | 560 bytes |
+| Placement | 8,024 | 388 bytes | 236 bytes | 624 bytes |
+| Redemption | 22,140 | 388 bytes | 300 bytes | 688 bytes |
 
 The constant proof size keeps both verifier CPIs within Solana transaction data limits. On-chain compute use still has to be measured after verifier deployment.

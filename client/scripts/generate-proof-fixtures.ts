@@ -11,21 +11,25 @@ import {
 } from "../src/commitments.js";
 
 const marketId = 42n;
-const ticketAmount = 1_000_000n;
+const stakeAmount = 100_000_000n;
+const amount = 37_000_000n;
 const payerHash = 91n;
 const side = true;
 const secret = 11n;
 const nullifier = 12n;
-const coefficient = 13n;
+const sideCoefficient = 13n;
+const yesAmountCoefficient = 14n;
+const totalAmountCoefficient = 15n;
 const salts = [21n, 22n, 23n] as const;
-const shares = [
-  1n + coefficient,
-  1n + coefficient * 2n,
-  1n + coefficient * 3n,
-] as const;
+const bundles = [1n, 2n, 3n].map((index) => ({
+  sideShare: 1n + sideCoefficient * index,
+  yesAmountShare: amount + yesAmountCoefficient * index,
+  totalAmountShare: amount + totalAmountCoefficient * index,
+}));
 const commitment = orderCommitment(
   marketId,
-  ticketAmount,
+  stakeAmount,
+  amount,
   side,
   secret,
   nullifier,
@@ -33,16 +37,17 @@ const commitment = orderCommitment(
 
 const placementToml = [
   `market_id = "${fieldHex(marketId)}"`,
-  `ticket_amount = "${fieldHex(ticketAmount)}"`,
+  `stake_amount = "${fieldHex(stakeAmount)}"`,
   `payer_hash = "${fieldHex(payerHash)}"`,
   `commitment = "${fieldHex(commitment)}"`,
-  `share_commitment_1 = "${fieldHex(shareCommitment(shares[0], salts[0]))}"`,
-  `share_commitment_2 = "${fieldHex(shareCommitment(shares[1], salts[1]))}"`,
-  `share_commitment_3 = "${fieldHex(shareCommitment(shares[2], salts[2]))}"`,
+  ...bundles.map((bundle, index) => `share_commitment_${index + 1} = "${fieldHex(shareCommitment(bundle.sideShare, bundle.yesAmountShare, bundle.totalAmountShare, salts[index] ?? 0n))}"`),
+  `amount = ${amount}`,
   `side = ${side}`,
   `secret = "${fieldHex(secret)}"`,
   `nullifier = "${fieldHex(nullifier)}"`,
-  `coefficient = "${fieldHex(coefficient)}"`,
+  `side_coefficient = "${fieldHex(sideCoefficient)}"`,
+  `yes_amount_coefficient = "${fieldHex(yesAmountCoefficient)}"`,
+  `total_amount_coefficient = "${fieldHex(totalAmountCoefficient)}"`,
   `salt_1 = "${fieldHex(salts[0])}"`,
   `salt_2 = "${fieldHex(salts[1])}"`,
   `salt_3 = "${fieldHex(salts[2])}"`,
@@ -54,12 +59,15 @@ const siblings = Array<bigint>(TREE_DEPTH).fill(0n);
 const root = merkleRoot(commitment, pathBits, siblings);
 const redemptionToml = [
   `market_id = "${fieldHex(marketId)}"`,
-  `ticket_amount = "${fieldHex(ticketAmount)}"`,
+  `stake_amount = "${fieldHex(stakeAmount)}"`,
   `commitment_root = "${fieldHex(root)}"`,
   `outcome = ${side}`,
   `nullifier_hash = "${fieldHex(nullifierHash(marketId, nullifier))}"`,
   `recipient_hash = "${fieldHex(91n)}"`,
-  `payout_amount = "${fieldHex(1_485_000n)}"`,
+  `net_pool = "${fieldHex(99_000_000n)}"`,
+  `winning_amount = "${fieldHex(50_000_000n)}"`,
+  `payout_amount = "${fieldHex(136_260_000n)}"`,
+  `amount = ${amount}`,
   `side = ${side}`,
   `secret = "${fieldHex(secret)}"`,
   `nullifier = "${fieldHex(nullifier)}"`,

@@ -8,18 +8,27 @@ export function poseidonHash(left: bigint, right: bigint): bigint {
 
 export function orderCommitment(
   marketId: bigint,
-  ticketAmount: bigint,
+  stakeAmount: bigint,
+  amount: bigint,
   side: boolean,
   secret: bigint,
   nullifier: bigint,
 ): bigint {
-  const context = poseidonHash(marketId, ticketAmount);
-  const position = poseidonHash(side ? 1n : 0n, secret);
-  return poseidonHash(context, poseidonHash(position, nullifier));
+  const context = poseidonHash(marketId, stakeAmount);
+  const position = poseidonHash(amount, side ? 1n : 0n);
+  return poseidonHash(context, poseidonHash(position, poseidonHash(secret, nullifier)));
 }
 
-export function shareCommitment(share: bigint, salt: bigint): bigint {
-  return poseidonHash(share, salt);
+export function shareCommitment(
+  sideShare: bigint,
+  yesAmountShare: bigint,
+  totalAmountShare: bigint,
+  salt: bigint,
+): bigint {
+  return poseidonHash(
+    poseidonHash(sideShare, yesAmountShare),
+    poseidonHash(totalAmountShare, salt),
+  );
 }
 
 export function nullifierHash(marketId: bigint, nullifier: bigint): bigint {

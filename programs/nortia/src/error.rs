@@ -22,6 +22,10 @@ pub enum NortiaError {
     DuplicateCommitteeSigner,
     #[msg("Batch counts do not match accepted orders")]
     BatchCountMismatch,
+    #[msg("Private wager amounts are outside the market collateral bounds")]
+    InvalidPrivateAmount,
+    #[msg("Batch wager amounts do not match accepted private orders")]
+    BatchAmountMismatch,
     #[msg("The market has no accepted orders")]
     NoOrders,
     #[msg("The private batch does not meet the minimum anonymity set")]
@@ -44,7 +48,7 @@ pub enum NortiaError {
     PoseidonHashFailed,
     #[msg("Arithmetic overflow")]
     ArithmeticOverflow,
-    #[msg("The resolved side has no winning tickets")]
+    #[msg("The resolved side has no winning liquidity")]
     NoWinners,
     #[msg("The order has already been refunded")]
     AlreadyRefunded,
@@ -58,7 +62,7 @@ pub enum NortiaError {
     InvalidProtocolFee,
     #[msg("The protocol treasury is invalid")]
     InvalidTreasury,
-    #[msg("The vault does not have enough ticket collateral")]
+    #[msg("The vault does not have enough private order collateral")]
     InsufficientVaultBalance,
     #[msg("The TxLINE program is invalid")]
     InvalidTxlineProgram,
@@ -112,4 +116,6 @@ pub enum NortiaError {
     NoOptimisticBondPayout,
     #[msg("The published market metadata does not match its immutable hashes")]
     InvalidMarketMetadata,
+    #[msg("Every private position has already been settled")]
+    AllPrivatePositionsSettled,
 }

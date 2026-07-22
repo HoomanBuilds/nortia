@@ -11,7 +11,7 @@ pub mod zk;
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::bpf_loader_upgradeable;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, TransferChecked};
-use core::cmp::max;
+use core::cmp::{max, min};
 use solana_sha256_hasher::hashv;
 
 pub use constants::*;
@@ -143,6 +143,7 @@ pub mod nortia {
                 && args.lock_ts < args.batch_deadline_ts
                 && args.batch_deadline_ts < args.resolution_deadline_ts
                 && args.fixture_start_ts < args.resolution_deadline_ts
+                && valid_private_stake_amount(args.stake_amount)
                 && live_timing_valid,
             NortiaError::InvalidMarketConfiguration
         );
@@ -165,7 +166,7 @@ pub mod nortia {
         market.total_goals_threshold = args.total_goals_threshold;
         market.collateral_mint = protocol.collateral_mint;
         market.token_program = protocol.token_program;
-        market.ticket_amount = TICKET_AMOUNT;
+        market.stake_amount = args.stake_amount;
         market.fee_bps = protocol.fee_bps;
         market.keeper_reward_bps = protocol.keeper_reward_bps;
         market.treasury_owner = protocol.treasury_owner;
@@ -198,6 +199,8 @@ pub mod nortia {
         market.settlement_evidence_hash = [0; 32];
         market.score_a = 0;
         market.score_b = 0;
+        market.yes_amount = 0;
+        market.no_amount = 0;
 
         emit!(MarketCreated {
             market: market.key(),
@@ -211,7 +214,7 @@ pub mod nortia {
             total_goals_threshold: market.total_goals_threshold,
             market_mode: market.market_mode,
             collateral_mint: market.collateral_mint,
-            ticket_amount: market.ticket_amount,
+            stake_amount: market.stake_amount,
             fee_bps: market.fee_bps,
             lock_ts: market.lock_ts,
         });
@@ -261,7 +264,7 @@ pub mod nortia {
         };
         token::transfer_checked(
             CpiContext::new(ctx.accounts.token_program.key(), transfer_accounts),
-            ctx.accounts.market.ticket_amount,
+            ctx.accounts.market.stake_amount,
             ctx.accounts.collateral_mint.decimals,
         )?;
 
@@ -298,11 +301,23 @@ pub mod nortia {
             has_two_private_sides(args.yes_count, args.no_count),
             NortiaError::OneSidedPrivateBatch
         );
+        require!(
+            valid_private_batch_amounts(
+                market.stake_amount,
+                args.yes_count,
+                args.no_count,
+                args.yes_amount,
+                args.no_amount,
+            ),
+            NortiaError::BatchAmountMismatch
+        );
         verify_committee_quorum(&market.committee, ctx.remaining_accounts)?;
 
         market.commitment_root = args.commitment_root;
         market.yes_count = args.yes_count;
         market.no_count = args.no_count;
+        market.yes_amount = args.yes_amount;
+        market.no_amount = args.no_amount;
         market.phase = MarketPhase::Batched;
 
         emit!(BatchSubmitted {
@@ -310,6 +325,8 @@ pub mod nortia {
             commitment_root: market.commitment_root,
             yes_count: market.yes_count,
             no_count: market.no_count,
+            yes_amount: market.yes_amount,
+            no_amount: market.no_amount,
             refunding: false,
         });
         Ok(())
@@ -338,20 +355,31 @@ pub mod nortia {
             &ctx.accounts.txline_program,
         )?;
         let outcome = u8::from(is_over);
-        let winners = if is_over {
-            ctx.accounts.market.yes_count
+        let winning_amount = if is_over {
+            ctx.accounts.market.yes_amount
         } else {
-            ctx.accounts.market.no_count
+            ctx.accounts.market.no_amount
         };
+        let gross_pool = ctx
+            .accounts
+            .market
+            .yes_amount
+            .checked_add(ctx.accounts.market.no_amount)
+            .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
         let settlement = calculate_settlement(
-            ctx.accounts.market.ticket_amount,
-            ctx.accounts.market.order_count,
-            winners,
+            gross_pool,
+            winning_amount,
             ctx.accounts.market.fee_bps,
             ctx.accounts.market.keeper_reward_bps,
         )?;
+        let escrowed_pool = ctx
+            .accounts
+            .market
+            .stake_amount
+            .checked_mul(ctx.accounts.market.order_count as u64)
+            .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
         require!(
-            ctx.accounts.vault.amount >= settlement.gross_pool,
+            ctx.accounts.vault.amount >= escrowed_pool,
             NortiaError::InsufficientVaultBalance
         );
 
@@ -376,8 +404,8 @@ pub mod nortia {
             market.keeper_reward = settlement.keeper_reward;
             market.treasury_fee = settlement.treasury_fee;
             market.net_pool = settlement.net_pool;
-            market.payout_amount = settlement.payout_amount;
-            market.payout_remainder = settlement.payout_remainder;
+            market.payout_amount = 0;
+            market.payout_remainder = 0;
             market.phase = MarketPhase::Resolved;
             market.settled_at = now;
             market.txline_proof_ts = payload.ts;
@@ -425,8 +453,7 @@ pub mod nortia {
             keeper_reward: settlement.keeper_reward,
             treasury_fee: settlement.treasury_fee,
             net_pool: settlement.net_pool,
-            payout_amount: settlement.payout_amount,
-            payout_remainder: settlement.payout_remainder,
+            winning_amount,
             settlement_evidence_hash,
         });
         Ok(())
@@ -478,7 +505,7 @@ pub mod nortia {
                 market: ctx.accounts.market.key(),
             });
         }
-        let amount = ctx.accounts.market.ticket_amount;
+        let amount = ctx.accounts.market.stake_amount;
         transfer_from_vault(
             &ctx.accounts.market,
             &ctx.accounts.vault,
@@ -503,32 +530,39 @@ pub mod nortia {
             NortiaError::InvalidPhase
         );
         require!(
-            ctx.accounts.market.payout_amount > 0,
-            NortiaError::NoWinners
-        );
-        require!(
-            ctx.accounts.market.claimed_count < ctx.accounts.market.winner_count(),
-            NortiaError::NoWinners
+            ctx.accounts.market.claimed_count < ctx.accounts.market.order_count,
+            NortiaError::AllPrivatePositionsSettled
         );
         zk::verify_redeem(
             &ctx.accounts.market,
             &ctx.accounts.recipient_owner.key(),
             &args.nullifier_hash,
+            args.payout_amount,
             &args.proof,
             &args.public_witness,
             &ctx.accounts.redeem_verifier,
         )?;
 
         let is_final_claim =
-            ctx.accounts.market.claimed_count + 1 == ctx.accounts.market.winner_count();
+            ctx.accounts.market.claimed_count + 1 == ctx.accounts.market.order_count;
+        require!(
+            ctx.accounts.vault.amount >= args.payout_amount,
+            NortiaError::InsufficientVaultBalance
+        );
         let amount = if is_final_claim {
-            ctx.accounts
-                .market
-                .payout_amount
-                .checked_add(ctx.accounts.market.payout_remainder)
+            let rounding_dust = ctx
+                .accounts
+                .vault
+                .amount
+                .checked_sub(args.payout_amount)
+                .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
+            let rounding_dust_cap =
+                u64::from(ctx.accounts.market.winning_count().saturating_sub(1));
+            args.payout_amount
+                .checked_add(min(rounding_dust, rounding_dust_cap))
                 .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?
         } else {
-            ctx.accounts.market.payout_amount
+            args.payout_amount
         };
         let claim = &mut ctx.accounts.claim;
         claim.bump = ctx.bumps.claim;
@@ -544,22 +578,24 @@ pub mod nortia {
             .claimed_count
             .checked_add(1)
             .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
-        if ctx.accounts.market.claimed_count == ctx.accounts.market.winner_count() {
+        if ctx.accounts.market.claimed_count == ctx.accounts.market.order_count {
             ctx.accounts.market.phase = MarketPhase::Closed;
             emit!(MarketClosed {
                 market: ctx.accounts.market.key(),
             });
         }
-        transfer_from_vault(
-            &ctx.accounts.market,
-            &ctx.accounts.vault,
-            &ctx.accounts.recipient_token,
-            &ctx.accounts.collateral_mint,
-            &ctx.accounts.token_program,
-            amount,
-        )?;
+        if amount > 0 {
+            transfer_from_vault(
+                &ctx.accounts.market,
+                &ctx.accounts.vault,
+                &ctx.accounts.recipient_token,
+                &ctx.accounts.collateral_mint,
+                &ctx.accounts.token_program,
+                amount,
+            )?;
+        }
 
-        emit!(WinningsRedeemed {
+        emit!(PrivatePositionSettled {
             market: ctx.accounts.market.key(),
             nullifier_hash: args.nullifier_hash,
             recipient_owner: ctx.accounts.recipient_owner.key(),
@@ -3499,11 +3535,28 @@ fn valid_verifier_program(verifier: &AccountInfo) -> bool {
     verifier.executable && *verifier.owner == bpf_loader_upgradeable::ID
 }
 
+fn valid_private_stake_amount(amount: u64) -> bool {
+    matches!(
+        amount,
+        1_000_000
+            | 5_000_000
+            | 10_000_000
+            | 25_000_000
+            | 50_000_000
+            | 100_000_000
+            | 250_000_000
+            | 500_000_000
+            | 1_000_000_000
+    ) && amount <= MAX_PRIVATE_STAKE_AMOUNT
+}
+
 fn market_verifiers_can_sync(market: &Market, vault_amount: u64) -> bool {
     market.phase == MarketPhase::Open
         && market.order_count == 0
         && market.yes_count == 0
         && market.no_count == 0
+        && market.yes_amount == 0
+        && market.no_amount == 0
         && market.commitment_root == [0; 32]
         && market.outcome == Market::OUTCOME_UNSET
         && market.gross_pool == 0
@@ -3555,6 +3608,25 @@ fn has_two_private_sides(yes_count: u32, no_count: u32) -> bool {
     yes_count > 0 && no_count > 0
 }
 
+fn valid_private_batch_amounts(
+    stake_amount: u64,
+    yes_count: u32,
+    no_count: u32,
+    yes_amount: u64,
+    no_amount: u64,
+) -> bool {
+    let within_side = |count: u32, amount: u64| {
+        MIN_PRIVATE_WAGER_AMOUNT
+            .checked_mul(count as u64)
+            .zip(stake_amount.checked_mul(count as u64))
+            .is_some_and(|(minimum, maximum)| (minimum..=maximum).contains(&amount))
+    };
+    valid_private_stake_amount(stake_amount)
+        && within_side(yes_count, yes_amount)
+        && within_side(no_count, no_amount)
+        && yes_amount.checked_add(no_amount).is_some()
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct SettlementAmounts {
     gross_pool: u64,
@@ -3562,18 +3634,19 @@ struct SettlementAmounts {
     keeper_reward: u64,
     treasury_fee: u64,
     net_pool: u64,
-    payout_amount: u64,
-    payout_remainder: u64,
 }
 
 fn calculate_settlement(
-    ticket_amount: u64,
-    order_count: u32,
-    winners: u32,
+    gross_pool: u64,
+    winning_amount: u64,
     fee_bps: u16,
     keeper_reward_bps: u16,
 ) -> Result<SettlementAmounts> {
-    require!(winners > 0, NortiaError::NoWinners);
+    require!(gross_pool > 0, NortiaError::InvalidPrivateAmount);
+    require!(
+        winning_amount > 0 && winning_amount <= gross_pool,
+        NortiaError::NoWinners
+    );
     require!(
         fee_bps > 0 && fee_bps <= MAX_PROTOCOL_FEE_BPS,
         NortiaError::InvalidProtocolFee
@@ -3582,9 +3655,7 @@ fn calculate_settlement(
         keeper_reward_bps <= MAX_KEEPER_REWARD_BPS,
         NortiaError::InvalidProtocolFee
     );
-    let gross_pool = (ticket_amount as u128)
-        .checked_mul(order_count as u128)
-        .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
+    let gross_pool = gross_pool as u128;
     let protocol_fee = gross_pool
         .checked_mul(fee_bps as u128)
         .and_then(|value| value.checked_div(BASIS_POINTS_DENOMINATOR))
@@ -3599,13 +3670,6 @@ fn calculate_settlement(
     let treasury_fee = protocol_fee
         .checked_sub(keeper_reward)
         .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
-    let payout_amount = net_pool
-        .checked_div(winners as u128)
-        .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
-    let payout_remainder = net_pool
-        .checked_rem(winners as u128)
-        .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
-
     Ok(SettlementAmounts {
         gross_pool: u64::try_from(gross_pool)
             .map_err(|_| error!(NortiaError::ArithmeticOverflow))?,
@@ -3616,11 +3680,38 @@ fn calculate_settlement(
         treasury_fee: u64::try_from(treasury_fee)
             .map_err(|_| error!(NortiaError::ArithmeticOverflow))?,
         net_pool: u64::try_from(net_pool).map_err(|_| error!(NortiaError::ArithmeticOverflow))?,
-        payout_amount: u64::try_from(payout_amount)
-            .map_err(|_| error!(NortiaError::ArithmeticOverflow))?,
-        payout_remainder: u64::try_from(payout_remainder)
-            .map_err(|_| error!(NortiaError::ArithmeticOverflow))?,
     })
+}
+
+#[cfg(test)]
+fn calculate_private_payout(
+    stake_amount: u64,
+    wager_amount: u64,
+    winner: bool,
+    net_pool: u64,
+    winning_amount: u64,
+) -> Result<u64> {
+    require!(
+        valid_private_stake_amount(stake_amount)
+            && (MIN_PRIVATE_WAGER_AMOUNT..=stake_amount).contains(&wager_amount),
+        NortiaError::InvalidPrivateAmount
+    );
+    require!(winning_amount > 0, NortiaError::NoWinners);
+    let unused = stake_amount
+        .checked_sub(wager_amount)
+        .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?;
+    let winnings = if winner {
+        (wager_amount as u128)
+            .checked_mul(net_pool as u128)
+            .and_then(|value| value.checked_div(winning_amount as u128))
+            .and_then(|value| u64::try_from(value).ok())
+            .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))?
+    } else {
+        0
+    };
+    unused
+        .checked_add(winnings)
+        .ok_or_else(|| error!(NortiaError::ArithmeticOverflow))
 }
 
 fn transfer_from_vault<'info>(
@@ -3679,7 +3770,7 @@ mod tests {
             total_goals_threshold: 2,
             collateral_mint: DEVNET_USDC_MINT,
             token_program: anchor_spl::token::ID,
-            ticket_amount: TICKET_AMOUNT,
+            stake_amount: DEFAULT_PRIVATE_STAKE_AMOUNT,
             fee_bps: 100,
             keeper_reward_bps: 1_000,
             treasury_owner: Pubkey::new_unique(),
@@ -3716,6 +3807,8 @@ mod tests {
             settlement_evidence_hash: [0; 32],
             score_a: 0,
             score_b: 0,
+            yes_amount: 0,
+            no_amount: 0,
         }
     }
 
@@ -3919,7 +4012,7 @@ mod tests {
         assert!(!market_verifiers_can_sync(&ordered, 0));
 
         let mut funded = syncable_private_market();
-        funded.gross_pool = TICKET_AMOUNT;
+        funded.gross_pool = MIN_PRIVATE_WAGER_AMOUNT;
         assert!(!market_verifiers_can_sync(&funded, 0));
 
         let mut locked = syncable_private_market();
@@ -3985,44 +4078,121 @@ mod tests {
     }
 
     #[test]
-    fn settlement_collects_one_percent_from_gross_pool() {
-        let settlement = calculate_settlement(TICKET_AMOUNT, 3, 2, 100, 1_000).unwrap();
+    fn private_stake_uses_an_explicit_public_allowlist() {
+        for amount in [
+            1_000_000,
+            5_000_000,
+            10_000_000,
+            25_000_000,
+            50_000_000,
+            100_000_000,
+            250_000_000,
+            500_000_000,
+            1_000_000_000,
+        ] {
+            assert!(valid_private_stake_amount(amount));
+        }
+        assert!(!valid_private_stake_amount(0));
+        assert!(!valid_private_stake_amount(99_000_000));
+        assert!(!valid_private_stake_amount(1_001_000_000));
+    }
+
+    #[test]
+    fn private_batch_amounts_are_bounded_by_count_and_stake() {
+        assert!(valid_private_batch_amounts(
+            100_000_000,
+            2,
+            2,
+            42_000_000,
+            21_000_000
+        ));
+        assert!(!valid_private_batch_amounts(
+            100_000_000,
+            2,
+            2,
+            1_999_999,
+            21_000_000
+        ));
+        assert!(!valid_private_batch_amounts(
+            100_000_000,
+            2,
+            2,
+            200_000_001,
+            21_000_000
+        ));
+        assert!(!valid_private_batch_amounts(
+            99_000_000, 2, 2, 42_000_000, 21_000_000
+        ));
+    }
+
+    #[test]
+    fn private_market_fits_reserved_account_space() {
+        let mut data = Vec::new();
+        syncable_private_market().try_serialize(&mut data).unwrap();
+        assert!(data.len() <= Market::SPACE);
+    }
+
+    #[test]
+    fn settlement_collects_one_percent_from_hidden_liquidity() {
+        let settlement = calculate_settlement(63_000_000, 42_000_000, 100, 1_000).unwrap();
         assert_eq!(
             settlement,
             SettlementAmounts {
-                gross_pool: 3_000_000,
-                protocol_fee: 30_000,
-                keeper_reward: 3_000,
-                treasury_fee: 27_000,
-                net_pool: 2_970_000,
-                payout_amount: 1_485_000,
-                payout_remainder: 0,
+                gross_pool: 63_000_000,
+                protocol_fee: 630_000,
+                keeper_reward: 63_000,
+                treasury_fee: 567_000,
+                net_pool: 62_370_000,
             }
         );
     }
 
     #[test]
-    fn settlement_assigns_division_dust_to_the_final_winner() {
-        let settlement = calculate_settlement(1, 3, 2, 100, 1_000).unwrap();
-        assert_eq!(settlement.payout_amount, 1);
-        assert_eq!(settlement.payout_remainder, 1);
+    fn private_payout_returns_unused_collateral_to_winners_and_losers() {
         assert_eq!(
-            settlement.protocol_fee + settlement.payout_amount * 2 + settlement.payout_remainder,
-            settlement.gross_pool
+            calculate_private_payout(100_000_000, 37_000_000, true, 62_370_000, 42_000_000)
+                .unwrap(),
+            117_945_000
+        );
+        assert_eq!(
+            calculate_private_payout(100_000_000, 12_000_000, false, 62_370_000, 42_000_000)
+                .unwrap(),
+            88_000_000
         );
     }
 
     #[test]
     fn settlement_rejects_invalid_fee_and_zero_winners() {
-        assert!(calculate_settlement(TICKET_AMOUNT, 3, 2, 0, 1_000).is_err());
-        assert!(calculate_settlement(TICKET_AMOUNT, 3, 2, 301, 1_000).is_err());
-        assert!(calculate_settlement(TICKET_AMOUNT, 3, 2, 100, 5_001).is_err());
-        assert!(calculate_settlement(TICKET_AMOUNT, 3, 0, 100, 1_000).is_err());
+        assert!(calculate_settlement(63_000_000, 42_000_000, 0, 1_000).is_err());
+        assert!(calculate_settlement(63_000_000, 42_000_000, 301, 1_000).is_err());
+        assert!(calculate_settlement(63_000_000, 42_000_000, 100, 5_001).is_err());
+        assert!(calculate_settlement(63_000_000, 0, 100, 1_000).is_err());
+        assert!(calculate_settlement(63_000_000, 63_000_001, 100, 1_000).is_err());
     }
 
     #[test]
-    fn settlement_rejects_values_that_do_not_fit_u64() {
-        assert!(calculate_settlement(u64::MAX, 2, 1, 100, 1_000).is_err());
+    fn confidential_settlement_never_exceeds_escrow() {
+        let stake = 100_000_000;
+        let wagers = [
+            (37_000_000, true),
+            (5_000_000, true),
+            (12_000_000, false),
+            (9_000_000, false),
+        ];
+        let yes_amount = 42_000_000;
+        let no_amount = 21_000_000;
+        let settlement =
+            calculate_settlement(yes_amount + no_amount, yes_amount, 100, 1_000).unwrap();
+        let payouts = wagers
+            .iter()
+            .map(|(amount, yes)| {
+                calculate_private_payout(stake, *amount, *yes, settlement.net_pool, yes_amount)
+                    .unwrap()
+            })
+            .sum::<u64>();
+        let escrow = stake * wagers.len() as u64;
+        assert!(payouts + settlement.protocol_fee <= escrow);
+        assert!(escrow - payouts - settlement.protocol_fee < 2);
     }
 
     #[test]

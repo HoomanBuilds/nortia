@@ -3,13 +3,16 @@ import { poseidonHash, shareCommitment, TREE_DEPTH } from "./commitments.js";
 export const BN254_SCALAR_MODULUS =
   21888242871839275222246405745257275088548364400416034343698204186575808495617n;
 export const MIN_PRIVATE_BATCH_ORDERS = 4;
+export const MIN_PRIVATE_WAGER_AMOUNT = 1_000_000n;
 
 export type CommitteeShare = {
   market: string;
   orderIndex: number;
   orderCommitment: bigint;
   memberIndex: 1 | 2 | 3;
-  share: bigint;
+  sideShare: bigint;
+  yesAmountShare: bigint;
+  totalAmountShare: bigint;
   salt: bigint;
   expectedShareCommitment: bigint;
   placementSignature: string;
@@ -20,6 +23,8 @@ export type CommitteeBatch = {
   orderCount: number;
   yesCount: number;
   noCount: number;
+  yesAmount: bigint;
+  noAmount: bigint;
   commitmentRoot: bigint;
   memberIndices: readonly [number, number];
 };
@@ -28,7 +33,9 @@ export type CommitteeAggregate = {
   market: string;
   memberIndex: 1 | 2 | 3;
   orderCount: number;
-  aggregateShare: bigint;
+  aggregateSideShare: bigint;
+  aggregateYesAmountShare: bigint;
+  aggregateTotalAmountShare: bigint;
   orderCommitments: readonly bigint[];
 };
 
@@ -58,11 +65,11 @@ function inverse(value: bigint): bigint {
 }
 
 export function createShamirShare(
-  side: boolean,
+  value: bigint,
   coefficient: bigint,
   memberIndex: 1 | 2 | 3,
 ): bigint {
-  return mod((side ? 1n : 0n) + coefficient * BigInt(memberIndex));
+  return mod(value + coefficient * BigInt(memberIndex));
 }
 
 export function reconstructIntercept(
@@ -141,7 +148,17 @@ export class CommitteeMember {
     if (!input.placementSignature) {
       throw new Error("placement signature is required");
     }
-    if (shareCommitment(input.share, input.salt) !== input.expectedShareCommitment) {
+    for (const [name, value] of [
+      ["orderCommitment", input.orderCommitment],
+      ["sideShare", input.sideShare],
+      ["yesAmountShare", input.yesAmountShare],
+      ["totalAmountShare", input.totalAmountShare],
+      ["salt", input.salt],
+      ["expectedShareCommitment", input.expectedShareCommitment],
+    ] as const) {
+      if (value < 0n || value >= BN254_SCALAR_MODULUS) throw new Error(`${name} is outside the BN254 scalar field`);
+    }
+    if (shareCommitment(input.sideShare, input.yesAmountShare, input.totalAmountShare, input.salt) !== input.expectedShareCommitment) {
       throw new Error("share commitment mismatch");
     }
 
@@ -150,7 +167,9 @@ export class CommitteeMember {
     if (existing) {
       if (
         existing.orderCommitment !== input.orderCommitment ||
-        existing.share !== input.share ||
+        existing.sideShare !== input.sideShare ||
+        existing.yesAmountShare !== input.yesAmountShare ||
+        existing.totalAmountShare !== input.totalAmountShare ||
         existing.salt !== input.salt ||
         existing.placementSignature !== input.placementSignature
       ) {
@@ -178,18 +197,24 @@ export class CommitteeMember {
     if (shares.length < MIN_PRIVATE_BATCH_ORDERS) {
       throw new Error(`private batches require at least ${MIN_PRIVATE_BATCH_ORDERS} orders`);
     }
-    let aggregateShare = 0n;
+    let aggregateSideShare = 0n;
+    let aggregateYesAmountShare = 0n;
+    let aggregateTotalAmountShare = 0n;
     const orderCommitments: bigint[] = [];
     shares.forEach((share, orderIndex) => {
       if (share.orderIndex !== orderIndex) throw new Error("committee orders must be contiguous from zero");
-      aggregateShare = mod(aggregateShare + share.share);
+      aggregateSideShare = mod(aggregateSideShare + share.sideShare);
+      aggregateYesAmountShare = mod(aggregateYesAmountShare + share.yesAmountShare);
+      aggregateTotalAmountShare = mod(aggregateTotalAmountShare + share.totalAmountShare);
       orderCommitments.push(share.orderCommitment);
     });
     return {
       market,
       memberIndex: this.memberIndex,
       orderCount: shares.length,
-      aggregateShare,
+      aggregateSideShare,
+      aggregateYesAmountShare,
+      aggregateTotalAmountShare,
       orderCommitments,
     };
   }
@@ -227,9 +252,9 @@ export function finalizeCommitteeAggregates(
 
   const reconstructed = reconstructIntercept(
     first.memberIndex,
-    first.aggregateShare,
+    first.aggregateSideShare,
     second.memberIndex,
-    second.aggregateShare,
+    second.aggregateSideShare,
   );
   if (reconstructed > BigInt(first.orderCount)) {
     throw new Error("reconstructed YES count is outside the order range");
@@ -240,11 +265,31 @@ export function finalizeCommitteeAggregates(
   if (yesCount === 0 || noCount === 0) {
     throw new Error("one-sided private batches must wait for permissionless refunds");
   }
+  const yesAmount = reconstructIntercept(
+    first.memberIndex,
+    first.aggregateYesAmountShare,
+    second.memberIndex,
+    second.aggregateYesAmountShare,
+  );
+  const totalAmount = reconstructIntercept(
+    first.memberIndex,
+    first.aggregateTotalAmountShare,
+    second.memberIndex,
+    second.aggregateTotalAmountShare,
+  );
+  if (yesAmount > totalAmount) throw new Error("reconstructed YES liquidity exceeds total liquidity");
+  const noAmount = totalAmount - yesAmount;
+  if (
+    yesAmount < BigInt(yesCount) * MIN_PRIVATE_WAGER_AMOUNT
+    || noAmount < BigInt(noCount) * MIN_PRIVATE_WAGER_AMOUNT
+  ) throw new Error("reconstructed private liquidity is below the minimum wager bounds");
   return {
     market,
     orderCount: first.orderCount,
     yesCount,
     noCount,
+    yesAmount,
+    noAmount,
     commitmentRoot: commitmentRoot(leaves),
     memberIndices: [first.memberIndex, second.memberIndex],
   };
