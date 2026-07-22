@@ -11,19 +11,19 @@ const headers = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosnif
 
 function configuration() {
   const endpoints = (process.env.NORTIA_COMMITTEE_ENDPOINTS ?? "").split(",").map((value) => value.trim()).filter(Boolean);
-  const token = process.env.NORTIA_COMMITTEE_API_TOKEN;
-  return { endpoints, token };
+  const tokens = (process.env.NORTIA_COMMITTEE_API_TOKENS ?? "").split(",").map((value) => value.trim()).filter(Boolean);
+  return { endpoints, tokens };
 }
 
 export async function GET() {
-  const { endpoints, token } = configuration();
-  if (endpoints.length !== 3 || !token || token.length < 24) {
+  const { endpoints, tokens } = configuration();
+  if (endpoints.length !== 3 || tokens.length !== 3 || tokens.some((token) => token.length < 24) || new Set(tokens).size !== 3) {
     return NextResponse.json({ error: "Committee encryption is not configured" }, { status: 503, headers });
   }
   try {
     const keys = await Promise.all(endpoints.map(async (endpoint, index) => {
       const response = await fetch(`${endpoint.replace(/\/$/, "")}/encryption-key`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${tokens[index]}` },
         cache: "no-store",
         signal: AbortSignal.timeout(10_000),
       });
@@ -40,9 +40,11 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const { endpoints, token } = configuration();
+  const { endpoints, tokens } = configuration();
   if (endpoints.length !== 3) return NextResponse.json({ error: "Three committee endpoints are required" }, { status: 503, headers });
-  if (!token || token.length < 24) return NextResponse.json({ error: "Committee authentication is not configured" }, { status: 503, headers });
+  if (tokens.length !== 3 || tokens.some((token) => token.length < 24) || new Set(tokens).size !== 3) {
+    return NextResponse.json({ error: "Distinct committee authentication is not configured" }, { status: 503, headers });
+  }
   const contentLength = Number(request.headers.get("content-length") ?? 0);
   if (contentLength > 32 * 1024) return NextResponse.json({ error: "Committee request is too large" }, { status: 413, headers });
   try {
@@ -62,7 +64,7 @@ export async function POST(request: Request) {
       }
       const response = await fetch(`${endpoints[index]?.replace(/\/$/, "")}/shares`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${tokens[index]}` },
         body: JSON.stringify(envelope),
         cache: "no-store",
         signal: AbortSignal.timeout(15_000),

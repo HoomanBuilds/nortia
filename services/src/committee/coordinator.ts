@@ -5,6 +5,7 @@ import {
 } from "nortia-client/committee";
 import { config } from "../config.js";
 import { createProgram, readKeypair } from "../solana.js";
+import { checkedCommitteeApiTokens } from "./auth.js";
 
 type EncodedAggregate = Omit<CommitteeAggregate, "aggregateShare" | "orderCommitments"> & {
   aggregateShare: string;
@@ -26,10 +27,10 @@ function fieldBytes(value: bigint) {
   return Array.from(Buffer.from(value.toString(16).padStart(64, "0"), "hex"));
 }
 
-async function memberAggregate(endpoint: string, market: string) {
+async function memberAggregate(endpoint: string, token: string, market: string) {
   const response = await fetch(`${endpoint.replace(/\/$/, "")}/markets/${encodeURIComponent(market)}/aggregate`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${config.committeeApiToken}` },
+    headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(10_000),
   });
   if (response.status === 409) throw new IneligiblePrivateBatchError("Private batch does not meet the minimum anonymity set");
@@ -37,17 +38,17 @@ async function memberAggregate(endpoint: string, market: string) {
   return decode(await response.json() as EncodedAggregate);
 }
 
-async function purgeMember(endpoint: string, market: string) {
+async function purgeMember(endpoint: string, token: string, market: string) {
   const response = await fetch(`${endpoint.replace(/\/$/, "")}/markets/${encodeURIComponent(market)}/shares`, {
     method: "DELETE",
-    headers: { Authorization: `Bearer ${config.committeeApiToken}` },
+    headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(10_000),
   });
   return response.ok;
 }
 
-async function purgeAll(market: string) {
-  return Promise.all(config.committeeEndpoints.map((endpoint) => purgeMember(endpoint, market)));
+async function purgeAll(tokens: readonly [string, string, string], market: string) {
+  return Promise.all(config.committeeEndpoints.map((endpoint, index) => purgeMember(endpoint, tokens[index]!, market)));
 }
 
 async function main() {
@@ -57,21 +58,19 @@ async function main() {
   if (config.committeeEndpoints.length !== 3 || config.committeeKeypairPaths.length < 2) {
     throw new Error("Three committee endpoints and two committee keypair paths are required");
   }
-  if (!config.committeeApiToken || config.committeeApiToken.length < 24) {
-    throw new Error("COMMITTEE_API_TOKEN must be configured with at least 24 characters");
-  }
+  const tokens = checkedCommitteeApiTokens(config.committeeApiTokens);
 
   const market = new PublicKey(marketValue);
   let batch;
   try {
     const [first, second] = await Promise.all([
-      memberAggregate(config.committeeEndpoints[0] ?? "", marketValue),
-      memberAggregate(config.committeeEndpoints[1] ?? "", marketValue),
+      memberAggregate(config.committeeEndpoints[0] ?? "", tokens[0], marketValue),
+      memberAggregate(config.committeeEndpoints[1] ?? "", tokens[1], marketValue),
     ]);
     batch = finalizeCommitteeAggregates(marketValue, first, second);
   } catch (error) {
     if (!(error instanceof IneligiblePrivateBatchError) && !(error instanceof Error && error.message.includes("one-sided"))) throw error;
-    const purged = await purgeAll(marketValue);
+    const purged = await purgeAll(tokens, marketValue);
     process.stdout.write(`${JSON.stringify({ event: "batch-ineligible", market: marketValue, reason: error.message, purged })}\n`);
     return;
   }
@@ -86,7 +85,7 @@ async function main() {
   }).accountsPartial({ market }).remainingAccounts(
     signers.map((signer) => ({ pubkey: signer.publicKey, isSigner: true, isWritable: false })),
   ).signers(signers).rpc();
-  const purged = await purgeAll(marketValue);
+  const purged = await purgeAll(tokens, marketValue);
   process.stdout.write(`${JSON.stringify({ event: "batch-submitted", market: marketValue, signature, yesCount: batch.yesCount, noCount: batch.noCount, purged })}\n`);
 }
 

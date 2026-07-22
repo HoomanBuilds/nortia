@@ -12,7 +12,7 @@ This workspace keeps network and automation responsibilities outside the web app
 - `stork/` lists token-gated assets and validates exact signed asset metadata for the external chain pusher.
 - `keeper/` executes private-pool and LMSR locking, TxLINE, Pyth, Switchboard, optimistic, and timeout transitions.
 
-Run three committee processes with distinct `COMMITTEE_MEMBER_INDEX`, port, RSA encryption key material, state key, and state path. Generate each RSA key file with `npm run committee:keys -- <1|2|3> <output-path>`, set its mode to owner-only, and point that process at it with `COMMITTEE_ENCRYPTION_KEY_PATH`. Encrypt each member's state under a distinct `COMMITTEE_STATE_KEY`. The bootstrap profile keeps committee signing operator-managed. Production should move signer keys into isolated remote signers or HSMs.
+Run three committee processes with distinct `COMMITTEE_MEMBER_INDEX`, port, API token, RSA encryption key material, state key, and state path. Generate each RSA key file with `npm run committee:keys -- <1|2|3> <output-path>`, set its mode to owner-only, and point that process at it with `COMMITTEE_ENCRYPTION_KEY_PATH`. Encrypt each member's state under a distinct `COMMITTEE_STATE_KEY`. The coordinator receives the three ordered tokens through `COMMITTEE_API_TOKENS`. The bootstrap profile keeps committee signing operator-managed. Production should move signer keys into isolated remote signers or HSMs.
 
 Run the relay with a dedicated funded devnet keypair at `NORTIA_RELAYER_KEYPAIR_PATH`, a separate `RELAYER_API_TOKEN`, and `RELAYER_PORT`. It receives public proof material and the recipient address, but no private witness. It remains a metadata and availability boundary.
 

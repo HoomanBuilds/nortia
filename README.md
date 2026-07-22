@@ -400,13 +400,13 @@ npm --prefix services run indexer
 npm --prefix services run keeper
 ```
 
-Each committee member needs its own `COMMITTEE_MEMBER_INDEX`, port, state path, and RSA encryption key file. Generate each file once with:
+Each committee member needs its own `COMMITTEE_MEMBER_INDEX`, port, state path, API token, and RSA encryption key file. The three `COMMITTEE_API_TOKEN` values must be distinct. Generate each encryption file once with:
 
 ```bash
 npm --prefix services run committee:keys -- 1 /absolute/path/to/committee-1-encryption.json
 ```
 
-Set `COMMITTEE_ENCRYPTION_KEY_PATH` to the matching file and give each member a distinct 32-byte hex `COMMITTEE_STATE_KEY` to encrypt its state. Batch coordination additionally requires two member endpoints and two committee signer keypairs.
+Set `COMMITTEE_ENCRYPTION_KEY_PATH` to the matching file and give each member a distinct 32-byte hex `COMMITTEE_STATE_KEY` to encrypt its state. Batch coordination additionally requires two committee signer keypairs and the three ordered member tokens in `COMMITTEE_API_TOKENS`. Vercel receives the same ordered list as `NORTIA_COMMITTEE_API_TOKENS` so its routing layer cannot use one member's credential against another.
 
 The relay needs a dedicated funded devnet signer at `NORTIA_RELAYER_KEYPAIR_PATH`, a private `RELAYER_API_TOKEN`, and its own `RELAYER_PORT`. Configure `NORTIA_RELAYER_URL` and `NORTIA_RELAYER_API_TOKEN` only in the Vercel server environment. Keep `NEXT_PUBLIC_NORTIA_PROOF_MODE` unset for browser proving. Set it to `hosted` only when the explicit hosted fallback is required.
 
@@ -439,7 +439,7 @@ Latest verified results:
 
 - 73 Rust tests pass.
 - 47 client assertions pass.
-- 53 service assertions pass.
+- 55 service assertions pass.
 - The Noir placement suite passes 4 tests across 3,918 constraints.
 - The Noir redemption suite passes 3 tests across 20,737 constraints.
 - Clippy passes with warnings denied.

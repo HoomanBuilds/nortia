@@ -67,6 +67,7 @@ export const config = {
   committeeEndpoints: list("COMMITTEE_ENDPOINTS"),
   committeeKeypairPaths: list("COMMITTEE_KEYPAIR_PATHS").map((value) => path.resolve(value)),
   committeeApiToken: process.env.COMMITTEE_API_TOKEN ?? null,
+  committeeApiTokens: list("COMMITTEE_API_TOKENS"),
   committeeStateKey: process.env.COMMITTEE_STATE_KEY ?? null,
   proverPort: integer("PROVER_PORT", 4_200),
   proverApiToken: process.env.PROVER_API_TOKEN ?? null,
