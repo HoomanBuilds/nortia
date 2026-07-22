@@ -22,7 +22,7 @@ redeem_so="$repo_root/circuits/target/redeem.so"
 redeem_keypair="$repo_root/circuits/target/redeem-keypair.json"
 program_so="${NORTIA_PROGRAM_SO_PATH:-$repo_root/target/deploy/nortia.so}"
 program_id="4S2EvdGrbKJ9zazvB4gtR83crTrVJWqqwoVVvEQy8VE9"
-program_keypair="${NORTIA_PROGRAM_KEYPAIR_PATH:-$repo_root/.anchor/nortia-keypair.json}"
+program_keypair="${NORTIA_PROGRAM_KEYPAIR_PATH:-}"
 buffer_keypair="${NORTIA_BUFFER_KEYPAIR_PATH:-$repo_root/target/deploy/nortia-buffer-keypair.json}"
 
 for artifact in "$placement_so" "$placement_keypair" "$redeem_so" "$redeem_keypair"; do
