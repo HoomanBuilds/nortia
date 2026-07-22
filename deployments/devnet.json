@@ -1,6 +1,6 @@
 {
   "network": "solana-devnet",
-  "checkedAt": "2026-07-22T07:29:27Z",
+  "checkedAt": "2026-07-22T07:34:30Z",
   "status": "deployed-with-live-private-runtime",
   "programs": {
     "nortia": {
@@ -114,8 +114,9 @@
     "authorityBalanceLamportsAfterUpgrade": 13587382421,
     "privatePlacementSimulation": {
       "status": "passed",
+      "placementVerifier": "AJwBUyb2GP5MejGz22Tk88GX9FdVFVcJvFMUU9EtqLjH",
       "computeUnitLimit": 300000,
-      "computeUnitsConsumed": 215237
+      "computeUnitsConsumed": 216779
     },
     "redeemVerifierSimulation": {
       "status": "passed",
