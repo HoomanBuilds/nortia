@@ -1,6 +1,6 @@
 {
   "network": "solana-devnet",
-  "checkedAt": "2026-07-22T07:19:15Z",
+  "checkedAt": "2026-07-22T07:29:27Z",
   "status": "deployed-with-live-private-runtime",
   "programs": {
     "nortia": {
@@ -187,8 +187,13 @@
     "status": "live",
     "origin": "https://nortia-api.15-135-178-84.sslip.io/prover",
     "service": "nortia-prover.service",
+    "artifactRelease": "d2a9162",
+    "placementVerifierKeySha256": "5e08fcdf539f7aba44788740d69ca9d950a77f29c712754a2ba23d05bbb7cf7c",
+    "redemptionVerifierKeySha256": "11b16cbf7ceeb01a28794c7be73a13e33fa9ffbafad2d57ad333a21d29586bc7",
     "proofBytes": 324,
     "publicWitnessBytes": 236,
+    "livePlacementVerification": "passed",
+    "liveRedemptionVerification": "passed",
     "vercelScopes": [
       "production",
       "preview",
