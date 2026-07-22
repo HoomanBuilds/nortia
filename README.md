@@ -408,7 +408,7 @@ npm --prefix services run committee:keys -- 1 /absolute/path/to/committee-1-encr
 
 Set `COMMITTEE_ENCRYPTION_KEY_PATH` to the matching file and give each member a distinct 32-byte hex `COMMITTEE_STATE_KEY` to encrypt its state. Batch coordination additionally requires two committee signer keypairs and the three ordered member tokens in `COMMITTEE_API_TOKENS`. Vercel receives the same ordered list as `NORTIA_COMMITTEE_API_TOKENS` so its routing layer cannot use one member's credential against another.
 
-The relay needs a dedicated funded devnet signer at `NORTIA_RELAYER_KEYPAIR_PATH`, a private `RELAYER_API_TOKEN`, and its own `RELAYER_PORT`. Configure `NORTIA_RELAYER_URL` and `NORTIA_RELAYER_API_TOKEN` only in the Vercel server environment. Keep `NEXT_PUBLIC_NORTIA_PROOF_MODE` unset for browser proving. Set it to `hosted` only when the explicit hosted fallback is required.
+The relay needs a dedicated funded devnet signer at `NORTIA_RELAYER_KEYPAIR_PATH`, a private `RELAYER_API_TOKEN`, and its own `RELAYER_PORT`. Create the signer with `npm --prefix services run relayer:key -- /absolute/path/to/relayer.json`. Configure `NORTIA_RELAYER_URL` and `NORTIA_RELAYER_API_TOKEN` only in the Vercel server environment. Keep `NEXT_PUBLIC_NORTIA_PROOF_MODE` unset for browser proving. Set it to `hosted` only when the explicit hosted fallback is required.
 
 The keeper defaults to dry-run. Set `KEEPER_DRY_RUN=false` only for a deliberately funded devnet keeper.
 

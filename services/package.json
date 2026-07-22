@@ -18,6 +18,7 @@
     "keeper:once": "KEEPER_ONCE=true node --env-file-if-exists=.env --import tsx src/keeper/runner.ts",
     "prover": "node --env-file-if-exists=.env --import tsx src/prover/server.ts",
     "relayer": "node --env-file-if-exists=.env --import tsx src/relayer/server.ts",
+    "relayer:key": "node --import tsx src/relayer/generate-key.ts",
     "test": "node --import tsx --test src/*.test.ts src/**/*.test.ts",
     "typecheck": "tsc --noEmit"
   },

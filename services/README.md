@@ -14,7 +14,7 @@ This workspace keeps network and automation responsibilities outside the web app
 
 Run three committee processes with distinct `COMMITTEE_MEMBER_INDEX`, port, API token, RSA encryption key material, state key, and state path. Generate each RSA key file with `npm run committee:keys -- <1|2|3> <output-path>`, set its mode to owner-only, and point that process at it with `COMMITTEE_ENCRYPTION_KEY_PATH`. Encrypt each member's state under a distinct `COMMITTEE_STATE_KEY`. The coordinator receives the three ordered tokens through `COMMITTEE_API_TOKENS`. The bootstrap profile keeps committee signing operator-managed. Production should move signer keys into isolated remote signers or HSMs.
 
-Run the relay with a dedicated funded devnet keypair at `NORTIA_RELAYER_KEYPAIR_PATH`, a separate `RELAYER_API_TOKEN`, and `RELAYER_PORT`. It receives public proof material and the recipient address, but no private witness. It remains a metadata and availability boundary.
+Create a dedicated relay key with `npm run relayer:key -- <output-path>`, then run the relay with that funded devnet keypair at `NORTIA_RELAYER_KEYPAIR_PATH`, a separate `RELAYER_API_TOKEN`, and `RELAYER_PORT`. It receives public proof material and the recipient address, but no private witness. It remains a metadata and availability boundary.
 
 The keeper defaults to dry-run. Set `KEEPER_DRY_RUN=false` only after the Nortia program, protocol account, verifier programs, treasury token account, and required resolver credentials are configured on the same Solana cluster.
 
