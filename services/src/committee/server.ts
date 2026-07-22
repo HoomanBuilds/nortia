@@ -13,9 +13,11 @@ import { openCommitteeState, sealCommitteeState } from "./state.js";
 const NORTIA_PROGRAM = new PublicKey("4S2EvdGrbKJ9zazvB4gtR83crTrVJWqqwoVVvEQy8VE9");
 const MAX_BODY_BYTES = 64 * 1024;
 
-type EncodedShare = Omit<CommitteeShare, "orderCommitment" | "share" | "salt" | "expectedShareCommitment"> & {
+type EncodedShare = Omit<CommitteeShare, "orderCommitment" | "sideShare" | "yesAmountShare" | "totalAmountShare" | "salt" | "expectedShareCommitment"> & {
   orderCommitment: string;
-  share: string;
+  sideShare: string;
+  yesAmountShare: string;
+  totalAmountShare: string;
   salt: string;
   expectedShareCommitment: string;
 };
@@ -34,8 +36,10 @@ type MarketAccount = {
   phase: Record<string, unknown>;
 };
 
-type EncodedAggregate = Omit<CommitteeAggregate, "aggregateShare" | "orderCommitments"> & {
-  aggregateShare: string;
+type EncodedAggregate = Omit<CommitteeAggregate, "aggregateSideShare" | "aggregateYesAmountShare" | "aggregateTotalAmountShare" | "orderCommitments"> & {
+  aggregateSideShare: string;
+  aggregateYesAmountShare: string;
+  aggregateTotalAmountShare: string;
   orderCommitments: string[];
 };
 
@@ -48,7 +52,9 @@ function encode(share: CommitteeShare): EncodedShare {
   return {
     ...share,
     orderCommitment: share.orderCommitment.toString(),
-    share: share.share.toString(),
+    sideShare: share.sideShare.toString(),
+    yesAmountShare: share.yesAmountShare.toString(),
+    totalAmountShare: share.totalAmountShare.toString(),
     salt: share.salt.toString(),
     expectedShareCommitment: share.expectedShareCommitment.toString(),
   };
@@ -58,7 +64,9 @@ function decode(value: EncodedShare): CommitteeShare {
   return {
     ...value,
     orderCommitment: BigInt(value.orderCommitment),
-    share: BigInt(value.share),
+    sideShare: BigInt(value.sideShare),
+    yesAmountShare: BigInt(value.yesAmountShare),
+    totalAmountShare: BigInt(value.totalAmountShare),
     salt: BigInt(value.salt),
     expectedShareCommitment: BigInt(value.expectedShareCommitment),
   };
@@ -67,7 +75,9 @@ function decode(value: EncodedShare): CommitteeShare {
 function encodeAggregate(aggregate: CommitteeAggregate): EncodedAggregate {
   return {
     ...aggregate,
-    aggregateShare: aggregate.aggregateShare.toString(),
+    aggregateSideShare: aggregate.aggregateSideShare.toString(),
+    aggregateYesAmountShare: aggregate.aggregateYesAmountShare.toString(),
+    aggregateTotalAmountShare: aggregate.aggregateTotalAmountShare.toString(),
     orderCommitments: aggregate.orderCommitments.map((value) => value.toString()),
   };
 }

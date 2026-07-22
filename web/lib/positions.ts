@@ -5,7 +5,8 @@ export type PrivatePosition = {
   marketAddress?: string;
   question: string;
   side: "yes" | "no";
-  ticketUsdc: 1;
+  amount: string;
+  stakeAmount: string;
   commitment: string;
   secret: string;
   nullifier: string;
@@ -13,12 +14,14 @@ export type PrivatePosition = {
   settlementSignature?: string;
   committeeShares?: Array<{
     memberIndex: 1 | 2 | 3;
-    share: string;
+    sideShare: string;
+    yesAmountShare: string;
+    totalAmountShare: string;
     salt: string;
     expectedShareCommitment: string;
   }>;
   createdAt: string;
-  status: "prepared" | "delivery-pending" | "open" | "claimable" | "claimed" | "refundable" | "refunded" | "lost";
+  status: "prepared" | "delivery-pending" | "open" | "claimable" | "claimed" | "refundable" | "refunded";
 };
 
 type EncryptedVault = {
@@ -85,7 +88,14 @@ function parsePositions(value: unknown, owner: string): PrivatePosition[] {
 function normalizePosition(value: unknown, owner: string): PrivatePosition | null {
   if (!value || typeof value !== "object") return null;
   const position = value as Partial<PrivatePosition>;
+  const legacy = position as Partial<PrivatePosition> & { ticketUsdc?: unknown };
   const normalizedOwner = typeof position.owner === "string" ? position.owner : owner;
+  const amount = typeof position.amount === "string"
+    ? position.amount
+    : legacy.ticketUsdc === 1
+      ? "1000000"
+      : null;
+  const stakeAmount = typeof position.stakeAmount === "string" ? position.stakeAmount : amount;
   if (
     position.version !== 1
     || normalizedOwner !== owner
@@ -95,8 +105,12 @@ function normalizePosition(value: unknown, owner: string): PrivatePosition | nul
     || typeof position.commitment !== "string"
     || typeof position.secret !== "string"
     || typeof position.nullifier !== "string"
+    || typeof amount !== "string"
+    || typeof stakeAmount !== "string"
+    || !/^\d+$/.test(amount)
+    || !/^\d+$/.test(stakeAmount)
   ) return null;
-  return { ...position, owner: normalizedOwner } as PrivatePosition;
+  return { ...position, owner: normalizedOwner, amount, stakeAmount } as PrivatePosition;
 }
 
 function dedupe(positions: PrivatePosition[]) {

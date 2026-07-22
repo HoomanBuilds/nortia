@@ -49,6 +49,14 @@ function vaultPda(programId: PublicKey, market: PublicKey) {
   return PublicKey.findProgramAddressSync([Buffer.from("vault"), market.toBuffer()], programId)[0];
 }
 
+function privateStakeAmount() {
+  const value = process.env.NORTIA_PRIVATE_STAKE_USDC ?? "100";
+  if (!/^(1|5|10|25|50|100|250|500|1000)$/.test(value)) {
+    throw new Error("NORTIA_PRIVATE_STAKE_USDC must be one of 1, 5, 10, 25, 50, 100, 250, 500, 1000");
+  }
+  return new BN((BigInt(value) * 1_000_000n).toString());
+}
+
 async function main() {
   if (!config.keypairPath) throw new Error("NORTIA_KEYPAIR_PATH is required");
 
@@ -80,6 +88,7 @@ async function main() {
     totalGoalsThreshold: 2,
     marketMode: { replay: {} },
     fixtureStartTs: new BN(fixtureStart),
+    stakeAmount: privateStakeAmount(),
     lockTs: new BN(lock),
     batchDeadlineTs: new BN(batchDeadline),
     resolutionDeadlineTs: new BN(resolutionDeadline),

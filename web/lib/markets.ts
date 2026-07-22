@@ -97,6 +97,7 @@ export type Market = {
   volume: number;
   liquidity: number;
   traders: number;
+  privateStakeAmount?: string;
   featured?: boolean;
   replay: boolean;
   points: number[];
@@ -146,9 +147,10 @@ export const markets: Market[] = [
     minute: 90,
     score: [3, 1],
     yes: 100,
-    volume: 3,
-    liquidity: 2.97,
-    traders: 3,
+    volume: 63,
+    liquidity: 62.37,
+    traders: 4,
+    privateStakeAmount: "100000000",
     featured: true,
     replay: true,
     points: [48, 49, 47, 51, 54, 58, 61, 66, 74, 82, 100, 100],
@@ -256,16 +258,19 @@ export const markets: Market[] = [
 export const featuredMarket = markets[0]!;
 
 export const demoPool = {
-  ticketUsdc: 1,
-  orderCount: 3,
+  stakeUsdc: 100,
+  orderCount: 4,
   yesCount: 2,
-  noCount: 1,
-  grossPool: 3,
-  fee: 0.03,
-  keeperReward: 0.003,
-  treasuryRevenue: 0.027,
-  netPool: 2.97,
-  payoutPerWinner: 1.485,
+  noCount: 2,
+  yesAmount: 42,
+  noAmount: 21,
+  grossPool: 63,
+  fee: 0.63,
+  keeperReward: 0.063,
+  treasuryRevenue: 0.567,
+  netPool: 62.37,
+  exampleWinningWager: 37,
+  examplePayout: 117.945,
   feeBps: 100,
 };
 

@@ -1,4 +1,5 @@
 import { Connection, PublicKey } from "@solana/web3.js";
+import BN from "bn.js";
 import {
   finalizeCommitteeAggregates,
   type CommitteeAggregate,
@@ -7,8 +8,10 @@ import { config } from "../config.js";
 import { createProgram, readKeypair } from "../solana.js";
 import { checkedCommitteeApiTokens } from "./auth.js";
 
-type EncodedAggregate = Omit<CommitteeAggregate, "aggregateShare" | "orderCommitments"> & {
-  aggregateShare: string;
+type EncodedAggregate = Omit<CommitteeAggregate, "aggregateSideShare" | "aggregateYesAmountShare" | "aggregateTotalAmountShare" | "orderCommitments"> & {
+  aggregateSideShare: string;
+  aggregateYesAmountShare: string;
+  aggregateTotalAmountShare: string;
   orderCommitments: string[];
 };
 
@@ -17,7 +20,9 @@ class IneligiblePrivateBatchError extends Error {}
 function decode(value: EncodedAggregate): CommitteeAggregate {
   return {
     ...value,
-    aggregateShare: BigInt(value.aggregateShare),
+    aggregateSideShare: BigInt(value.aggregateSideShare),
+    aggregateYesAmountShare: BigInt(value.aggregateYesAmountShare),
+    aggregateTotalAmountShare: BigInt(value.aggregateTotalAmountShare),
     orderCommitments: value.orderCommitments.map(BigInt),
   };
 }
@@ -82,11 +87,13 @@ async function main() {
     commitmentRoot: fieldBytes(batch.commitmentRoot),
     yesCount: batch.yesCount,
     noCount: batch.noCount,
+    yesAmount: new BN(batch.yesAmount.toString()),
+    noAmount: new BN(batch.noAmount.toString()),
   }).accountsPartial({ market }).remainingAccounts(
     signers.map((signer) => ({ pubkey: signer.publicKey, isSigner: true, isWritable: false })),
   ).signers(signers).rpc();
   const purged = await purgeAll(tokens, marketValue);
-  process.stdout.write(`${JSON.stringify({ event: "batch-submitted", market: marketValue, signature, yesCount: batch.yesCount, noCount: batch.noCount, purged })}\n`);
+  process.stdout.write(`${JSON.stringify({ event: "batch-submitted", market: marketValue, signature, yesCount: batch.yesCount, noCount: batch.noCount, yesAmount: batch.yesAmount.toString(), noAmount: batch.noAmount.toString(), purged })}\n`);
 }
 
 main().catch((error) => {

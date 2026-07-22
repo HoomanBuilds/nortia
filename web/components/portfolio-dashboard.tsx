@@ -7,7 +7,7 @@ import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from "@solana/spl-tok
 import { PublicKey } from "@solana/web3.js";
 import { Buffer } from "buffer";
 import { nullifierHash as computeNullifierHash } from "nortia-client/commitments";
-import { formatUsdc } from "nortia-client/economics";
+import { calculatePrivatePayout, formatUsdc } from "nortia-client/economics";
 import { AlertTriangle, ArrowUpRight, Clock3, EyeOff, KeyRound, ReceiptText, Wallet } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { HybridPortfolio, type HybridPortfolioSummary } from "@/components/hybrid-portfolio";
@@ -84,7 +84,7 @@ export function PortfolioDashboard() {
         const phase = Object.keys(account.phase)[0];
         let status = position.status;
         if (phase === "refunding") status = "refundable";
-        else if (phase === "resolved") status = (account.outcome === 1) === (position.side === "yes") ? "claimable" : "lost";
+        else if (phase === "resolved") status = "claimable";
         else if (phase === "open" || phase === "batched") {
           status = !position.transactionSignature
             ? "prepared"
@@ -169,7 +169,9 @@ export function PortfolioDashboard() {
         orderIndex: order.orderIndex,
         orderCommitment: BigInt(position.commitment).toString(),
         memberIndex: share.memberIndex,
-        share: BigInt(share.share).toString(),
+        sideShare: BigInt(share.sideShare).toString(),
+        yesAmountShare: BigInt(share.yesAmountShare).toString(),
+        totalAmountShare: BigInt(share.totalAmountShare).toString(),
         salt: BigInt(share.salt).toString(),
         expectedShareCommitment: BigInt(share.expectedShareCommitment).toString(),
         placementSignature: position.transactionSignature as string,
@@ -199,23 +201,36 @@ export function PortfolioDashboard() {
       const leaves = orders.map((item) => fieldBigInt(item.account.commitment));
       const commitment = fieldBigInt(position.commitment);
       const index = leaves.findIndex((value) => value === commitment);
+      if (index < 0) throw new Error("Private position commitment is missing from this market");
       const path = commitmentPath(leaves, index);
       const expectedRoot = fieldBigInt(account.commitmentRoot);
       if (path.root !== expectedRoot) throw new Error("Local commitment path does not match the onchain batch root");
       const marketId = BigInt(account.marketId.toString());
+      const stakeAmount = BigInt(account.stakeAmount.toString());
+      const amount = BigInt(position.amount);
+      if (BigInt(position.stakeAmount) !== stakeAmount) throw new Error("Private position collateral does not match this market");
+      const netPool = BigInt(account.netPool.toString());
+      const winningAmount = account.outcome === 1
+        ? BigInt(account.yesAmount.toString())
+        : BigInt(account.noAmount.toString());
+      const winner = (position.side === "yes") === (account.outcome === 1);
+      const payoutAmount = calculatePrivatePayout(stakeAmount, amount, winner, netPool, winningAmount).payoutAmount;
       const nullifierValue = computeNullifierHash(marketId, BigInt(position.nullifier));
       const nullifierHex = fieldHex(nullifierValue);
       let proof: { proof?: string; publicWitness?: string; nullifierHash?: string; error?: string };
       if (proofMode === "browser") {
         proof = await generateBrowserProof("redeem", {
           market_id: fieldHex(marketId),
-          ticket_amount: fieldHex(BigInt(account.ticketAmount.toString())),
+          stake_amount: fieldHex(stakeAmount),
           commitment_root: fieldHex(expectedRoot),
           outcome: account.outcome === 1,
           nullifier_hash: nullifierHex,
           recipient_hash: fieldHex(solanaPublicKeyHash(recipient.toBytes())),
-          payout_amount: fieldHex(BigInt(account.payoutAmount.toString())),
+          net_pool: fieldHex(netPool),
+          winning_amount: fieldHex(winningAmount),
+          payout_amount: fieldHex(payoutAmount),
           side: position.side === "yes",
+          amount: position.amount,
           secret: position.secret,
           nullifier: position.nullifier,
           path_bits: path.pathBits,
@@ -227,11 +242,14 @@ export function PortfolioDashboard() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             marketId: account.marketId.toString(),
-            ticketAmount: account.ticketAmount.toString(),
+            stakeAmount: stakeAmount.toString(),
+            amount: position.amount,
             commitmentRoot: fieldHex(expectedRoot),
             outcome: account.outcome === 1,
             recipient: recipient.toBase58(),
-            payoutAmount: account.payoutAmount.toString(),
+            netPool: netPool.toString(),
+            winningAmount: winningAmount.toString(),
+            payoutAmount: payoutAmount.toString(),
             side: position.side === "yes",
             secret: position.secret,
             nullifier: position.nullifier,
@@ -251,6 +269,7 @@ export function PortfolioDashboard() {
           market: market.toBase58(),
           recipient: recipient.toBase58(),
           nullifierHash: nullifierHex,
+          payoutAmount: payoutAmount.toString(),
           proof: proof.proof,
           publicWitness: proof.publicWitness,
         }),
@@ -308,8 +327,8 @@ export function PortfolioDashboard() {
         </div>
       )}
       <section className="empty-positions">
-        <div><span>Position</span><span>Market</span><span>Stake</span><span>Status</span></div>
-        {vaultState !== "unlocked" ? <div className="empty-position-state"><KeyRound size={22} /><h3>Private vault locked</h3><p>Unlock with the connected wallet to decrypt private tickets.</p></div> : positions.length === 0 ? <div className="empty-position-state"><EyeOff size={22} /><h3>No recovered positions</h3><p>Create or open a market. Nortia encrypts the recovery record before the order is signed.</p><Link href="/markets">Browse markets <ArrowUpRight size={14} /></Link></div> : <div className="position-list">{positions.map((position) => <article key={position.commitment}><strong>{position.side.toUpperCase()}</strong><span>{position.question}</span><b className="asset-value"><UsdcTokenIcon size={14} />{position.ticketUsdc.toFixed(2)} USDC</b><em>{position.status}{position.status === "delivery-pending" && <button type="button" disabled={pending === position.commitment} onClick={() => void retryCommitteeDelivery(position)}>Deliver shares</button>}{position.status === "claimable" && <button type="button" disabled={!connected || !payoutRecipient.trim() || pending === position.commitment} onClick={() => void redeem(position)}>Claim privately</button>}{position.status === "refundable" && <button type="button" disabled={!connected || pending === position.commitment} onClick={() => void refund(position)}>Refund</button>}</em></article>)}</div>}
+        <div><span>Position</span><span>Market</span><span>Hidden wager</span><span>Status</span></div>
+        {vaultState !== "unlocked" ? <div className="empty-position-state"><KeyRound size={22} /><h3>Private vault locked</h3><p>Unlock with the connected wallet to decrypt private positions.</p></div> : positions.length === 0 ? <div className="empty-position-state"><EyeOff size={22} /><h3>No recovered positions</h3><p>Create or open a market. Nortia encrypts the recovery record before the order is signed.</p><Link href="/markets">Browse markets <ArrowUpRight size={14} /></Link></div> : <div className="position-list">{positions.map((position) => <article key={position.commitment}><strong>{position.side.toUpperCase()}</strong><span>{position.question}</span><b className="asset-value"><UsdcTokenIcon size={14} />{formatUsdc(BigInt(position.amount))} USDC</b><em>{position.status}{position.status === "delivery-pending" && <button type="button" disabled={pending === position.commitment} onClick={() => void retryCommitteeDelivery(position)}>Deliver shares</button>}{position.status === "claimable" && <button type="button" disabled={!connected || !payoutRecipient.trim() || pending === position.commitment} onClick={() => void redeem(position)}>Settle privately</button>}{position.status === "refundable" && <button type="button" disabled={!connected || pending === position.commitment} onClick={() => void refund(position)}>Refund</button>}</em></article>)}</div>}
       </section>
       {actionError && <div className="portfolio-action-error"><AlertTriangle size={14} />{actionError}</div>}
     </>

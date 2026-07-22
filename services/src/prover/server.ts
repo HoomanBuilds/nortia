@@ -71,25 +71,35 @@ let queue = Promise.resolve();
 
 async function provePlace(input: PlaceRequest) {
   const marketId = BigInt(input.marketId);
-  const ticketAmount = BigInt(input.ticketAmount);
+  const stakeAmount = BigInt(input.stakeAmount);
+  const amount = BigInt(input.amount);
   const payer = new PublicKey(input.payer);
   const secret = field(input.secret, "secret");
   const nullifier = field(input.nullifier, "nullifier");
-  const coefficient = field(input.coefficient, "coefficient");
+  const sideCoefficient = field(input.sideCoefficient, "sideCoefficient");
+  const yesAmountCoefficient = field(input.yesAmountCoefficient, "yesAmountCoefficient");
+  const totalAmountCoefficient = field(input.totalAmountCoefficient, "totalAmountCoefficient");
   const salts = input.salts.map((value, index) => field(value, `salts[${index}]`)) as [bigint, bigint, bigint];
-  const shares = [1, 2, 3].map((memberIndex) => createShamirShare(input.side, coefficient, memberIndex as 1 | 2 | 3));
-  const commitment = orderCommitment(marketId, ticketAmount, input.side, secret, nullifier);
-  const shareCommitments = shares.map((share, index) => shareCommitment(share, salts[index] ?? 0n));
+  const bundles = [1, 2, 3].map((memberIndex) => ({
+    sideShare: createShamirShare(input.side ? 1n : 0n, sideCoefficient, memberIndex as 1 | 2 | 3),
+    yesAmountShare: createShamirShare(input.side ? amount : 0n, yesAmountCoefficient, memberIndex as 1 | 2 | 3),
+    totalAmountShare: createShamirShare(amount, totalAmountCoefficient, memberIndex as 1 | 2 | 3),
+  }));
+  const commitment = orderCommitment(marketId, stakeAmount, amount, input.side, secret, nullifier);
+  const shareCommitments = bundles.map((bundle, index) => shareCommitment(bundle.sideShare, bundle.yesAmountShare, bundle.totalAmountShare, salts[index] ?? 0n));
   const proverToml = [
     `market_id = "${fieldHex(marketId)}"`,
-    `ticket_amount = "${fieldHex(ticketAmount)}"`,
+    `stake_amount = "${fieldHex(stakeAmount)}"`,
     `payer_hash = "${fieldHex(payerHash(payer))}"`,
     `commitment = "${fieldHex(commitment)}"`,
     ...shareCommitments.map((value, index) => `share_commitment_${index + 1} = "${fieldHex(value)}"`),
+    `amount = ${amount}`,
     `side = ${input.side}`,
     `secret = "${fieldHex(secret)}"`,
     `nullifier = "${fieldHex(nullifier)}"`,
-    `coefficient = "${fieldHex(coefficient)}"`,
+    `side_coefficient = "${fieldHex(sideCoefficient)}"`,
+    `yes_amount_coefficient = "${fieldHex(yesAmountCoefficient)}"`,
+    `total_amount_coefficient = "${fieldHex(totalAmountCoefficient)}"`,
     ...salts.map((value, index) => `salt_${index + 1} = "${fieldHex(value)}"`),
     "",
   ].join("\n");
@@ -129,23 +139,27 @@ async function provePlace(input: PlaceRequest) {
 
 async function proveRedeem(input: RedeemRequest) {
   const marketId = BigInt(input.marketId);
-  const ticketAmount = BigInt(input.ticketAmount);
+  const stakeAmount = BigInt(input.stakeAmount);
+  const amount = BigInt(input.amount);
   const commitmentRoot = field(input.commitmentRoot, "commitmentRoot");
   const secret = field(input.secret, "secret");
   const nullifier = field(input.nullifier, "nullifier");
   const siblings = input.siblings.map((value, index) => field(value, `siblings[${index}]`));
-  const commitment = orderCommitment(marketId, ticketAmount, input.side, secret, nullifier);
+  const commitment = orderCommitment(marketId, stakeAmount, amount, input.side, secret, nullifier);
   if (merkleRoot(commitment, input.pathBits, siblings) !== commitmentRoot) throw new Error("Position is not included in the submitted commitment root");
   const recipient = new PublicKey(input.recipient);
   const nullifierValue = nullifierHash(marketId, nullifier);
   const proverToml = [
     `market_id = "${fieldHex(marketId)}"`,
-    `ticket_amount = "${fieldHex(ticketAmount)}"`,
+    `stake_amount = "${fieldHex(stakeAmount)}"`,
     `commitment_root = "${fieldHex(commitmentRoot)}"`,
     `outcome = ${input.outcome}`,
     `nullifier_hash = "${fieldHex(nullifierValue)}"`,
     `recipient_hash = "${fieldHex(payerHash(recipient))}"`,
+    `net_pool = "${fieldHex(BigInt(input.netPool))}"`,
+    `winning_amount = "${fieldHex(BigInt(input.winningAmount))}"`,
     `payout_amount = "${fieldHex(BigInt(input.payoutAmount))}"`,
+    `amount = ${amount}`,
     `side = ${input.side}`,
     `secret = "${fieldHex(secret)}"`,
     `nullifier = "${fieldHex(nullifier)}"`,

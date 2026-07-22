@@ -3,7 +3,9 @@ export type CommitteeShareDelivery = {
   orderIndex: number;
   orderCommitment: string;
   memberIndex: 1 | 2 | 3;
-  share: string;
+  sideShare: string;
+  yesAmountShare: string;
+  totalAmountShare: string;
   salt: string;
   expectedShareCommitment: string;
   placementSignature: string;

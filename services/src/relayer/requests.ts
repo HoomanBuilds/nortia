@@ -4,6 +4,7 @@ export type RelayRedeemRequest = {
   market: string;
   recipient: string;
   nullifierHash: string;
+  payoutAmount: string;
   proof: string;
   publicWitness: string;
 };
@@ -22,6 +23,13 @@ function publicKey(value: unknown, name: string) {
   return key.toBase58();
 }
 
+function decimalU64(value: unknown, name: string) {
+  if (typeof value !== "string" || !/^(0|[1-9]\d*)$/.test(value)) throw new Error(`${name} must be a decimal u64`);
+  const amount = BigInt(value);
+  if (amount > 18_446_744_073_709_551_615n) throw new Error(`${name} exceeds u64`);
+  return value;
+}
+
 export function checkedRelayRedeem(value: unknown): RelayRedeemRequest {
   if (!value || typeof value !== "object") throw new Error("Invalid relay request");
   const input = value as Partial<RelayRedeemRequest>;
@@ -34,7 +42,8 @@ export function checkedRelayRedeem(value: unknown): RelayRedeemRequest {
     market,
     recipient,
     nullifierHash: input.nullifierHash.toLowerCase(),
-    proof: canonicalBase64(input.proof, "proof", 324),
-    publicWitness: canonicalBase64(input.publicWitness, "publicWitness", 236),
+    payoutAmount: decimalU64(input.payoutAmount, "payoutAmount"),
+    proof: canonicalBase64(input.proof, "proof", 388),
+    publicWitness: canonicalBase64(input.publicWitness, "publicWitness", 300),
   };
 }

@@ -691,6 +691,22 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
   line-height: 1.6;
 }
 
+.amount-field input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 22px;
+  font-weight: 650;
+}
+
+.amount-field input::placeholder {
+  color: var(--muted-2);
+}
+
 .play-button,
 .primary-order-button,
 .commitment-preview button,

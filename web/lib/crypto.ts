@@ -6,7 +6,9 @@ export const BN254_SCALAR_MODULUS = 21888242871839275222246405745257275088548364
 export type PlacementWitness = {
   secret: string;
   nullifier: string;
-  coefficient: string;
+  sideCoefficient: string;
+  yesAmountCoefficient: string;
+  totalAmountCoefficient: string;
   salts: [string, string, string];
 };
 
@@ -53,7 +55,9 @@ export function createPlacementWitness(): PlacementWitness {
   return {
     secret: randomFieldHex(),
     nullifier: randomFieldHex(),
-    coefficient: randomFieldHex(),
+    sideCoefficient: randomFieldHex(),
+    yesAmountCoefficient: randomFieldHex(),
+    totalAmountCoefficient: randomFieldHex(),
     salts: [randomFieldHex(), randomFieldHex(), randomFieldHex()],
   };
 }

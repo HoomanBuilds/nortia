@@ -31,13 +31,15 @@ type MarketAccount = {
   market_mode: EnumLike;
   fixture_start_ts: IntegerLike;
   total_goals_threshold: number;
-  ticket_amount: IntegerLike;
+  stake_amount: IntegerLike;
   lock_ts: IntegerLike;
   phase: EnumLike;
   order_count: number;
   outcome: number;
   gross_pool: IntegerLike;
   net_pool: IntegerLike;
+  yes_amount: IntegerLike;
+  no_amount: IntegerLike;
   score_a: number;
   score_b: number;
 };
@@ -288,6 +290,7 @@ function buildPrivateMarket(value: string, account: MarketAccount): Market | nul
     ? "locked"
     : tradingState;
   const grossPool = integer(account.gross_pool);
+  const batchedLiquidity = integer(account.yes_amount) + integer(account.no_amount);
   return {
     id: value,
     address: value,
@@ -308,9 +311,10 @@ function buildPrivateMarket(value: string, account: MarketAccount): Market | nul
     tradingState: effectiveTradingState,
     score: resolved ? [account.score_a, account.score_b] : undefined,
     yes: resolved ? account.outcome * 100 : 50,
-    volume: grossPool > 0n ? tokenNumber(grossPool) : account.order_count * tokenNumber(account.ticket_amount),
+    volume: tokenNumber(grossPool > 0n ? grossPool : batchedLiquidity),
     liquidity: tokenNumber(account.net_pool),
     traders: account.order_count,
+    privateStakeAmount: account.stake_amount.toString(),
     replay,
     points: [50, 50],
   };

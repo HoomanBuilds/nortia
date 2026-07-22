@@ -6,6 +6,7 @@ import {
   createAssociatedTokenAccountIdempotentInstruction,
   getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
+import BN from "bn.js";
 import { ComputeBudgetProgram, Connection, PublicKey, SystemProgram } from "@solana/web3.js";
 import { config } from "../config.js";
 import { createProgram, phaseName, readKeypair } from "../solana.js";
@@ -71,6 +72,7 @@ async function main() {
     const vault = PublicKey.findProgramAddressSync([Buffer.from("vault"), market.toBuffer()], program.programId)[0];
     return program.methods.redeem({
       nullifierHash,
+      payoutAmount: new BN(input.payoutAmount),
       proof: Buffer.from(input.proof, "base64"),
       publicWitness: Buffer.from(input.publicWitness, "base64"),
     }).accountsPartial({

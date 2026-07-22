@@ -71,6 +71,7 @@ const INITIAL_SUBSIDY = requiredLmsrSubsidy(LIQUIDITY_PARAMETER, ROUNDING_RESERV
 const MAX_TRADE_SHARES = 10_000_000n;
 const TRADE_FEE_BPS = 100;
 const OPTIMISTIC_BOND = 25_000_000n;
+const PRIVATE_STAKE_OPTIONS = [1, 5, 10, 25, 50, 100, 250, 500, 1_000] as const;
 const SWITCHBOARD_QUEUE = new PublicKey(SWITCHBOARD_DEVNET_QUEUE_ADDRESS);
 const PYTH_API_KEY_DATE = Date.parse("2026-08-18T00:00:00Z");
 
@@ -167,6 +168,7 @@ export function CreateMarketForm() {
   const [storkAssetId, setStorkAssetId] = useState("");
   const [storkAsset, setStorkAsset] = useState<StorkAsset | null>(null);
   const [fixtureId, setFixtureId] = useState<number>(fixtures[0].id);
+  const [privateStakeUsdc, setPrivateStakeUsdc] = useState<number>(100);
   const [readiness, setReadiness] = useState<Readiness | null>(null);
   const [stage, setStage] = useState<SubmissionStage>("idle");
   const [signature, setSignature] = useState<string | null>(null);
@@ -338,6 +340,7 @@ export function CreateMarketForm() {
       totalGoalsThreshold: 2,
       marketMode: { replay: {} },
       fixtureStartTs: new BN(Math.floor(Date.parse(fixture.start) / 1_000)),
+      stakeAmount: new BN((BigInt(privateStakeUsdc) * 1_000_000n).toString()),
       lockTs: new BN(lockTs),
       batchDeadlineTs: new BN(lockTs + 15 * 60),
       resolutionDeadlineTs: new BN(lockTs + 2 * 60 * 60),
@@ -653,7 +656,7 @@ export function CreateMarketForm() {
             <label className="create-field"><span>Primary source URL</span><input value={customReferenceUrl} onChange={(event) => setCustomReferenceUrl(event.target.value)} placeholder="https://official-source.example/result" maxLength={160} /></label>
           </>
         )}
-        {resolver === "txline-replay" && <label className="create-field"><span>Covered fixture</span><select value={fixtureId} onChange={(event) => setFixtureId(Number(event.target.value))}>{fixtures.map((item) => <option value={item.id} key={item.id}>{item.label} - {item.group}</option>)}</select></label>}
+        {resolver === "txline-replay" && <div className="create-field-grid"><label className="create-field"><span>Covered fixture</span><select value={fixtureId} onChange={(event) => setFixtureId(Number(event.target.value))}>{fixtures.map((item) => <option value={item.id} key={item.id}>{item.label} - {item.group}</option>)}</select></label><label className="create-field"><span>Private order collateral ceiling</span><select value={privateStakeUsdc} onChange={(event) => setPrivateStakeUsdc(Number(event.target.value))}>{PRIVATE_STAKE_OPTIONS.map((amount) => <option value={amount} key={amount}>{amount.toLocaleString("en-US")} USDC</option>)}</select></label></div>}
         <label className="create-field"><span>Question preview</span><input value={question} readOnly /></label>
         {usesMarketEngine && <label className="create-field"><span>Resolution time in your local timezone</span><input type="datetime-local" value={resolutionAt} min={futureLocalDate(20)} onChange={(event) => setResolutionAt(event.target.value)} /></label>}
 
@@ -663,6 +666,7 @@ export function CreateMarketForm() {
           <div><span>Pricing</span><b>{usesMarketEngine ? "LMSR" : "Private pool"}</b></div>
           <div><span>Creator funding</span><b>{usesMarketEngine ? `${formatUsdc(INITIAL_SUBSIDY)} USDC` : "Account rent"}</b></div>
           <div><span>Trading fee</span><b>{usesMarketEngine ? "Up to 1% curve fee" : "1% on settlement"}</b></div>
+          {!usesMarketEngine && <div><span>Hidden wager range</span><b>1 to {privateStakeUsdc.toLocaleString("en-US")} USDC</b></div>}
           <div><span>Protocol share</span><b>{usesMarketEngine ? "70% of trade fee" : "Treasury after keeper"}</b></div>
           <div><span>Market PDA</span><code>{marketAddress ? `${marketAddress.toBase58().slice(0, 8)}...${marketAddress.toBase58().slice(-8)}` : "Connect wallet to derive"}</code></div>
         </div>
