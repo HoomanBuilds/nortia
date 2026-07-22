@@ -7,10 +7,15 @@ import { ComputeBudgetProgram, PublicKey, SystemProgram } from "@solana/web3.js"
 import { Buffer } from "buffer";
 import { AlertTriangle, Check, EyeOff, Info, LockKeyhole, ShieldCheck, Sparkles, Wallet } from "lucide-react";
 import { useState } from "react";
+import { createShamirShare } from "nortia-client/committee";
+import { orderCommitment, shareCommitment } from "nortia-client/commitments";
 import { UsdcTokenIcon } from "@/components/market-icons";
+import { generateBrowserProof, proofMode } from "@/lib/browser-prover";
+import { deliverCommitteeShares } from "@/lib/committee-delivery";
+import { createPlacementWitness, fieldHex, solanaPublicKeyHash } from "@/lib/crypto";
 import type { Market } from "@/lib/markets";
 import { canPlaceOrder, tradingStateLabel } from "@/lib/markets";
-import { savePrivatePosition, type PrivatePosition } from "@/lib/positions";
+import { savePrivatePosition, unlockPrivatePositions, type PrivatePosition } from "@/lib/positions";
 import { vaultPda } from "@/lib/solana/pdas";
 import { useNortiaProgram, useProtocolStatus } from "@/lib/solana/use-nortia-program";
 
@@ -18,17 +23,8 @@ type Side = "yes" | "no";
 type SubmissionState = "idle" | "proving" | "signing" | "committee" | "complete";
 
 type ProofResponse = {
-  commitment: string;
-  shareCommitments: string[];
   proof: string;
   publicWitness: string;
-  recovery: { secret: string; nullifier: string };
-  shares: Array<{
-    memberIndex: number;
-    share: string;
-    salt: string;
-    expectedShareCommitment: string;
-  }>;
   error?: string;
 };
 
@@ -52,7 +48,7 @@ export function PrivateOrderPanel({ market }: { market: Market }) {
   const [submission, setSubmission] = useState<SubmissionState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [signature, setSignature] = useState<string | null>(null);
-  const { connected, publicKey } = useWallet();
+  const { connected, publicKey, signMessage } = useWallet();
   const { setVisible } = useWalletModal();
   const program = useNortiaProgram();
   const protocol = useProtocolStatus();
@@ -66,6 +62,7 @@ export function PrivateOrderPanel({ market }: { market: Market }) {
     setError(null);
     setSignature(null);
     try {
+      if (!signMessage) throw new Error("The connected wallet must support message signing to encrypt private recovery data");
       const marketAddress = new PublicKey(market.address);
       const account = await program.account.market.fetch(marketAddress);
       if (!("open" in account.phase) || Date.now() >= account.lockTs.toNumber() * 1_000) {
@@ -77,51 +74,84 @@ export function PrivateOrderPanel({ market }: { market: Market }) {
       if (BigInt(tokenBalance.value.amount) < BigInt(account.ticketAmount.toString())) {
         throw new Error("The connected wallet needs at least 1.00 devnet USDC");
       }
-      const proofResponse = await fetch("/api/proofs/place", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          marketId: account.marketId.toString(),
-          ticketAmount: account.ticketAmount.toString(),
-          payer: publicKey.toBase58(),
+      const owner = publicKey.toBase58();
+      const { key: vaultKey } = await unlockPrivatePositions(owner, signMessage);
+      const witness = createPlacementWitness();
+      const marketId = BigInt(account.marketId.toString());
+      const ticketAmount = BigInt(account.ticketAmount.toString());
+      const secret = BigInt(witness.secret);
+      const nullifier = BigInt(witness.nullifier);
+      const coefficient = BigInt(witness.coefficient);
+      const shares = [1, 2, 3].map((memberIndex) => createShamirShare(side === "yes", coefficient, memberIndex as 1 | 2 | 3));
+      const shareCommitments = shares.map((share, index) => shareCommitment(share, BigInt(witness.salts[index] ?? "0")));
+      const commitment = orderCommitment(marketId, ticketAmount, side === "yes", secret, nullifier);
+      const commitmentHex = fieldHex(commitment);
+      let proof: ProofResponse;
+      if (proofMode === "browser") {
+        proof = await generateBrowserProof("place_order", {
+          market_id: fieldHex(marketId),
+          ticket_amount: fieldHex(ticketAmount),
+          payer_hash: fieldHex(solanaPublicKeyHash(publicKey.toBytes())),
+          commitment: commitmentHex,
+          share_commitment_1: fieldHex(shareCommitments[0] ?? 0n),
+          share_commitment_2: fieldHex(shareCommitments[1] ?? 0n),
+          share_commitment_3: fieldHex(shareCommitments[2] ?? 0n),
           side: side === "yes",
-        }),
-      });
-      const proof = await proofResponse.json() as ProofResponse;
-      if (!proofResponse.ok || proof.error) throw new Error(proof.error ?? "Proof generation failed");
-      if (proof.shareCommitments.length !== 3 || proof.shares.length !== 3) throw new Error("Prover returned an incomplete committee payload");
+          secret: witness.secret,
+          nullifier: witness.nullifier,
+          coefficient: witness.coefficient,
+          salt_1: witness.salts[0],
+          salt_2: witness.salts[1],
+          salt_3: witness.salts[2],
+        });
+      } else {
+        const proofResponse = await fetch("/api/proofs/place", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            marketId: account.marketId.toString(),
+            ticketAmount: account.ticketAmount.toString(),
+            payer: owner,
+            side: side === "yes",
+            ...witness,
+          }),
+        });
+        proof = await proofResponse.json() as ProofResponse;
+        if (!proofResponse.ok || proof.error) throw new Error(proof.error ?? "Proof generation failed");
+      }
 
-      const committeeShares = proof.shares.map((share) => ({
-        memberIndex: share.memberIndex as 1 | 2 | 3,
-        share: share.share,
-        salt: share.salt,
-        expectedShareCommitment: share.expectedShareCommitment,
+      const committeeShares = shares.map((share, index) => ({
+        memberIndex: (index + 1) as 1 | 2 | 3,
+        share: fieldHex(share),
+        salt: witness.salts[index] ?? "",
+        expectedShareCommitment: fieldHex(shareCommitments[index] ?? 0n),
       }));
       const prepared: PrivatePosition = {
         version: 1,
+        owner,
         marketId: account.marketId.toString(),
         marketAddress: market.address,
         question: market.question,
         side,
         ticketUsdc: 1,
-        commitment: proof.commitment,
-        secret: proof.recovery.secret,
-        nullifier: proof.recovery.nullifier,
+        commitment: commitmentHex,
+        secret: witness.secret,
+        nullifier: witness.nullifier,
         committeeShares,
         createdAt: new Date().toISOString(),
         status: "prepared",
       };
-      savePrivatePosition(prepared);
+      await savePrivatePosition(prepared, vaultKey);
 
-      const commitment = fieldBytes(proof.commitment);
+      const commitmentBytes = fieldBytes(commitmentHex);
       const order = PublicKey.findProgramAddressSync(
-        [Buffer.from("order"), marketAddress.toBuffer(), Buffer.from(commitment)],
+        [Buffer.from("order"), marketAddress.toBuffer(), Buffer.from(commitmentBytes)],
         program.programId,
       )[0];
       setSubmission("signing");
       const transactionSignature = await program.methods.placeOrder({
-        commitment,
-        shareCommitments: proof.shareCommitments.map(fieldBytes) as [number[], number[], number[]],
+        commitment: commitmentBytes,
+        shareCommitments: shareCommitments.map((value) => fieldBytes(fieldHex(value))) as [number[], number[], number[]],
         proof: base64Bytes(proof.proof),
         publicWitness: base64Bytes(proof.publicWitness),
       }).preInstructions([
@@ -138,28 +168,21 @@ export function PrivateOrderPanel({ market }: { market: Market }) {
         systemProgram: SystemProgram.programId,
       }).rpc();
       setSignature(transactionSignature);
-      savePrivatePosition({ ...prepared, transactionSignature, status: "open" });
+      await savePrivatePosition({ ...prepared, transactionSignature, status: "delivery-pending" }, vaultKey);
       const placedOrder = await program.account.order.fetch(order);
 
       setSubmission("committee");
-      const delivery = await fetch("/api/committee/shares", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          shares: committeeShares.map((share) => ({
-            market: market.address,
-            orderIndex: placedOrder.orderIndex,
-            orderCommitment: decimalField(proof.commitment),
-            memberIndex: share.memberIndex,
-            share: decimalField(share.share),
-            salt: decimalField(share.salt),
-            expectedShareCommitment: decimalField(share.expectedShareCommitment),
-            placementSignature: transactionSignature,
-          })),
-        }),
-      });
-      const result = await delivery.json() as { error?: string };
-      if (!delivery.ok) throw new Error(`Order confirmed, but committee delivery failed: ${result.error ?? "unknown error"}`);
+      await deliverCommitteeShares(committeeShares.map((share) => ({
+        market: market.address as string,
+        orderIndex: placedOrder.orderIndex,
+        orderCommitment: decimalField(commitmentHex),
+        memberIndex: share.memberIndex,
+        share: decimalField(share.share),
+        salt: decimalField(share.salt),
+        expectedShareCommitment: decimalField(share.expectedShareCommitment),
+        placementSignature: transactionSignature,
+      })));
+      await savePrivatePosition({ ...prepared, transactionSignature, status: "open", committeeShares: undefined }, vaultKey);
       setSubmission("complete");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Private order failed");
@@ -192,7 +215,7 @@ export function PrivateOrderPanel({ market }: { market: Market }) {
         </div>
       ) : (
         <>
-          <div className="privacy-callout"><LockKeyhole size={16} /><p>Your side is committed before the transaction. The committee receives one encrypted share per member.</p></div>
+          <div className="privacy-callout"><LockKeyhole size={16} /><p>Your side is committed before the transaction. Each committee member receives one independently blinded share.</p></div>
           <span className="field-label">Outcome</span>
           <div className="outcome-toggle">
             <button type="button" className={side === "yes" ? "yes active" : "yes"} onClick={() => { setSide("yes"); setPreview(false); }}><span>YES</span><b>{market.yes}c</b></button>
@@ -211,14 +234,14 @@ export function PrivateOrderPanel({ market }: { market: Market }) {
           <a className="faucet-link" href="https://faucet.circle.com/" target="_blank" rel="noreferrer">Need test collateral? Get Circle devnet USDC</a>
           {preview && actionable && (
             <div className="commitment-preview">
-              <div className="preview-title"><ShieldCheck size={16} /><div><strong>Order preflight</strong><span>Recovery data is saved locally before signing</span></div></div>
+              <div className="preview-title"><ShieldCheck size={16} /><div><strong>Order preflight</strong><span>Recovery data is wallet-encrypted before signing</span></div></div>
               <div className="preview-step"><Check size={12} />Market is open and before lock time</div>
               <div className="preview-step"><Check size={12} />1.00 USDC ticket and 1% fee cap</div>
               <div className="preview-step"><Check size={12} />Fee-free timeout and cancellation refund</div>
               <button type="button" disabled={!protocol.program || !protocol.protocol || submission !== "idle"} onClick={() => void submit()}>{submitLabel}</button>
               {error && <small className="order-error"><AlertTriangle size={10} />{error}</small>}
               {signature && <a className="order-signature" href={`https://explorer.solana.com/tx/${signature}?cluster=devnet`} target="_blank" rel="noreferrer">View confirmed order</a>}
-              {!protocol.program || !protocol.protocol ? <small><AlertTriangle size={10} /> Nortia program and protocol must be deployed before a transaction can be built.</small> : <small>The configured self-hosted prover sees the private input. Run it locally for end-to-end privacy.</small>}
+              {!protocol.program || !protocol.protocol ? <small><AlertTriangle size={10} /> Nortia program and protocol must be deployed before a transaction can be built.</small> : proofMode === "browser" ? <small>Your private witness stays in this browser while the zero-knowledge proof is generated.</small> : <small>Hosted proof mode is enabled. The configured prover receives the private witness.</small>}
             </div>
           )}
         </>

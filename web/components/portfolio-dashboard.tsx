@@ -3,22 +3,20 @@
 import Link from "next/link";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
-import {
-  ASSOCIATED_TOKEN_PROGRAM_ID,
-  TOKEN_PROGRAM_ID,
-  createAssociatedTokenAccountIdempotentInstruction,
-  getAssociatedTokenAddressSync,
-} from "@solana/spl-token";
-import { ComputeBudgetProgram, PublicKey, SystemProgram } from "@solana/web3.js";
+import { TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from "@solana/spl-token";
+import { PublicKey } from "@solana/web3.js";
 import { Buffer } from "buffer";
+import { nullifierHash as computeNullifierHash } from "nortia-client/commitments";
 import { formatUsdc } from "nortia-client/economics";
-import { AlertTriangle, ArrowUpRight, Clock3, EyeOff, ReceiptText, Wallet } from "lucide-react";
+import { AlertTriangle, ArrowUpRight, Clock3, EyeOff, KeyRound, ReceiptText, Wallet } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { HybridPortfolio, type HybridPortfolioSummary } from "@/components/hybrid-portfolio";
 import { UsdcTokenIcon } from "@/components/market-icons";
 import { RecoveryPanel } from "@/components/recovery-panel";
-import { commitmentPath, fieldBigInt, fieldHex } from "@/lib/crypto";
-import { loadPrivatePositions, savePrivatePosition, type PrivatePosition } from "@/lib/positions";
+import { generateBrowserProof, proofMode } from "@/lib/browser-prover";
+import { deliverCommitteeShares } from "@/lib/committee-delivery";
+import { commitmentPath, fieldBigInt, fieldHex, solanaPublicKeyHash } from "@/lib/crypto";
+import { exportPrivatePositionVault, importPrivatePositionVault, loadPrivatePositions, savePrivatePosition, unlockPrivatePositions, type PrivatePosition } from "@/lib/positions";
 import { vaultPda } from "@/lib/solana/pdas";
 import { useNortiaProgram } from "@/lib/solana/use-nortia-program";
 import { useWalletBalances } from "@/lib/solana/use-wallet-balances";
@@ -29,30 +27,57 @@ function bytes32(value: string) {
   return Array.from(Uint8Array.from(hex.match(/.{2}/g) ?? [], (byte) => Number.parseInt(byte, 16)));
 }
 
-function base64Bytes(value: string) {
-  return Buffer.from(value, "base64");
-}
-
 export function PortfolioDashboard() {
-  const { connected, publicKey } = useWallet();
+  const { connected, publicKey, signMessage } = useWallet();
   const { setVisible } = useWalletModal();
   const program = useNortiaProgram();
   const { balances } = useWalletBalances();
   const [positions, setPositions] = useState<PrivatePosition[]>([]);
+  const [vaultKey, setVaultKey] = useState<CryptoKey | null>(null);
+  const [vaultState, setVaultState] = useState<"locked" | "unlocking" | "unlocked">("locked");
+  const [vaultError, setVaultError] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [payoutRecipient, setPayoutRecipient] = useState("");
   const [hybridSummary, setHybridSummary] = useState<HybridPortfolioSummary>({ loading: false, active: 0, claimable: 0n, value: 0n, pnl: 0n });
 
-  const replacePosition = useCallback((position: PrivatePosition) => {
-    savePrivatePosition(position);
+  const replacePosition = useCallback(async (position: PrivatePosition) => {
+    if (!vaultKey) throw new Error("Unlock the private position vault first");
+    await savePrivatePosition(position, vaultKey);
     setPositions((current) => current.map((item) => item.commitment === position.commitment ? position : item));
-  }, []);
+  }, [vaultKey]);
+
+  const unlockVault = useCallback(async () => {
+    if (!publicKey || !signMessage) {
+      setVaultError("The connected wallet must support message signing");
+      return;
+    }
+    setVaultState("unlocking");
+    setVaultError(null);
+    try {
+      const unlocked = await unlockPrivatePositions(publicKey.toBase58(), signMessage);
+      setVaultKey(unlocked.key);
+      setPositions(unlocked.positions);
+      setVaultState("unlocked");
+    } catch (error) {
+      setVaultError(error instanceof Error ? error.message : "Private vault unlock failed");
+      setVaultState("locked");
+    }
+  }, [publicKey, signMessage]);
 
   useEffect(() => {
-    const local = loadPrivatePositions();
-    setPositions(local);
-    if (!program) return;
-    void Promise.all(local.map(async (position) => {
+    setVaultKey(null);
+    setPositions([]);
+    setVaultState("locked");
+    setVaultError(null);
+    setPayoutRecipient("");
+  }, [publicKey]);
+
+  useEffect(() => {
+    if (!program || !publicKey || !vaultKey) return;
+    let cancelled = false;
+    void loadPrivatePositions(publicKey.toBase58(), vaultKey).then(async (local) => {
+      const next = await Promise.all(local.map(async (position) => {
       if (!position.marketAddress || position.status === "claimed" || position.status === "refunded") return position;
       try {
         const account = await program.account.market.fetch(new PublicKey(position.marketAddress));
@@ -60,24 +85,51 @@ export function PortfolioDashboard() {
         let status = position.status;
         if (phase === "refunding") status = "refundable";
         else if (phase === "resolved") status = (account.outcome === 1) === (position.side === "yes") ? "claimable" : "lost";
-        else if (phase === "open" || phase === "batched") status = "open";
+        else if (phase === "open" || phase === "batched") {
+          status = !position.transactionSignature
+            ? "prepared"
+            : position.committeeShares?.length === 3
+              ? "delivery-pending"
+              : "open";
+        }
         return { ...position, status } as PrivatePosition;
       } catch {
         return position;
       }
-    })).then((next) => {
-      next.forEach(savePrivatePosition);
-      setPositions(next);
+      }));
+      await Promise.all(next.map((position) => savePrivatePosition(position, vaultKey)));
+      if (!cancelled) setPositions(next);
     });
-  }, [program]);
+    return () => { cancelled = true; };
+  }, [program, publicKey, vaultKey]);
 
   const onRecovered = (position: PrivatePosition) => setPositions((current) => [position, ...current.filter((item) => item.commitment !== position.commitment)]);
+
+  const exportVault = async () => {
+    if (!publicKey || !vaultKey) throw new Error("Unlock the private position vault first");
+    const backup = await exportPrivatePositionVault(publicKey.toBase58(), vaultKey);
+    const url = URL.createObjectURL(new Blob([backup], { type: "application/json" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `nortia-private-positions-${publicKey.toBase58().slice(0, 8)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importVault = async (file: File) => {
+    if (!publicKey || !vaultKey) throw new Error("Unlock the private position vault first");
+    if (file.size > 5 * 1024 * 1024) throw new Error("Private position backup exceeds 5 MB");
+    const imported = await importPrivatePositionVault(publicKey.toBase58(), vaultKey, await file.text());
+    setPositions(imported);
+    return imported.length;
+  };
 
   const refund = async (position: PrivatePosition) => {
     if (!program || !publicKey || !position.marketAddress) return;
     setPending(position.commitment);
     setActionError(null);
     try {
+      if (position.owner !== publicKey.toBase58()) throw new Error("Connect the wallet that placed this order to receive its refund");
       const market = new PublicKey(position.marketAddress);
       const account = await program.account.market.fetch(market);
       const commitment = bytes32(position.commitment);
@@ -92,9 +144,39 @@ export function PortfolioDashboard() {
         payerToken,
         tokenProgram: TOKEN_PROGRAM_ID,
       }).rpc();
-      replacePosition({ ...position, status: "refunded", settlementSignature: signature });
+      await replacePosition({ ...position, status: "refunded", settlementSignature: signature });
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Refund failed");
+    } finally {
+      setPending(null);
+    }
+  };
+
+  const retryCommitteeDelivery = async (position: PrivatePosition) => {
+    if (!program || !position.marketAddress || !position.transactionSignature || position.committeeShares?.length !== 3) return;
+    setPending(position.commitment);
+    setActionError(null);
+    try {
+      const market = new PublicKey(position.marketAddress);
+      const commitment = bytes32(position.commitment);
+      const orderAddress = PublicKey.findProgramAddressSync(
+        [Buffer.from("order"), market.toBuffer(), Buffer.from(commitment)],
+        program.programId,
+      )[0];
+      const order = await program.account.order.fetch(orderAddress);
+      await deliverCommitteeShares(position.committeeShares.map((share) => ({
+        market: position.marketAddress as string,
+        orderIndex: order.orderIndex,
+        orderCommitment: BigInt(position.commitment).toString(),
+        memberIndex: share.memberIndex,
+        share: BigInt(share.share).toString(),
+        salt: BigInt(share.salt).toString(),
+        expectedShareCommitment: BigInt(share.expectedShareCommitment).toString(),
+        placementSignature: position.transactionSignature as string,
+      })));
+      await replacePosition({ ...position, status: "open", committeeShares: undefined });
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Committee delivery failed");
     } finally {
       setPending(null);
     }
@@ -105,6 +187,9 @@ export function PortfolioDashboard() {
     setPending(position.commitment);
     setActionError(null);
     try {
+      const recipient = new PublicKey(payoutRecipient.trim());
+      if (!PublicKey.isOnCurve(recipient.toBytes())) throw new Error("Fresh payout recipient must be a wallet address");
+      if (recipient.equals(publicKey)) throw new Error("Use a fresh payout wallet that differs from the order wallet");
       const market = new PublicKey(position.marketAddress);
       const account = await program.account.market.fetch(market);
       if (!("resolved" in account.phase)) throw new Error("Market is not ready for redemption");
@@ -117,56 +202,63 @@ export function PortfolioDashboard() {
       const path = commitmentPath(leaves, index);
       const expectedRoot = fieldBigInt(account.commitmentRoot);
       if (path.root !== expectedRoot) throw new Error("Local commitment path does not match the onchain batch root");
-
-      const response = await fetch("/api/proofs/redeem", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          marketId: account.marketId.toString(),
-          ticketAmount: account.ticketAmount.toString(),
-          commitmentRoot: fieldHex(expectedRoot),
+      const marketId = BigInt(account.marketId.toString());
+      const nullifierValue = computeNullifierHash(marketId, BigInt(position.nullifier));
+      const nullifierHex = fieldHex(nullifierValue);
+      let proof: { proof?: string; publicWitness?: string; nullifierHash?: string; error?: string };
+      if (proofMode === "browser") {
+        proof = await generateBrowserProof("redeem", {
+          market_id: fieldHex(marketId),
+          ticket_amount: fieldHex(BigInt(account.ticketAmount.toString())),
+          commitment_root: fieldHex(expectedRoot),
           outcome: account.outcome === 1,
-          recipient: publicKey.toBase58(),
-          payoutAmount: account.payoutAmount.toString(),
+          nullifier_hash: nullifierHex,
+          recipient_hash: fieldHex(solanaPublicKeyHash(recipient.toBytes())),
+          payout_amount: fieldHex(BigInt(account.payoutAmount.toString())),
           side: position.side === "yes",
           secret: position.secret,
           nullifier: position.nullifier,
-          pathBits: path.pathBits,
+          path_bits: path.pathBits,
           siblings: path.siblings.map(fieldHex),
+        });
+      } else {
+        const response = await fetch("/api/proofs/redeem", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            marketId: account.marketId.toString(),
+            ticketAmount: account.ticketAmount.toString(),
+            commitmentRoot: fieldHex(expectedRoot),
+            outcome: account.outcome === 1,
+            recipient: recipient.toBase58(),
+            payoutAmount: account.payoutAmount.toString(),
+            side: position.side === "yes",
+            secret: position.secret,
+            nullifier: position.nullifier,
+            pathBits: path.pathBits,
+            siblings: path.siblings.map(fieldHex),
+          }),
+        });
+        proof = await response.json() as typeof proof;
+        if (!response.ok) throw new Error(proof.error ?? "Redeem proof generation failed");
+        if (proof.nullifierHash !== nullifierHex) throw new Error("Hosted prover returned a mismatched nullifier hash");
+      }
+      if (!proof.proof || !proof.publicWitness) throw new Error(proof.error ?? "Redeem proof generation failed");
+      const response = await fetch("/api/redeem/relay", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          market: market.toBase58(),
+          recipient: recipient.toBase58(),
+          nullifierHash: nullifierHex,
+          proof: proof.proof,
+          publicWitness: proof.publicWitness,
         }),
       });
-      const proof = await response.json() as { nullifierHash?: string; proof?: string; publicWitness?: string; error?: string };
-      if (!response.ok || !proof.nullifierHash || !proof.proof || !proof.publicWitness) throw new Error(proof.error ?? "Redeem proof generation failed");
-      const nullifierHash = bytes32(proof.nullifierHash);
-      const claim = PublicKey.findProgramAddressSync([Buffer.from("claim"), market.toBuffer(), Buffer.from(nullifierHash)], program.programId)[0];
-      const recipientToken = getAssociatedTokenAddressSync(account.collateralMint, publicKey);
-      const signature = await program.methods.redeem({
-        nullifierHash,
-        proof: base64Bytes(proof.proof),
-        publicWitness: base64Bytes(proof.publicWitness),
-      }).accountsPartial({
-        relayer: publicKey,
-        market,
-        collateralMint: account.collateralMint,
-        claim,
-        vault: vaultPda(market),
-        recipientOwner: publicKey,
-        recipientToken,
-        redeemVerifier: account.redeemVerifier,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        systemProgram: SystemProgram.programId,
-      }).preInstructions([
-        ComputeBudgetProgram.setComputeUnitLimit({ units: 300_000 }),
-        createAssociatedTokenAccountIdempotentInstruction(
-          publicKey,
-          recipientToken,
-          publicKey,
-          account.collateralMint,
-          TOKEN_PROGRAM_ID,
-          ASSOCIATED_TOKEN_PROGRAM_ID,
-        ),
-      ]).rpc();
-      replacePosition({ ...position, status: "claimed", settlementSignature: signature });
+      const relay = await response.json() as { signature?: string; error?: string };
+      if (!response.ok || !relay.signature) throw new Error(relay.error ?? "Private relay rejected the redemption");
+      const signature = relay.signature;
+      await replacePosition({ ...position, status: "claimed", settlementSignature: signature });
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Redemption failed");
     } finally {
@@ -189,11 +281,35 @@ export function PortfolioDashboard() {
           <button type="button" onClick={() => setVisible(true)}>Connect wallet</button>
         </section>
       )}
+      {connected && vaultState !== "unlocked" && (
+        <section className="wallet-gate">
+          <span><KeyRound size={20} /></span>
+          <div><strong>Unlock encrypted private positions</strong><p>Sign a read-only message to decrypt this wallet's local recovery vault. The signature cannot move funds.</p></div>
+          <button type="button" disabled={vaultState === "unlocking" || !signMessage} onClick={() => void unlockVault()}>{vaultState === "unlocking" ? "Waiting for signature" : "Unlock vault"}</button>
+        </section>
+      )}
+      {vaultError && <div className="portfolio-action-error"><AlertTriangle size={14} />{vaultError}</div>}
       <HybridPortfolio onSummary={setHybridSummary} />
-      <div className="portfolio-grid"><RecoveryPanel onRecovered={onRecovered} /><aside className="portfolio-side"><div className="portfolio-info-card"><span><UsdcTokenIcon size={17} /></span><div><strong>Fee model</strong><p>Each LMSR fill uses an immutable base rate up to 1%. The effective fee is probability-sensitive and splits 70% to Nortia and 30% to market liquidity.</p></div></div><div className="portfolio-info-card"><span><ReceiptText size={17} /></span><div><strong>Redeem privately</strong><p>A winning commitment can be redeemed with a fresh address, without linking the payout to the order wallet.</p></div></div><div className="portfolio-info-card"><span><Clock3 size={17} /></span><div><strong>Permissionless fallback</strong><p>Any caller can open refunds after a missed deadline. A keeper is useful, but it is never the only recovery path.</p></div></div></aside></div>
+      {vaultState === "unlocked" && (
+        <div className="portfolio-grid">
+          <RecoveryPanel positions={positions} onRecovered={onRecovered} onExport={exportVault} onImport={importVault} />
+          <aside className="portfolio-side">
+            <div className="portfolio-info-card"><span><UsdcTokenIcon size={17} /></span><div><strong>Fee model</strong><p>Each LMSR fill uses an immutable base rate up to 1%. The effective fee is probability-sensitive and splits 70% to Nortia and 30% to market liquidity.</p></div></div>
+            <div className="portfolio-info-card private-recipient-card">
+              <span><ReceiptText size={17} /></span>
+              <div>
+                <strong>Fresh payout wallet</strong>
+                <p>The browser binds your claim to this address. Nortia&apos;s relay submits it without exposing your order wallet on the redemption transaction.</p>
+                <input value={payoutRecipient} onChange={(event) => setPayoutRecipient(event.target.value)} placeholder="Fresh Solana wallet address" spellCheck={false} />
+              </div>
+            </div>
+            <div className="portfolio-info-card"><span><Clock3 size={17} /></span><div><strong>Permissionless fallback</strong><p>Any caller can open refunds after a missed deadline. A keeper is useful, but it is never the only recovery path.</p></div></div>
+          </aside>
+        </div>
+      )}
       <section className="empty-positions">
         <div><span>Position</span><span>Market</span><span>Stake</span><span>Status</span></div>
-        {positions.length === 0 ? <div className="empty-position-state"><EyeOff size={22} /><h3>No recovered positions</h3><p>Create or open a market, then save the private recovery record before signing.</p><Link href="/markets">Browse markets <ArrowUpRight size={14} /></Link></div> : <div className="position-list">{positions.map((position) => <article key={position.commitment}><strong>{position.side.toUpperCase()}</strong><span>{position.question}</span><b className="asset-value"><UsdcTokenIcon size={14} />{position.ticketUsdc.toFixed(2)} USDC</b><em>{position.status}{position.status === "claimable" && <button type="button" disabled={!connected || pending === position.commitment} onClick={() => void redeem(position)}>Claim</button>}{position.status === "refundable" && <button type="button" disabled={!connected || pending === position.commitment} onClick={() => void refund(position)}>Refund</button>}</em></article>)}</div>}
+        {vaultState !== "unlocked" ? <div className="empty-position-state"><KeyRound size={22} /><h3>Private vault locked</h3><p>Unlock with the connected wallet to decrypt private tickets.</p></div> : positions.length === 0 ? <div className="empty-position-state"><EyeOff size={22} /><h3>No recovered positions</h3><p>Create or open a market. Nortia encrypts the recovery record before the order is signed.</p><Link href="/markets">Browse markets <ArrowUpRight size={14} /></Link></div> : <div className="position-list">{positions.map((position) => <article key={position.commitment}><strong>{position.side.toUpperCase()}</strong><span>{position.question}</span><b className="asset-value"><UsdcTokenIcon size={14} />{position.ticketUsdc.toFixed(2)} USDC</b><em>{position.status}{position.status === "delivery-pending" && <button type="button" disabled={pending === position.commitment} onClick={() => void retryCommitteeDelivery(position)}>Deliver shares</button>}{position.status === "claimable" && <button type="button" disabled={!connected || !payoutRecipient.trim() || pending === position.commitment} onClick={() => void redeem(position)}>Claim privately</button>}{position.status === "refundable" && <button type="button" disabled={!connected || pending === position.commitment} onClick={() => void refund(position)}>Refund</button>}</em></article>)}</div>}
       </section>
       {actionError && <div className="portfolio-action-error"><AlertTriangle size={14} />{actionError}</div>}
     </>

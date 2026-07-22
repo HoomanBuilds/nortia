@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { timingSafeEqual } from "node:crypto";
 import { access, cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import os from "node:os";
@@ -8,35 +8,9 @@ import { PublicKey } from "@solana/web3.js";
 import { createShamirShare } from "nortia-client/committee";
 import { TREE_DEPTH, fieldHex, merkleRoot, nullifierHash, orderCommitment, poseidonHash, shareCommitment } from "nortia-client/commitments";
 import { config } from "../config.js";
+import { checkedPlace, checkedRedeem, field, type PlaceRequest, type RedeemRequest } from "./requests.js";
 
-const SCALAR_MODULUS = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
 const MAX_BODY_BYTES = 16 * 1024;
-
-type PlaceRequest = {
-  marketId: string;
-  ticketAmount: string;
-  payer: string;
-  side: boolean;
-};
-
-type RedeemRequest = {
-  marketId: string;
-  ticketAmount: string;
-  commitmentRoot: string;
-  outcome: boolean;
-  recipient: string;
-  payoutAmount: string;
-  side: boolean;
-  secret: string;
-  nullifier: string;
-  pathBits: boolean[];
-  siblings: string[];
-};
-
-function randomField() {
-  const value = BigInt(`0x${randomBytes(32).toString("hex")}`) % SCALAR_MODULUS;
-  return value === 0n ? 1n : value;
-}
 
 function littleEndianInteger(value: Uint8Array) {
   return BigInt(`0x${Buffer.from(value).reverse().toString("hex")}`);
@@ -45,19 +19,6 @@ function littleEndianInteger(value: Uint8Array) {
 function payerHash(payer: PublicKey) {
   const bytes = payer.toBytes();
   return poseidonHash(littleEndianInteger(bytes.slice(0, 16)), littleEndianInteger(bytes.slice(16)));
-}
-
-function checkedRequest(value: unknown): PlaceRequest {
-  if (!value || typeof value !== "object") throw new Error("Invalid proof request");
-  const input = value as Partial<PlaceRequest>;
-  if (typeof input.marketId !== "string" || !/^\d+$/.test(input.marketId)) throw new Error("marketId must be a decimal integer");
-  if (input.ticketAmount !== "1000000") throw new Error("Only the fixed 1 USDC ticket is supported");
-  if (typeof input.payer !== "string") throw new Error("payer is required");
-  if (typeof input.side !== "boolean") throw new Error("side must be boolean");
-  const marketId = BigInt(input.marketId);
-  if (marketId <= 0n || marketId > 18_446_744_073_709_551_615n) throw new Error("marketId is outside the u64 range");
-  new PublicKey(input.payer);
-  return input as PlaceRequest;
 }
 
 async function requestJson(request: IncomingMessage) {
@@ -72,37 +33,15 @@ async function requestJson(request: IncomingMessage) {
   return JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown;
 }
 
-function field(value: unknown, name: string) {
-  if (typeof value !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(value)) throw new Error(`${name} must be a 32-byte field`);
-  const parsed = BigInt(value);
-  if (parsed >= SCALAR_MODULUS) throw new Error(`${name} exceeds the BN254 scalar field`);
-  return parsed;
-}
-
-function checkedRedeem(value: unknown): RedeemRequest {
-  if (!value || typeof value !== "object") throw new Error("Invalid redeem proof request");
-  const input = value as Partial<RedeemRequest>;
-  if (typeof input.marketId !== "string" || !/^\d+$/.test(input.marketId)) throw new Error("marketId must be a decimal integer");
-  if (input.ticketAmount !== "1000000") throw new Error("Only the fixed 1 USDC ticket is supported");
-  if (typeof input.payoutAmount !== "string" || !/^\d+$/.test(input.payoutAmount) || BigInt(input.payoutAmount) <= 0n) throw new Error("payoutAmount must be positive");
-  if (typeof input.recipient !== "string") throw new Error("recipient is required");
-  if (typeof input.outcome !== "boolean" || typeof input.side !== "boolean") throw new Error("outcome and side must be boolean");
-  if (input.side !== input.outcome) throw new Error("A losing position cannot generate a redeem proof");
-  if (!Array.isArray(input.pathBits) || input.pathBits.length !== TREE_DEPTH || !input.pathBits.every((item) => typeof item === "boolean")) throw new Error(`pathBits must contain ${TREE_DEPTH} booleans`);
-  if (!Array.isArray(input.siblings) || input.siblings.length !== TREE_DEPTH) throw new Error(`siblings must contain ${TREE_DEPTH} fields`);
-  const marketId = BigInt(input.marketId);
-  if (marketId <= 0n || marketId > 18_446_744_073_709_551_615n) throw new Error("marketId is outside the u64 range");
-  new PublicKey(input.recipient);
-  field(input.commitmentRoot, "commitmentRoot");
-  field(input.secret, "secret");
-  field(input.nullifier, "nullifier");
-  input.siblings.forEach((item, index) => field(item, `siblings[${index}]`));
-  return input as RedeemRequest;
-}
-
 function respond(response: ServerResponse, status: number, value: unknown) {
-  response.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+  response.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
   response.end(`${JSON.stringify(value)}\n`);
+}
+
+function authorized(value: string | undefined) {
+  const expected = Buffer.from(`Bearer ${config.proverApiToken ?? ""}`);
+  const actual = Buffer.from(value ?? "");
+  return expected.length === actual.length && timingSafeEqual(expected, actual);
 }
 
 function run(command: string, args: string[], cwd?: string) {
@@ -134,10 +73,10 @@ async function provePlace(input: PlaceRequest) {
   const marketId = BigInt(input.marketId);
   const ticketAmount = BigInt(input.ticketAmount);
   const payer = new PublicKey(input.payer);
-  const secret = randomField();
-  const nullifier = randomField();
-  const coefficient = randomField();
-  const salts = [randomField(), randomField(), randomField()] as const;
+  const secret = field(input.secret, "secret");
+  const nullifier = field(input.nullifier, "nullifier");
+  const coefficient = field(input.coefficient, "coefficient");
+  const salts = input.salts.map((value, index) => field(value, `salts[${index}]`)) as [bigint, bigint, bigint];
   const shares = [1, 2, 3].map((memberIndex) => createShamirShare(input.side, coefficient, memberIndex as 1 | 2 | 3));
   const commitment = orderCommitment(marketId, ticketAmount, input.side, secret, nullifier);
   const shareCommitments = shares.map((share, index) => shareCommitment(share, salts[index] ?? 0n));
@@ -178,17 +117,8 @@ async function provePlace(input: PlaceRequest) {
       readFile(path.join(targetRoot, "place_order.pw")),
     ]);
     return {
-      commitment: fieldHex(commitment),
-      shareCommitments: shareCommitments.map(fieldHex),
       proof: proof.toString("base64"),
       publicWitness: publicWitness.toString("base64"),
-      recovery: { secret: fieldHex(secret), nullifier: fieldHex(nullifier) },
-      shares: shares.map((share, index) => ({
-        memberIndex: index + 1,
-        share: fieldHex(share),
-        salt: fieldHex(salts[index] ?? 0n),
-        expectedShareCommitment: fieldHex(shareCommitments[index] ?? 0n),
-      })),
     };
   } finally {
     if (temporaryRoot.startsWith(path.join(os.tmpdir(), "nortia-place-"))) {
@@ -270,13 +200,13 @@ async function main() {
         respond(response, 404, { error: "Not found" });
         return;
       }
-      if (request.headers.authorization !== `Bearer ${config.proverApiToken}`) {
+      if (!authorized(request.headers.authorization)) {
         respond(response, 401, { error: "Unauthorized" });
         return;
       }
       const value = await requestJson(request);
       const work = request.url === "/place"
-        ? queue.then(() => provePlace(checkedRequest(value)))
+        ? queue.then(() => provePlace(checkedPlace(value)))
         : queue.then(() => proveRedeem(checkedRedeem(value)));
       queue = work.then(() => undefined, () => undefined);
       respond(response, 200, await work);

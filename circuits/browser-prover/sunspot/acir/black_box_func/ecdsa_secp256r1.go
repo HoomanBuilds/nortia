@@ -1,0 +1,134 @@
+package blackboxfunc
+
+import (
+	"math/big"
+	"github.com/reilabs/sunspot/go/acir/msgpackutil"
+	shr "github.com/reilabs/sunspot/go/acir/shared"
+
+	"github.com/consensys/gnark/constraint"
+	"github.com/consensys/gnark/frontend"
+	"github.com/consensys/gnark/std/algebra/emulated/sw_emulated"
+	"github.com/consensys/gnark/std/math/emulated"
+	"github.com/consensys/gnark/std/signature/ecdsa"
+)
+
+type ECDSASECP256R1[T shr.ACIRField, E constraint.Element] struct {
+	PublicKeyX    [32]FunctionInput[T]
+	PublicKeyY    [32]FunctionInput[T]
+	Signature     [64]FunctionInput[T]
+	HashedMessage [32]FunctionInput[T]
+	predicate     FunctionInput[T]
+	Output        shr.Witness
+}
+
+func (a *ECDSASECP256R1[T, E]) UnmarshalReader(r *msgpackutil.Reader) error {
+	return msgpackutil.ReadStruct(r, "EcdsaSecp256r1", []msgpackutil.Field{
+		{Name: "public_key_x", Decode: func(r *msgpackutil.Reader) error { return msgpackutil.ReadArrayInto(r, a.PublicKeyX[:]) }},
+		{Name: "public_key_y", Decode: func(r *msgpackutil.Reader) error { return msgpackutil.ReadArrayInto(r, a.PublicKeyY[:]) }},
+		{Name: "signature", Decode: func(r *msgpackutil.Reader) error { return msgpackutil.ReadArrayInto(r, a.Signature[:]) }},
+		{Name: "hashed_message", Decode: func(r *msgpackutil.Reader) error { return msgpackutil.ReadArrayInto(r, a.HashedMessage[:]) }},
+		{Name: "predicate", Decode: a.predicate.UnmarshalReader},
+		{Name: "output", Decode: a.Output.UnmarshalReader},
+	})
+}
+
+func (a *ECDSASECP256R1[T, E]) Equals(other BlackBoxFunction[E]) bool {
+	value, ok := other.(*ECDSASECP256R1[T, E])
+	if !ok || len(a.PublicKeyX) != len(value.PublicKeyX) ||
+		len(a.PublicKeyY) != len(value.PublicKeyY) ||
+		len(a.Signature) != len(value.Signature) ||
+		len(a.HashedMessage) != len(value.HashedMessage) {
+		return false
+	}
+
+	for i := 0; i < 32; i++ {
+		if !a.PublicKeyX[i].Equals(&value.PublicKeyX[i]) ||
+			!a.PublicKeyY[i].Equals(&value.PublicKeyY[i]) ||
+			!a.HashedMessage[i].Equals(&value.HashedMessage[i]) {
+			return false
+		}
+	}
+
+	for i := 0; i < 64; i++ {
+		if !a.Signature[i].Equals(&value.Signature[i]) {
+			return false
+		}
+	}
+
+	return a.Output == value.Output
+}
+
+func (a *ECDSASECP256R1[T, E]) Define(api frontend.Builder[E], witnesses map[shr.Witness]frontend.Variable) error {
+	primeField, err := emulated.NewField[emulated.P256Fp](api)
+	if err != nil {
+		return err
+	}
+	scalarField, err := emulated.NewField[emulated.P256Fr](api)
+	if err != nil {
+		return err
+	}
+
+	qXValue, err := BytesTo64BitLimbs(api, a.PublicKeyX[:], witnesses)
+	if err != nil {
+		return err
+	}
+
+	qYValue, err := BytesTo64BitLimbs(api, a.PublicKeyY[:], witnesses)
+	if err != nil {
+		return err
+	}
+
+	rValue, err := BytesTo64BitLimbs(api, a.Signature[0:32], witnesses)
+	if err != nil {
+		return err
+	}
+
+	sValue, err := BytesTo64BitLimbs(api, a.Signature[32:64], witnesses)
+	if err != nil {
+		return err
+	}
+
+	hash_value, err := BytesTo64BitLimbs(api, a.HashedMessage[:], witnesses)
+	if err != nil {
+		return err
+	}
+
+	Q := ecdsa.PublicKey[emulated.P256Fp, emulated.P256Fr]{
+		X: *primeField.NewElement(qXValue),
+		Y: *primeField.NewElement(qYValue),
+	}
+
+	// PK on-curve validation
+	cr, err := sw_emulated.New[emulated.P256Fp, emulated.P256Fr](api, sw_emulated.GetP256Params())
+	if err != nil {
+		return err
+	}
+	cr.AssertIsOnCurve(&sw_emulated.AffinePoint[emulated.P256Fp]{X: Q.X, Y: Q.Y})
+	isIdentity := api.And(primeField.IsZero(&Q.X), primeField.IsZero(&Q.Y))
+	api.AssertIsEqual(isIdentity, frontend.Variable(0))
+
+	sig := ecdsa.Signature[emulated.P256Fr]{
+		R: *scalarField.NewElement(rValue),
+		S: *scalarField.NewElement(sValue),
+	}
+
+	msg := scalarField.NewElement(hash_value)
+
+	pred, err := a.predicate.ToVariable(witnesses)
+	if err != nil {
+		return err
+	}
+
+	// Noir's verify_signature rejects signatures with s > n/2 (low-s form) to
+	// prevent malleability; gnark's IsValid does not, so enforce it here.
+	validSig := Q.IsValid(api, sw_emulated.GetP256Params(), msg, &sig)
+	halfOrder := new(big.Int).Rsh(emulated.P256Fr{}.Modulus(), 1)
+	sBits := scalarField.ToBits(&sig.S)
+	isLowS := isLessOrEqualConstant(api, sBits, halfOrder)
+	result := api.Mul(validSig, isLowS)
+
+	api.AssertIsEqual(frontend.Variable(0), api.Mul(pred, api.Sub(witnesses[a.Output], result)))
+	return nil
+}
+
+func (*ECDSASECP256R1[T, E]) SerdeName() string { return "EcdsaSecp256r1" }

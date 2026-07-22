@@ -1,18 +1,61 @@
 import { poseidon2 } from "poseidon-lite";
 
 export const TREE_DEPTH = 16;
+export const BN254_SCALAR_MODULUS = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
+
+export type PlacementWitness = {
+  secret: string;
+  nullifier: string;
+  coefficient: string;
+  salts: [string, string, string];
+};
 
 export function poseidonHash(left: bigint, right: bigint) {
   return poseidon2([left, right]);
 }
 
+function bigEndianInteger(bytes: readonly number[] | Uint8Array) {
+  let value = 0n;
+  for (const byte of bytes) value = (value << 8n) | BigInt(byte);
+  return value;
+}
+
+function littleEndianInteger(bytes: readonly number[] | Uint8Array) {
+  let value = 0n;
+  for (let index = bytes.length - 1; index >= 0; index -= 1) value = (value << 8n) | BigInt(bytes[index] ?? 0);
+  return value;
+}
+
 export function fieldBigInt(value: readonly number[] | Uint8Array | string) {
   if (typeof value === "string") return BigInt(value);
-  return BigInt(`0x${Buffer.from(value).toString("hex")}`);
+  return bigEndianInteger(value);
 }
 
 export function fieldHex(value: bigint) {
   return `0x${value.toString(16).padStart(64, "0")}`;
+}
+
+export function randomFieldHex() {
+  if (!globalThis.crypto?.getRandomValues) throw new Error("Secure browser randomness is unavailable");
+  for (;;) {
+    const bytes = globalThis.crypto.getRandomValues(new Uint8Array(32));
+    const value = bigEndianInteger(bytes);
+    if (value > 0n && value < BN254_SCALAR_MODULUS) return fieldHex(value);
+  }
+}
+
+export function solanaPublicKeyHash(bytes: Uint8Array) {
+  if (bytes.length !== 32) throw new Error("Solana public key must contain 32 bytes");
+  return poseidonHash(littleEndianInteger(bytes.slice(0, 16)), littleEndianInteger(bytes.slice(16)));
+}
+
+export function createPlacementWitness(): PlacementWitness {
+  return {
+    secret: randomFieldHex(),
+    nullifier: randomFieldHex(),
+    coefficient: randomFieldHex(),
+    salts: [randomFieldHex(), randomFieldHex(), randomFieldHex()],
+  };
 }
 
 function zeroHashes() {

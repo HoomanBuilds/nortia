@@ -7,6 +7,7 @@ import { Connection, PublicKey } from "@solana/web3.js";
 import { CommitteeMember, MIN_PRIVATE_BATCH_ORDERS, type CommitteeAggregate, type CommitteeShare } from "nortia-client/committee";
 import { config } from "../config.js";
 import idl from "../idl/nortia.json" with { type: "json" };
+import { openCommitteeShare, readCommitteeEncryptionKey, type CommitteeEnvelope } from "./encryption.js";
 import { openCommitteeState, sealCommitteeState } from "./state.js";
 
 const NORTIA_PROGRAM = new PublicKey("4S2EvdGrbKJ9zazvB4gtR83crTrVJWqqwoVVvEQy8VE9");
@@ -86,11 +87,11 @@ async function requestJson(request: IncomingMessage) {
     if (size > MAX_BODY_BYTES) throw new Error("Request body is too large");
     chunks.push(bytes);
   }
-  return JSON.parse(Buffer.concat(chunks).toString("utf8")) as EncodedShare;
+  return JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown;
 }
 
 function respond(response: ServerResponse, status: number, value: unknown) {
-  response.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+  response.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
   response.end(`${JSON.stringify(value)}\n`);
 }
 
@@ -101,7 +102,9 @@ async function main() {
   if (!config.committeeStateKey || !/^[0-9a-fA-F]{64}$/.test(config.committeeStateKey)) {
     throw new Error("COMMITTEE_STATE_KEY must be configured as 64 hex characters");
   }
+  if (!config.committeeEncryptionKeyPath) throw new Error("COMMITTEE_ENCRYPTION_KEY_PATH is required");
   const member = new CommitteeMember(config.committeeMemberIndex);
+  const encryptionKey = await readCommitteeEncryptionKey(config.committeeEncryptionKeyPath, member.memberIndex);
   const connection = new Connection(config.rpcUrl, "confirmed");
   const coder = new BorshAccountsCoder(idl as Idl);
   const allMarkets = new Set<string>();
@@ -164,6 +167,10 @@ async function main() {
         respond(response, 401, { error: "Unauthorized" });
         return;
       }
+      if (request.method === "GET" && url.pathname === "/encryption-key") {
+        respond(response, 200, { memberIndex: member.memberIndex, publicKey: encryptionKey.publicKey });
+        return;
+      }
       const match = url.pathname.match(/^\/markets\/([^/]+)\/aggregate$/);
       if (request.method === "POST" && match) {
         const marketValue = decodeURIComponent(match[1] ?? "");
@@ -184,7 +191,8 @@ async function main() {
         return;
       }
       if (request.method === "POST" && url.pathname === "/shares") {
-        const share = decode(await requestJson(request));
+        const envelope = await requestJson(request) as CommitteeEnvelope;
+        const share = decode(await openCommitteeShare(envelope, encryptionKey.privateKey, member.memberIndex) as EncodedShare);
         if (share.memberIndex !== member.memberIndex) throw new Error("Share was sent to the wrong member service");
         await verifyOnchainOrder(share);
         member.submit(share);

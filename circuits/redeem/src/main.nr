@@ -51,6 +51,8 @@ fn main(
     assert(hash(market_id, nullifier) == nullifier_hash);
     assert(recipient_hash != 0);
     assert(payout_amount != 0);
+    assert(secret != 0);
+    assert(nullifier != 0);
 }
 
 #[test]

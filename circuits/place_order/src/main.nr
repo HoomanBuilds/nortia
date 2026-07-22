@@ -41,6 +41,12 @@ fn main(
     assert(share_commitment_2 == hash(share_2, salt_2));
     assert(share_commitment_3 == hash(share_3, salt_3));
     assert(payer_hash != 0);
+    assert(secret != 0);
+    assert(nullifier != 0);
+    assert(coefficient != 0);
+    assert(salt_1 != 0);
+    assert(salt_2 != 0);
+    assert(salt_3 != 0);
 }
 
 #[test]
@@ -91,6 +97,31 @@ fn rejects_zero_payer_hash() {
         42,
         1000000,
         0,
+        commitment,
+        hash(side as Field + coefficient, 21),
+        hash(side as Field + coefficient * 2, 22),
+        hash(side as Field + coefficient * 3, 23),
+        side,
+        secret,
+        nullifier,
+        coefficient,
+        21,
+        22,
+        23,
+    );
+}
+
+#[test(should_fail)]
+fn rejects_zero_shamir_coefficient() {
+    let side: bool = true;
+    let secret: Field = 11;
+    let nullifier: Field = 12;
+    let coefficient: Field = 0;
+    let commitment = order_commitment(42, 1000000, side, secret, nullifier);
+    main(
+        42,
+        1000000,
+        91,
         commitment,
         hash(side as Field + coefficient, 21),
         hash(side as Field + coefficient * 2, 22),
