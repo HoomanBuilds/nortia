@@ -20,7 +20,7 @@
 
 Nortia is a prediction-market protocol with two complementary market designs:
 
-- Private fixed-ticket pools where an individual YES or NO side is hidden behind a Poseidon commitment, verified by Noir proofs, shared across a 2-of-3 committee, and settled from TxLINE data.
+- Private confidential-amount pools where an individual YES or NO side and exact wager are hidden behind a Poseidon commitment, verified by Noir proofs, shared across a 2-of-3 committee, and settled from TxLINE data.
 - Public continuous markets with deterministic binary LMSR pricing, creator-funded liquidity, category-specific resolvers, and immutable settlement receipts.
 
 Both designs escrow Circle devnet USDC in program-owned vaults. SOL is used only for Solana transaction fees and account rent.
@@ -29,7 +29,7 @@ Nortia is currently an unaudited devnet beta. Do not use it with real funds.
 
 ## Current product
 
-- Private one-USDC sports positions with hidden YES or NO sides
+- Private sports positions with hidden YES or NO sides and hidden wager amounts from 1 USDC to a market-defined collateral ceiling
 - Browser-generated Noir placement and redemption proofs compiled through Sunspot
 - Onchain proof verification through dedicated Solana verifier programs
 - Poseidon commitments, Merkle membership proofs, and market-scoped nullifiers
@@ -45,38 +45,40 @@ Nortia is currently an unaudited devnet beta. Do not use it with real funds.
 
 | | Private TxLINE pool | Public LMSR market |
 | --- | --- | --- |
-| Position | Fixed 1 USDC ticket | Variable YES or NO shares |
+| Position | Hidden variable wager inside uniform market collateral | Variable YES or NO shares |
 | Side visibility | Hidden from public chain observers | Public |
 | Price | Pool payout known after aggregate settlement | Continuous LMSR quote |
-| Liquidity | Ticket pool | Creator-funded worst-case subsidy |
+| Liquidity | Aggregate hidden wager pool | Creator-funded worst-case subsidy |
 | Resolution | TxLINE score proof and CPI | TxLINE, Pyth, Switchboard, Stork, or optimistic evidence |
 | Claim | Zero-knowledge redemption proof | Wallet-owned position settlement |
-| Fee | 1% of the successful gross pool | Probability-sensitive fill fee, bounded by market configuration |
-| Failure path | Full ticket refund | Invalid resolution or timeout settlement |
+| Fee | 1% of actual hidden wager liquidity | Probability-sensitive fill fee, bounded by market configuration |
+| Failure path | Full public collateral refund | Invalid resolution or timeout settlement |
 
 Private pools are for confidential participation. Public LMSR markets are for continuous price discovery across sports, crypto, economics, politics, science, governance, and other objective binary questions.
 
 ## Privacy model
 
-Within the onchain protocol, an individual private-pool side is shielded. The transaction, order account, program events, and USDC transfer do not contain a plaintext YES or NO value.
+Within the onchain protocol, an individual private-pool side and exact wager are shielded. The transaction, order account, program events, and USDC transfer do not contain either plaintext value. Every order in one market transfers the same public collateral ceiling, so transfer size does not reveal the wager.
 
 ### What is public
 
-- The payer wallet and one-USDC transfer
+- The payer wallet and the market's uniform collateral transfer
+- The market collateral ceiling, selectable from 1, 5, 10, 25, 50, 100, 250, 500, or 1,000 USDC
 - The market, order index, and timing
 - The Poseidon order commitment
 - Three salted share commitments
 - The placement proof and its public inputs
-- Aggregate YES and NO counts after batching
+- Aggregate YES and NO counts and wager liquidity after batching
 - The final outcome, pool accounting, and settlement evidence
 - A claim nullifier hash and its recipient wallet
 
 ### What remains private
 
 - The individual YES or NO side
+- The individual exact wager amount
 - The order secret and nullifier preimage
-- The random Shamir coefficient
-- Each committee share outside its assigned member service
+- The three random Shamir coefficients
+- Each committee share bundle outside its assigned member service
 - The direct link between an order commitment and a later winning claim
 
 ### Trust boundaries
@@ -84,8 +86,8 @@ Within the onchain protocol, an individual private-pool side is shielded. The tr
 | Actor | Privacy property |
 | --- | --- |
 | Public chain observer | Cannot derive an individual side from the order transaction or link a proof-based claim to one order |
-| One committee member | Holds one randomized share and cannot reconstruct the side alone |
-| Two colluding committee members | Can reconstruct individual sides because the current threshold is 2-of-3 |
+| One committee member | Holds one randomized bundle and cannot reconstruct the side or exact amount alone |
+| Two colluding committee members | Can reconstruct individual sides and amounts because the current threshold is 2-of-3 |
 | Browser prover | Generates the witness and proof locally without sending private inputs to Nortia services |
 | Optional hosted prover | Sees the side, secret, nullifier, and Shamir witness when explicitly enabled as a fallback |
 | Web routing layer | Routes member-specific encrypted envelopes and can observe request metadata, but cannot decrypt a committee share |
@@ -94,26 +96,27 @@ Within the onchain protocol, an individual private-pool side is shielded. The tr
 
 Browser proving is the default. The hosted devnet prover is available only when `NEXT_PUBLIC_NORTIA_PROOF_MODE=hosted` is configured, deletes temporary proving workspaces, and remains a trusted witness boundary in that mode. Production privacy still requires independently operated committee members, an audited setup, an audited client, and stronger network-level metadata protection.
 
-The current committee reconstructs aggregate counts by design. The program accepts only batches with at least four orders and at least one order on each side. Ineligible markets remain open until anyone starts the full-value refund path, so their side counts are never written onchain. Aggregate counts in an eligible batch can still narrow anonymity. Nortia therefore provides shielded onchain positions, not an unconditional anonymity claim against committee collusion or metadata analysis.
+The current committee reconstructs aggregate counts and wager liquidity by design. The program accepts only batches with at least four orders and at least one order on each side. Ineligible markets remain open until anyone starts the full-value refund path, so their aggregates are never written onchain. Eligible aggregate counts and amounts can still narrow anonymity. Nortia therefore provides shielded onchain positions, not an unconditional anonymity claim against committee collusion or metadata analysis.
 
 ## Private pool lifecycle
 
 ### 1. Prepare
 
-The browser generates a random nonzero secret, nullifier, Shamir coefficient, and three nonzero salts with rejection-sampled Web Crypto entropy. It derives the payer hash and three member shares, then generates the proof locally. The placement circuit proves:
+The browser generates a random nonzero secret, nullifier, three Shamir coefficients, and three nonzero salts with rejection-sampled Web Crypto entropy. It derives the payer hash and three member share bundles, then generates the proof locally. The placement circuit proves:
 
 - The hidden side is binary.
-- The public order commitment binds the market, ticket amount, side, secret, and nullifier.
-- All three public share commitments bind consistent shares of the same side.
+- The hidden amount is at least 1 USDC and does not exceed the public market collateral ceiling.
+- The public order commitment binds the market, collateral ceiling, hidden amount, side, secret, and nullifier.
+- All three public share commitments bind consistent shares of the side, YES amount contribution, and total amount contribution.
 - The proof is bound to the transaction payer.
 
 The browser saves the recovery record into a wallet-signature-derived AES-GCM vault before asking the wallet to sign the placement transaction.
 
 ### 2. Place
 
-The Nortia program verifies the 324-byte Sunspot proof through the deployed placement-verifier program. A successful transaction creates the order PDA and moves exactly one six-decimal devnet USDC ticket into the market vault.
+The Nortia program verifies the 388-byte Sunspot proof through the deployed placement-verifier program. A successful transaction creates the order PDA and moves the market's uniform public collateral ceiling into the vault. New private markets default to a 100 USDC ceiling, and creators can select another allowlisted ceiling.
 
-The side, secret, nullifier, coefficient, and raw shares are never written onchain.
+The side, exact wager, secret, nullifier, coefficients, and raw share bundles are never written onchain.
 
 ### 3. Deliver committee shares
 
@@ -128,30 +131,30 @@ Member state is encrypted with AES-256-GCM and persisted with owner-only file pe
 
 ### 4. Aggregate
 
-After the lock time, two distinct committee members combine their ordered snapshots. The coordinator adds shares before interpolation, reconstructs the aggregate YES count, derives the NO count, builds the Poseidon commitment root, and submits the batch with two committee signatures.
+After the lock time, two distinct committee members combine their ordered snapshots. The coordinator adds bundles before interpolation, reconstructs the aggregate YES count, YES wager liquidity, and total wager liquidity, derives the NO aggregates, builds the Poseidon commitment root, and submits the batch with two committee signatures.
 
-The program rejects missing orders, fewer than four orders, one-sided batches, mismatched counts, invalid committee signers, early batches, and batches after the deadline. Rejected aggregate counts are not persisted or emitted. After the batch deadline, anyone can enter refunds.
+The program rejects missing orders, fewer than four orders, one-sided batches, counts or amounts outside their provable bounds, invalid committee signers, early batches, and batches after the deadline. Rejected aggregates are not persisted or emitted. After the batch deadline, anyone can enter refunds.
 
 ### 5. Resolve with TxLINE
 
 The keeper selects a finalized TxLINE score record and requests the stat-validation payload. Nortia checks the exact fixture, final-period goal keys, timestamps, daily-root PDA, pinned TxLINE program, and CPI return origin before accepting the result.
 
-The program stores the final score, aggregate counts, fee accounting, root account, sequence, and settlement-evidence hash.
+The program stores the final score, aggregate counts and amounts, fee accounting, root account, sequence, and settlement-evidence hash.
 
 ### 6. Redeem or refund
 
-A winner proves that a hidden commitment:
+Every position, including a losing position with unused collateral, proves that its hidden commitment:
 
 - Belongs to the finalized 16-level commitment tree
-- Matches the resolved outcome
+- Binds the hidden side and amount used in deterministic settlement math
 - Produces the submitted market-scoped nullifier
-- Is bound to the selected recipient and exact payout
+- Is bound to the selected recipient and exact total return
 
 The claim PDA prevents replay without revealing which order was redeemed. The browser binds the proof to a fresh recipient address that must differ from the order wallet, then sends only the public proof material through the private relay. The relay creates the recipient token account when needed and submits the Solana transaction, so the original wallet is not the onchain redemption sender.
 
 The encrypted recovery vault can be exported and imported as an authenticated wallet-bound backup. The same wallet must sign the vault-unlock message to decrypt it.
 
-If batching or resolution misses its deadline, anyone can open refunds. Every order receives the full one-USDC ticket and no protocol fee is charged.
+For a winner, the total return is unused collateral plus its proportional share of the net wager pool. For a loser, it is the unused collateral. If batching or resolution misses its deadline, anyone can open refunds. Every order receives its full public collateral and no protocol fee is charged.
 
 ## Public LMSR lifecycle
 
@@ -200,13 +203,15 @@ A winning share pays one USDC. An invalid result pays half of the aggregate YES 
 The canonical private protocol charges 100 basis points, or 1%, once on a successfully resolved gross pool.
 
 ```text
-gross pool = order count * 1 USDC
+gross pool = aggregate YES wager + aggregate NO wager
 protocol fee = floor(gross pool * 1%)
 net pool = gross pool - protocol fee
-winner payout = floor(net pool / winner count)
+unused collateral = market collateral ceiling - hidden wager
+market payout = winner ? floor(hidden wager * net pool / winning-side wager) : 0
+total return = unused collateral + market payout
 ```
 
-Ten percent of the protocol fee rewards the resolving keeper. Ninety percent goes to the Nortia treasury. Any division remainder goes to the final valid claim so the vault closes exactly.
+Ten percent of the protocol fee rewards the resolving keeper. Ninety percent goes to the Nortia treasury. Proportional division dust is bounded by the number of winning positions and can be assigned only to the final valid settlement. Unrelated vault donations cannot inflate that settlement.
 
 Refunds are fee-free. The protocol does not charge an order merely for being placed.
 
@@ -437,17 +442,17 @@ nargo compile --workspace
 
 Latest verified results:
 
-- 73 Rust tests pass.
-- 47 client assertions pass.
-- 55 service assertions pass.
-- The Noir placement suite passes 4 tests across 3,918 constraints.
-- The Noir redemption suite passes 3 tests across 20,737 constraints.
+- 76 Rust tests pass.
+- 48 client assertions pass.
+- 56 service assertions pass.
+- The Noir placement suite passes 5 tests across 8,024 compiled constraints.
+- The Noir redemption suite passes 5 tests across 22,140 compiled constraints.
 - Clippy passes with warnings denied.
 - Anchor produces a valid SBF artifact.
 - The optimized Next.js production build passes.
 - A signed private-placement simulation verifies the proof and full order path in 215,237 of 300,000 requested compute units.
 - A signed redemption-verifier simulation succeeds in 190,485 of 300,000 requested compute units.
-- The browser WASM prover generates 324-byte placement and redemption proofs with 236-byte public witnesses, and both verify against the exact generated native verification keys.
+- The browser WASM prover generates 388-byte placement and redemption proofs with 236-byte placement witnesses and 300-byte redemption witnesses, and both verify against the exact generated native verification keys.
 - Browser ACIR, constraint-system, and proving-key artifacts match the generated circuit artifacts byte for byte.
 
 Run `cargo clean` after Rust verification when local disk space is constrained.
@@ -460,8 +465,8 @@ Nortia is experimental and unaudited.
 - Sunspot setup artifacts were generated with a development trusted setup. Mainnet requires an independent ceremony.
 - The program remains upgradeable by the recorded devnet upgrade authority.
 - Browser proving keeps private witnesses in the client by default. The explicitly enabled hosted fallback sees private witnesses.
-- The current committee is a fixed 2-of-3 set running under one devnet operator. Two members, or that operator, can reconstruct individual sides despite encrypted transport and encrypted state.
-- Eligible batches publish aggregate counts, which can narrow anonymity even with the four-order and two-sided minimum.
+- The current committee is a fixed 2-of-3 set running under one devnet operator. Two members, or that operator, can reconstruct individual sides and amounts despite encrypted transport and encrypted state.
+- Eligible batches publish aggregate counts and wager liquidity, which can narrow anonymity even with the four-order and two-sided minimum.
 - The routing layer and relay can observe IP addresses, timing, market selection, and recipient metadata. Nortia does not currently provide Tor routing or independent relay selection.
 - Recovery secrets are encrypted in browser local storage and can be exported as a wallet-bound backup. Losing every copy can make a private position unclaimable.
 - Public LMSR trades are intentionally transparent and must not be described as private.
