@@ -84,8 +84,28 @@ program_account_rent="$(solana rent 36 --lamports --url "$rpc_url" | awk '{ prin
 for verifier_artifact in "$placement_so:$NORTIA_PLACEMENT_VERIFIER" "$redeem_so:$NORTIA_REDEEM_VERIFIER"; do
   verifier_so="${verifier_artifact%%:*}"
   verifier_address="${verifier_artifact##*:}"
-  if ! solana program show "$verifier_address" --url "$rpc_url" >/dev/null 2>&1; then
-    verifier_data_size=$(( $(wc -c < "$verifier_so") + 45 ))
+  verifier_binary_size="$(wc -c < "$verifier_so")"
+  verifier_buffer_size=$((verifier_binary_size + 37))
+  verifier_buffer_rent="$(solana rent "$verifier_buffer_size" --lamports --url "$rpc_url" | awk '{ print $3 }')"
+  verifier_deploy_rent=$((verifier_deploy_rent + verifier_buffer_rent))
+  if verifier_json="$(solana program show "$verifier_address" --url "$rpc_url" --output json-compact 2>/dev/null)"; then
+    verifier_authority="$(printf '%s' "$verifier_json" | node -e 'let value=""; process.stdin.on("data", chunk => value += chunk); process.stdin.on("end", () => process.stdout.write(String(JSON.parse(value).authority)))')"
+    if [[ "$verifier_authority" != "$deployer_pubkey" ]]; then
+      printf 'Deployer %s is not the upgrade authority for verifier %s.\n' "$deployer_pubkey" "$verifier_address" >&2
+      exit 1
+    fi
+    verifier_capacity="$(printf '%s' "$verifier_json" | node -e 'let value=""; process.stdin.on("data", chunk => value += chunk); process.stdin.on("end", () => process.stdout.write(String(JSON.parse(value).dataLen)))')"
+    verifier_target_capacity="$verifier_capacity"
+    if (( verifier_binary_size > verifier_capacity )); then
+      verifier_growth=$((verifier_binary_size - verifier_capacity))
+      verifier_growth=$((((verifier_growth + 10239) / 10240) * 10240))
+      verifier_target_capacity=$((verifier_capacity + verifier_growth))
+      verifier_current_rent="$(solana rent "$((verifier_capacity + 45))" --lamports --url "$rpc_url" | awk '{ print $3 }')"
+      verifier_target_rent="$(solana rent "$((verifier_target_capacity + 45))" --lamports --url "$rpc_url" | awk '{ print $3 }')"
+      verifier_deploy_rent=$((verifier_deploy_rent + verifier_target_rent - verifier_current_rent))
+    fi
+  else
+    verifier_data_size=$((verifier_binary_size + 45))
     verifier_data_rent="$(solana rent "$verifier_data_size" --lamports --url "$rpc_url" | awk '{ print $3 }')"
     verifier_deploy_rent=$((verifier_deploy_rent + program_account_rent + verifier_data_rent))
   fi
@@ -114,13 +134,26 @@ if (( available_lamports < required_lamports )); then
   exit 1
 fi
 
-if ! solana program show "$NORTIA_PLACEMENT_VERIFIER" --url "$rpc_url" >/dev/null 2>&1; then
-  solana program deploy "$placement_so" --program-id "$placement_keypair" --max-len "$(wc -c < "$placement_so")" --url "$rpc_url" --keypair "$deployer_keypair" --commitment confirmed --use-quic --max-sign-attempts 15
-fi
+deploy_verifier() {
+  local verifier_so="$1"
+  local verifier_keypair="$2"
+  local verifier_address="$3"
+  local verifier_binary_size verifier_capacity verifier_json
+  verifier_binary_size="$(wc -c < "$verifier_so")"
+  if verifier_json="$(solana program show "$verifier_address" --url "$rpc_url" --output json-compact 2>/dev/null)"; then
+    verifier_capacity="$(printf '%s' "$verifier_json" | node -e 'let value=""; process.stdin.on("data", chunk => value += chunk); process.stdin.on("end", () => process.stdout.write(String(JSON.parse(value).dataLen)))')"
+    while (( verifier_capacity < verifier_binary_size )); do
+      solana program extend "$verifier_address" 10240 --keypair "$deployer_keypair" --url "$rpc_url" --commitment confirmed
+      verifier_capacity=$((verifier_capacity + 10240))
+    done
+    solana program deploy "$verifier_so" --program-id "$verifier_keypair" --url "$rpc_url" --keypair "$deployer_keypair" --commitment confirmed --use-quic --max-sign-attempts 15
+  else
+    solana program deploy "$verifier_so" --program-id "$verifier_keypair" --max-len "$verifier_binary_size" --url "$rpc_url" --keypair "$deployer_keypair" --commitment confirmed --use-quic --max-sign-attempts 15
+  fi
+}
 
-if ! solana program show "$NORTIA_REDEEM_VERIFIER" --url "$rpc_url" >/dev/null 2>&1; then
-  solana program deploy "$redeem_so" --program-id "$redeem_keypair" --max-len "$(wc -c < "$redeem_so")" --url "$rpc_url" --keypair "$deployer_keypair" --commitment confirmed --use-quic --max-sign-attempts 15
-fi
+deploy_verifier "$placement_so" "$placement_keypair" "$NORTIA_PLACEMENT_VERIFIER"
+deploy_verifier "$redeem_so" "$redeem_keypair" "$NORTIA_REDEEM_VERIFIER"
 
 while [[ "$program_exists" == true ]] && (( current_program_capacity < binary_size )); do
   solana program extend "$program_id" 10240 --keypair "$deployer_keypair" --url "$rpc_url" --commitment confirmed
