@@ -334,8 +334,8 @@ The canonical record is [deployments/devnet.json](deployments/devnet.json).
 | --- | --- |
 | Nortia program | [`4S2EvdGrbKJ9zazvB4gtR83crTrVJWqqwoVVvEQy8VE9`](https://explorer.solana.com/address/4S2EvdGrbKJ9zazvB4gtR83crTrVJWqqwoVVvEQy8VE9?cluster=devnet) |
 | ProgramData | [`38zjkVVYSt6A2ZA5vN4grWH4kwY6GUGM4uzhaugNdZWS`](https://explorer.solana.com/address/38zjkVVYSt6A2ZA5vN4grWH4kwY6GUGM4uzhaugNdZWS?cluster=devnet) |
-| Placement verifier | [`DgG5WEALzukX8DWwQNmWMnnpYCWZKFTU3bP8Lmh9UywC`](https://explorer.solana.com/address/DgG5WEALzukX8DWwQNmWMnnpYCWZKFTU3bP8Lmh9UywC?cluster=devnet) |
-| Redemption verifier | [`7LT9qPkWPKaijNjfQxGdCSUtd1xVhVc1tCPyEpQrGpqJ`](https://explorer.solana.com/address/7LT9qPkWPKaijNjfQxGdCSUtd1xVhVc1tCPyEpQrGpqJ?cluster=devnet) |
+| Placement verifier | [`AJwBUyb2GP5MejGz22Tk88GX9FdVFVcJvFMUU9EtqLjH`](https://explorer.solana.com/address/AJwBUyb2GP5MejGz22Tk88GX9FdVFVcJvFMUU9EtqLjH?cluster=devnet) |
+| Redemption verifier | [`5LcBMGtMj2VAUFhQgRqPvJwRS9Z28Emv7rSWYcgBEPGZ`](https://explorer.solana.com/address/5LcBMGtMj2VAUFhQgRqPvJwRS9Z28Emv7rSWYcgBEPGZ?cluster=devnet) |
 | Protocol PDA | [`CJi67t1hHprwceArXdPyw6xLrN1Y3QbcvSC4R2SXoKZR`](https://explorer.solana.com/address/CJi67t1hHprwceArXdPyw6xLrN1Y3QbcvSC4R2SXoKZR?cluster=devnet) |
 | Market engine PDA | [`EWgvZgWZNc1m2yunKonZwavnPgY6n6T2BbwXFC6kdRpf`](https://explorer.solana.com/address/EWgvZgWZNc1m2yunKonZwavnPgY6n6T2BbwXFC6kdRpf?cluster=devnet) |
 | Circle devnet USDC | [`4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`](https://explorer.solana.com/address/4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU?cluster=devnet) |
@@ -345,9 +345,9 @@ The canonical record is [deployments/devnet.json](deployments/devnet.json).
 | Canonical Pyth market | [`Gwg5Q44JVakT3JdNtpJQPeSCCDas4VFJpeY2zmzXQ34h`](https://explorer.solana.com/address/Gwg5Q44JVakT3JdNtpJQPeSCCDas4VFJpeY2zmzXQ34h?cluster=devnet) |
 | Canonical Pyth vault | [`3A3sQJ1V5g1tX5xy2P6zh72qXjPVH7T6Wupb74siEvGy`](https://explorer.solana.com/address/3A3sQJ1V5g1tX5xy2P6zh72qXjPVH7T6Wupb74siEvGy?cluster=devnet) |
 
-The current Nortia binary was confirmed at slot `477890681` with transaction [`4mySwWKMgxi7N2b9obVVLdjkDWqz4A2WgLUDv49PQuVSZFULH8ehppQWPbYk4mBeYjVFdpr7v94BM3SA4jAZYUbG`](https://explorer.solana.com/tx/4mySwWKMgxi7N2b9obVVLdjkDWqz4A2WgLUDv49PQuVSZFULH8ehppQWPbYk4mBeYjVFdpr7v94BM3SA4jAZYUbG?cluster=devnet).
+The current Nortia binary was confirmed at slot `478034810` with transaction [`5ATmai4oKW7dQJvXn5hP95YyEwJ2vfcgamZmL957e7Eeisy6JBnimypQSArLhBnmEyDDzVU7AwNUadpdqYq7SAtp`](https://explorer.solana.com/tx/5ATmai4oKW7dQJvXn5hP95YyEwJ2vfcgamZmL957e7Eeisy6JBnimypQSArLhBnmEyDDzVU7AwNUadpdqYq7SAtp?cluster=devnet).
 
-The table records the currently live devnet state. This source tree contains a pending hardened verifier pair at `AJwBUyb2GP5MejGz22Tk88GX9FdVFVcJvFMUU9EtqLjH` and `5LcBMGtMj2VAUFhQgRqPvJwRS9Z28Emv7rSWYcgBEPGZ`. Private browser proofs from this branch are not compatible with the live verifier pair until those programs, the Nortia program, protocol configuration, and empty replay market are rotated together. Public LMSR operation is unaffected.
+The table records the currently live devnet state. The Nortia program, hardened verifier pair, protocol configuration, and empty replay market were rotated together. Browser-generated private placement and redemption proofs from this source tree are compatible with the live verifier programs.
 
 The web application is deployed on Vercel. The optional prover, indexer, keeper, relay, and three committee members run as isolated services. Private service access is token-protected, bounded, and exposed through narrow no-store proxy routes. The current bootstrap deployment runs the committee members under one operator, so process isolation does not provide independence from operator collusion.
 

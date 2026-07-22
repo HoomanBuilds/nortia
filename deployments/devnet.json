@@ -1,30 +1,32 @@
 {
   "network": "solana-devnet",
-  "checkedAt": "2026-07-21T16:35:50Z",
+  "checkedAt": "2026-07-22T07:11:49Z",
   "status": "deployed-with-live-private-prover",
   "programs": {
     "nortia": {
       "programId": "4S2EvdGrbKJ9zazvB4gtR83crTrVJWqqwoVVvEQy8VE9",
       "programData": "38zjkVVYSt6A2ZA5vN4grWH4kwY6GUGM4uzhaugNdZWS",
-      "deploySignature": "4mySwWKMgxi7N2b9obVVLdjkDWqz4A2WgLUDv49PQuVSZFULH8ehppQWPbYk4mBeYjVFdpr7v94BM3SA4jAZYUbG",
-      "deploySlot": 477890681,
+      "deploySignature": "5ATmai4oKW7dQJvXn5hP95YyEwJ2vfcgamZmL957e7Eeisy6JBnimypQSArLhBnmEyDDzVU7AwNUadpdqYq7SAtp",
+      "deploySlot": 478034810,
       "dataLengthBytes": 1108136,
       "lamports": 7713830640,
       "upgradeAuthority": "5yFHYFS1y8hVuVte6F3ae9NMh3i4F1ZGyTynwb8onb5S"
     },
     "placementVerifier": {
-      "programId": "DgG5WEALzukX8DWwQNmWMnnpYCWZKFTU3bP8Lmh9UywC",
-      "programData": "AHP6vLAa764ksgeXYtkjaQPBGb3XoTiLJXjN4H2nKHHF",
-      "deploySignature": "7JurzHnLPmwxzj4JsoaZowUkNSPYquC2LaWHW6FMxXSUHHo4UnkNkpRfesX64NQfGWeuXK2uqXV7tkj7dTh8GvC",
-      "deploySlot": 477886349,
+      "programId": "AJwBUyb2GP5MejGz22Tk88GX9FdVFVcJvFMUU9EtqLjH",
+      "programData": "33g92HBxmyWjzGA3PozwLtrE3v33vCUsttZGFfteaiVf",
+      "deploySignature": "bNPXZENUyA3F3Qxv1t58zZdxx7bBRfXFeJEmBgZbnKzeNuQV5RK59fVExsdqD4yvzRsAWVfz6S1yR4ztQ7jD41Z",
+      "deploySlot": 478034711,
+      "artifactSha256": "32e987ab5a76922a820df7cc37c08bc6864a6197081ddcfaf578ce60537929cb",
       "dataLengthBytes": 87568,
       "lamports": 610677360
     },
     "redeemVerifier": {
-      "programId": "7LT9qPkWPKaijNjfQxGdCSUtd1xVhVc1tCPyEpQrGpqJ",
-      "programData": "H2WsBbsK5aA71XAK2179SYDxX73iF3z2M3Vd13pDXD81",
-      "deploySignature": "u6UDXqCiQS7orXnFYtXy6V26s2DZ9ZAkSpJ9CV8q93R6PGiz4sLcoYxMt6G7bWowWVimPXkU4b6jF7NJZqVPguT",
-      "deploySlot": 477886368,
+      "programId": "5LcBMGtMj2VAUFhQgRqPvJwRS9Z28Emv7rSWYcgBEPGZ",
+      "programData": "86gZwYBiQekbkrSCwYM2tvYhHCNLrbmhsDxVMuM5qa7w",
+      "deploySignature": "3m6HmVUBvMAzBwbCzbX9Uo6HioGPTfKpwL6oezx4NNRvaJvfVkfVWPoAWPTKDEhj55LtjYyCJfWDuQKJtUqcznV4",
+      "deploySlot": 478034735,
+      "artifactSha256": "1b5f68b940a8d08575c1233b6cd346939cbb2bcdc60f40e1c1839a3b76f3af9a",
       "dataLengthBytes": 87568,
       "lamports": 610677360
     },
@@ -54,10 +56,10 @@
     "collateralMint": "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
     "feeBps": 100,
     "keeperRewardBps": 1000,
-    "placementVerifier": "DgG5WEALzukX8DWwQNmWMnnpYCWZKFTU3bP8Lmh9UywC",
-    "redeemVerifier": "7LT9qPkWPKaijNjfQxGdCSUtd1xVhVc1tCPyEpQrGpqJ",
-    "verifierRotationSignature": "iCwskA7X3EhvpuhvSHfKwM7Gzwyxk76RPRRtBmiuyzPT6UMCbZvJXVTCNrgnyMNM4JwbpKa1KhfEwFaLNgDwSF1",
-    "verifierRotationSlot": 477886469,
+    "placementVerifier": "AJwBUyb2GP5MejGz22Tk88GX9FdVFVcJvFMUU9EtqLjH",
+    "redeemVerifier": "5LcBMGtMj2VAUFhQgRqPvJwRS9Z28Emv7rSWYcgBEPGZ",
+    "verifierRotationSignature": "fx5VAHJLFPRfhFcxknMDQTx37b5VBj5QXp4NhYvnqf34pZtomFRbmii6H2vchDworaBxgEWxP1HBBLH73EJUyQD",
+    "verifierRotationSlot": 478034818,
     "committee": [
       "9LxudrHenxBM1xeqB3c1Avqc5qEAWzE9twM6KbNyEAcE",
       "7nenWjHQkdBfuYvpoPBFmgB2Yvkw4Y1a2YdksmeU8Nbv",
@@ -93,12 +95,12 @@
   },
   "programUpgrade": {
     "status": "confirmed",
-    "commit": "baa6a04",
-    "artifactSha256": "71c287c59b292f89a6a2bd89b4d4d5204b7f33a54433367e0b418d99467dce5b",
-    "artifactLengthBytes": 1106320,
+    "commit": "d2a9162",
+    "artifactSha256": "dec780dd99c088030fdc3398f32abf7232394a07c55a3d80b25356b0c0245f7f",
+    "artifactLengthBytes": 1106576,
     "programDataLengthBytes": 1108136,
-    "upgradeSignature": "4mySwWKMgxi7N2b9obVVLdjkDWqz4A2WgLUDv49PQuVSZFULH8ehppQWPbYk4mBeYjVFdpr7v94BM3SA4jAZYUbG",
-    "upgradeSlot": 477890681,
+    "upgradeSignature": "5ATmai4oKW7dQJvXn5hP95YyEwJ2vfcgamZmL957e7Eeisy6JBnimypQSArLhBnmEyDDzVU7AwNUadpdqYq7SAtp",
+    "upgradeSlot": 478034810,
     "uploadBuffer": "2UpmDJNsJ2828YooM6kHaYDNB7ujRA81HY9iWdbxN3xp",
     "uploadBufferClosed": true,
     "engineAddress": "EWgvZgWZNc1m2yunKonZwavnPgY6n6T2BbwXFC6kdRpf",
@@ -109,7 +111,7 @@
     "paused": false,
     "oracleProviderProfile": "free",
     "authorityBalanceLamportsAfterInitialization": 16225521462,
-    "authorityBalanceLamportsAfterUpgrade": 14817425021,
+    "authorityBalanceLamportsAfterUpgrade": 13587382421,
     "privatePlacementSimulation": {
       "status": "passed",
       "computeUnitLimit": 300000,
@@ -160,6 +162,13 @@
     "signature": "36e4WELWBXbWUYKizSsQBu18xj9pMdM8t1zfnySodA9UHCM3Q11gih9HChVLxGKprGS71wm1aPtpKBjXtoT8ETaj",
     "slot": 477608167
   },
+  "relayFunding": {
+    "source": "C9q8YptFdiv2bkQXtRzeJKQWgfBwa3gZKWhVF8g7KVNZ",
+    "recipient": "4xSkQfpGxTb2xn8CzotkywWhB5JsEaree3LBSHvhTaSD",
+    "lamports": 250000000,
+    "signature": "3j5Y2o1VzfeSGt8479qH32jN3j1pwtFLsKAj144YJ3v23LAnQJ8jZsV1zfhntByQ6KVTaQ2ssqFX6JDN5oV6hHUT",
+    "slot": 478034886
+  },
   "sampleMarket": {
     "address": "44cD1kbvuheo5wSM4gxEZvAfitAXbC25f2u4Mzs48qix",
     "vault": "EqjB6nuMcvhtTw9Cngs2EgSNjthC6VrxFDthZnoYxtyM",
@@ -169,10 +178,10 @@
     "phase": "open",
     "lockAt": "2026-07-27T05:15:30Z",
     "initializeSignature": "DUm3uXtDhfv6DqNfLDQ35cBQGFVxzUU9ajpmuLBDVymdQXoGyvcUFUmyWgfx2H92VpLWZB17zm7YC8xhieZj3Hx",
-    "placementVerifier": "DgG5WEALzukX8DWwQNmWMnnpYCWZKFTU3bP8Lmh9UywC",
-    "redeemVerifier": "7LT9qPkWPKaijNjfQxGdCSUtd1xVhVc1tCPyEpQrGpqJ",
-    "verifierSyncSignature": "4pnhtjoR9CQUHADXmSYfsH5pbwAbKKYuUy4W37r6odRMvfy2zwyvoL8Lm1LJNG8FXdZGPRdP6dfdPeSQV2W5uW6P",
-    "verifierSyncSlot": 477886471
+    "placementVerifier": "AJwBUyb2GP5MejGz22Tk88GX9FdVFVcJvFMUU9EtqLjH",
+    "redeemVerifier": "5LcBMGtMj2VAUFhQgRqPvJwRS9Z28Emv7rSWYcgBEPGZ",
+    "verifierSyncSignature": "4gpvxkEkaWoVyL68mPLK9SjuBbdz1XeUAVPpbh2nyj5YWeNPETBYurMPqriGW6xm2XPENDFUZU1jL4Fask5NzQwM",
+    "verifierSyncSlot": 478034820
   },
   "privateProver": {
     "status": "live",
